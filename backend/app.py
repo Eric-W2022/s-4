@@ -57,6 +57,26 @@ TQ_USERNAME = '17665117821'
 TQ_PASSWORD = 'STC89c51'
 TQ_API = None  # TqApi实例，全局单例
 
+# 存储订阅的K线数据（实时更新）
+TQSDK_KLINE_CACHE = {
+    'AG': {
+        '1m': [],  # 1分钟K线数据
+        '5m': [],
+        '15m': [],
+        '30m': [],
+        '1h': [],
+        '1d': []
+    }
+}
+
+# 存储订阅的实时行情数据
+TQSDK_QUOTE_CACHE = {
+    'AG': None  # 最新行情数据
+}
+
+# 订阅任务运行标志
+TQSDK_SUBSCRIPTION_RUNNING = False
+
 # 线程池执行器（用于运行同步的TqSdk代码）
 if TQSDK_AVAILABLE:
     executor = ThreadPoolExecutor(max_workers=2)
@@ -167,6 +187,96 @@ def fetch_tqsdk_kline(symbol: str, duration_seconds: int, data_length: int):
     except Exception as e:
         logger.error(f"获取TqSdk K线数据失败: {e}")
         raise
+
+
+def start_tqsdk_subscription():
+    """启动TqSdk订阅任务（在后台线程中运行）"""
+    global TQSDK_SUBSCRIPTION_RUNNING
+    
+    if not TQSDK_AVAILABLE:
+        logger.warning("TqSdk未安装，无法启动订阅任务")
+        return
+    
+    if TQSDK_SUBSCRIPTION_RUNNING:
+        logger.info("TqSdk订阅任务已在运行")
+        return
+    
+    def subscription_loop():
+        """订阅循环"""
+        global TQSDK_SUBSCRIPTION_RUNNING, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
+        
+        TQSDK_SUBSCRIPTION_RUNNING = True
+        logger.info("TqSdk订阅任务启动")
+        
+        try:
+            api = get_tqsdk_api()
+            contract = "KQ.m@SHFE.ag"
+            
+            # 订阅不同周期的K线
+            interval_map = {
+                "1m": 60,
+                "5m": 300,
+                "15m": 900,
+                "30m": 1800,
+                "1h": 3600,
+                "1d": 86400
+            }
+            
+            klines = {}
+            for interval, duration_seconds in interval_map.items():
+                klines[interval] = api.get_kline_serial(
+                    contract, 
+                    duration_seconds=duration_seconds, 
+                    data_length=200  # 订阅最近200根K线
+                )
+                logger.info(f"已订阅 {interval} K线数据")
+            
+            # 订阅实时行情
+            quote = api.get_quote(contract)
+            logger.info("已订阅实时行情数据")
+            
+            # 主循环：等待数据更新
+            update_count = 0
+            import time
+            while TQSDK_SUBSCRIPTION_RUNNING:
+                try:
+                    # 等待数据更新（最多等待1秒）
+                    deadline = time.time() + 1
+                    api.wait_update(deadline=deadline)
+                    
+                    # 更新K线数据
+                    for interval, kline_df in klines.items():
+                        if kline_df is not None and not kline_df.empty:
+                            standard_data = convert_tqsdk_kline_to_standard_format(kline_df)
+                            TQSDK_KLINE_CACHE['AG'][interval] = standard_data
+                    
+                    # 更新实时行情
+                    if quote:
+                        TQSDK_QUOTE_CACHE['AG'] = quote
+                    
+                    update_count += 1
+                    if update_count % 60 == 0:  # 每60次更新记录一次日志
+                        logger.debug(f"TqSdk订阅任务运行中，已更新 {update_count} 次")
+                        
+                except Exception as e:
+                    logger.error(f"TqSdk订阅循环错误: {e}", exc_info=True)
+                    # 等待一段时间后重试
+                    time.sleep(5)
+                    
+        except Exception as e:
+            logger.error(f"TqSdk订阅任务失败: {e}", exc_info=True)
+            TQSDK_SUBSCRIPTION_RUNNING = False
+        finally:
+            logger.info("TqSdk订阅任务已停止")
+            TQSDK_SUBSCRIPTION_RUNNING = False
+    
+    # 在后台线程中启动订阅任务
+    if executor:
+        executor.submit(subscription_loop)
+    else:
+        import threading
+        thread = threading.Thread(target=subscription_loop, daemon=True)
+        thread.start()
 
 
 def fetch_tqsdk_quote(symbol: str):
@@ -323,7 +433,20 @@ async def get_kline(
         if symbol.upper() == 'AG':
             logger.info(f"[TqSdk请求] Symbol: {symbol} | Interval: {interval} | Limit: {limit}")
             
-            # 转换interval为秒数
+            # 检查是否有订阅缓存数据
+            if TQSDK_SUBSCRIPTION_RUNNING and interval.lower() in TQSDK_KLINE_CACHE.get('AG', {}):
+                cached_data = TQSDK_KLINE_CACHE['AG'][interval.lower()]
+                if cached_data and len(cached_data) > 0:
+                    # 从缓存中返回数据（限制数量）
+                    result_data = cached_data[-limit:] if len(cached_data) > limit else cached_data
+                    logger.info(f"[TqSdk缓存] Symbol: {symbol} | Interval: {interval} | 数据条数: {len(result_data)}")
+                    return JSONResponse(
+                        content=result_data,
+                        status_code=200
+                    )
+            
+            # 如果缓存中没有数据，尝试直接获取（兼容模式）
+            logger.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
             interval_map = {
                 "1m": 60,
                 "5m": 300,
@@ -474,7 +597,69 @@ async def get_trade_tick(
         try:
             logger.info(f"[TqSdk实时行情请求] Symbol: {symbol}")
             
-            # 使用TqSdk获取实时行情
+            # 优先从订阅缓存中获取实时行情
+            if TQSDK_SUBSCRIPTION_RUNNING and TQSDK_QUOTE_CACHE.get('AG'):
+                quote = TQSDK_QUOTE_CACHE['AG']
+                if quote:
+                    # 处理last_price
+                    last_price = quote.get('last_price', 0)
+                    if last_price is None:
+                        last_price = 0
+                    elif isinstance(last_price, str):
+                        try:
+                            last_price = float(last_price)
+                        except (ValueError, TypeError):
+                            last_price = 0
+                    else:
+                        try:
+                            last_price = float(last_price) if last_price else 0
+                        except (ValueError, TypeError):
+                            last_price = 0
+                    
+                    # 处理datetime
+                    datetime_value = quote.get('datetime', 0)
+                    if datetime_value is None:
+                        datetime_value = 0
+                    elif isinstance(datetime_value, str):
+                        try:
+                            datetime_value = float(datetime_value)
+                        except (ValueError, TypeError):
+                            datetime_value = 0
+                    else:
+                        try:
+                            datetime_value = float(datetime_value) if datetime_value else 0
+                        except (ValueError, TypeError):
+                            datetime_value = 0
+                    
+                    # 时间戳转换（纳秒转毫秒）
+                    if isinstance(datetime_value, (int, float)) and datetime_value > 0:
+                        if datetime_value > 1e12:
+                            tick_time_ms = int(datetime_value / 1e6)
+                        elif datetime_value > 1e9:
+                            tick_time_ms = int(datetime_value)
+                        else:
+                            tick_time_ms = int(datetime_value * 1000)
+                    else:
+                        tick_time_ms = int(datetime.now().timestamp() * 1000)
+                    
+                    result = {
+                        "ret": 200,
+                        "msg": "ok",
+                        "trace": trace_id,
+                        "data": {
+                            "tick_list": [{
+                                "code": "KQ.m@SHFE.ag",
+                                "price": str(last_price),
+                                "volume": str(quote.get('volume', 0)),
+                                "tick_time": str(tick_time_ms)
+                            }]
+                        }
+                    }
+                    logger.info(f"[TqSdk缓存行情] Symbol: {symbol} | Price: {last_price}")
+                    return JSONResponse(content=result, status_code=200)
+            
+            # 如果缓存中没有数据，使用直接获取（兼容模式）
+            logger.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
             quote_data = await get_tqsdk_quote_async(symbol)
             
             if quote_data:
@@ -637,6 +822,27 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 # 添加静态文件路由，使前端资源可以直接访问（放在最后，避免匹配API路由）
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时启动TqSdk订阅任务"""
+    if TQSDK_AVAILABLE:
+        logger.info("正在启动TqSdk订阅任务...")
+        # 延迟启动，确保TqApi实例已创建
+        await asyncio.sleep(2)
+        # 在后台线程中启动订阅任务
+        start_tqsdk_subscription()
+    else:
+        logger.warning("TqSdk未安装，跳过订阅任务启动")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时停止TqSdk订阅任务"""
+    global TQSDK_SUBSCRIPTION_RUNNING
+    TQSDK_SUBSCRIPTION_RUNNING = False
+    logger.info("TqSdk订阅任务已停止")
+
+
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str, request: Request):
     """服务前端静态文件"""
