@@ -1078,6 +1078,31 @@ let lastStableStrategy = null;
 
 // 保存AI分析结果
 let aiAnalysisResult = null;
+let currentDescription = ''; // 当前描述，用户输入的当下情况
+
+// 从localStorage加载保存的当前描述
+function loadCurrentDescription() {
+    try {
+        const saved = localStorage.getItem('currentDescription');
+        if (saved) {
+            currentDescription = saved;
+        }
+    } catch (e) {
+        console.warn('加载保存的当前描述失败', e);
+    }
+}
+
+// 保存当前描述到localStorage
+function saveCurrentDescription() {
+    try {
+        localStorage.setItem('currentDescription', currentDescription);
+    } catch (e) {
+        console.warn('保存当前描述到本地存储失败', e);
+    }
+}
+
+// 页面加载时恢复当前描述
+loadCurrentDescription();
 
 // 分析状态标志，防止重复点击
 let isAnalyzing = false;
@@ -1121,6 +1146,13 @@ function updateTradingStrategy() {
         return;
     }
     
+    // 检查用户是否正在输入当前描述（如果有焦点），如果是则跳过更新
+    const existingInput = document.getElementById('current-description-input');
+    if (existingInput && document.activeElement === existingInput) {
+        // 用户正在输入，完全跳过更新，避免打断用户
+        return;
+    }
+    
     // 检测布林带突破，自动触发AI分析
     checkBollingerBreakoutAndTriggerAnalysis();
     
@@ -1133,8 +1165,64 @@ function updateTradingStrategy() {
         }
     }
     
-    // 如果没有AI分析结果，使用原有逻辑（但隐藏）
-    container.innerHTML = '<div class="loading">等待AI分析数据...</div>';
+    // 在重新渲染之前，先保存当前输入框的值（如果存在）
+    let hadFocus = false;
+    let cursorPosition = 0;
+    if (existingInput) {
+        currentDescription = existingInput.value;
+        cursorPosition = existingInput.selectionStart || 0;
+        hadFocus = document.activeElement === existingInput;
+        // 如果有内容但没有焦点，光标应该在文本末尾
+        if (!hadFocus && currentDescription.length > 0 && cursorPosition === 0) {
+            cursorPosition = currentDescription.length;
+        }
+        saveCurrentDescription();
+    }
+    
+    // 如果没有AI分析结果，显示等待状态和当前描述输入框
+    container.innerHTML = `
+        <div class="loading" style="margin-bottom: 20px;">等待AI分析数据...</div>
+        <div class="strategy-section" style="margin-bottom: 20px;">
+            <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+                当前描述
+            </div>
+            <textarea id="current-description-input" placeholder="请输入当下情况的描述（将在AI分析时加入prompt）" 
+                style="width: 100%; min-height: 80px; padding: 12px; background: rgba(19, 23, 43, 0.8); border: 1px solid #1e2548; border-radius: 6px; color: #e0e0e0; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                >${currentDescription}</textarea>
+        </div>
+    `;
+    
+    // 添加输入框事件监听，保存当前描述
+    const descriptionInput = document.getElementById('current-description-input');
+    if (descriptionInput) {
+        // 恢复光标位置
+        if (cursorPosition >= 0 && currentDescription.length > 0) {
+            // 确保光标位置不超过文本长度
+            const safePosition = Math.min(cursorPosition, currentDescription.length);
+            setTimeout(() => {
+                descriptionInput.setSelectionRange(safePosition, safePosition);
+            }, 0);
+        }
+        
+        // 恢复焦点（如果之前有焦点）
+        if (hadFocus) {
+            setTimeout(() => {
+                descriptionInput.focus();
+            }, 0);
+        }
+        
+        // 移除之前可能存在的监听器（如果使用命名函数）
+        descriptionInput.addEventListener('input', function handleDescriptionInput(e) {
+            currentDescription = e.target.value;
+            saveCurrentDescription(); // 保存到localStorage
+        });
+        
+        // 添加 blur 事件监听器，确保失去焦点时也保存
+        descriptionInput.addEventListener('blur', function handleDescriptionBlur(e) {
+            currentDescription = e.target.value;
+            saveCurrentDescription();
+        });
+    }
     
     // 注释掉原有的策略分析逻辑，只保留AI分析
     /*
@@ -1213,6 +1301,21 @@ function renderStrategyFromAI(displayStrategy) {
         return;
     }
     
+    // 在重新渲染之前，先保存当前输入框的值（如果存在）
+    const existingInput = document.getElementById('current-description-input');
+    let hadFocus = false;
+    let cursorPosition = 0;
+    if (existingInput) {
+        currentDescription = existingInput.value;
+        cursorPosition = existingInput.selectionStart || 0;
+        hadFocus = document.activeElement === existingInput;
+        // 如果有内容但没有焦点，光标应该在文本末尾
+        if (!hadFocus && currentDescription.length > 0 && cursorPosition === 0) {
+            cursorPosition = currentDescription.length;
+        }
+        saveCurrentDescription();
+    }
+    
     let html = '';
     
     // 当前持仓信息
@@ -1252,8 +1355,43 @@ function renderStrategyFromAI(displayStrategy) {
         </div>
     </div>`;
     
+    // 当前描述（显示在分析理由下面）
+    html += `<div class="strategy-section" style="margin-bottom: 20px;">
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+            当前描述
+        </div>
+        <textarea id="current-description-input" placeholder="请输入当下情况的描述（将在AI分析时加入prompt）" 
+            style="width: 100%; min-height: 80px; padding: 12px; background: rgba(19, 23, 43, 0.8); border: 1px solid #1e2548; border-radius: 6px; color: #e0e0e0; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; box-sizing: border-box;"
+            >${currentDescription}</textarea>
+    </div>`;
+    
     // 将HTML渲染到页面
     container.innerHTML = html;
+    
+    // 添加输入框事件监听，保存当前描述
+    const descriptionInput = document.getElementById('current-description-input');
+    if (descriptionInput) {
+        // 恢复光标位置
+        if (cursorPosition >= 0 && currentDescription.length > 0) {
+            // 确保光标位置不超过文本长度
+            const safePosition = Math.min(cursorPosition, currentDescription.length);
+            setTimeout(() => {
+                descriptionInput.setSelectionRange(safePosition, safePosition);
+            }, 0);
+        }
+        
+        // 恢复焦点（如果之前有焦点）
+        if (hadFocus) {
+            setTimeout(() => {
+                descriptionInput.focus();
+            }, 0);
+        }
+        
+        descriptionInput.addEventListener('input', (e) => {
+            currentDescription = e.target.value;
+            saveCurrentDescription(); // 保存到localStorage
+        });
+    }
 }
 
 // 更新布林带分析显示
@@ -2634,17 +2772,37 @@ async function callAnalysisAPI(domesticData, londonData) {
                 'AG'
             );
             // 如果是最后一个消息，添加分析要求
-            const analysisInstruction = domesticPrompt + "\n\n请综合分析以上两个市场的K线数据（伦敦现货白银和国内白银），注意它们之间的关联性，并按照JSON格式输出分析结果。";
+            let analysisInstruction = domesticPrompt + "\n\n请综合分析以上两个市场的K线数据（伦敦现货白银和国内白银），注意它们之间的关联性，并按照JSON格式输出分析结果。";
+            
+            // 如果用户填写了当前描述，添加到prompt中
+            if (currentDescription && currentDescription.trim()) {
+                analysisInstruction += `\n\n当前情况描述：${currentDescription.trim()}\n\n请结合以上当前情况描述，综合考虑市场数据和实际情况，进行更准确的分析。`;
+            }
+            
             messages.push({
                 role: "user",
                 content: analysisInstruction
             });
             console.log('[callAnalysisAPI] 已添加国内数据到messages，数据条数:', domesticData.length);
+            if (currentDescription && currentDescription.trim()) {
+                console.log('[callAnalysisAPI] 已添加当前描述到prompt:', currentDescription.trim());
+            }
         } else {
             console.warn('[callAnalysisAPI] 国内数据为空，跳过');
             // 如果只有伦敦数据，在最后一个消息中添加分析要求
             if (londonData && londonData.length > 0 && messages.length > 0) {
-                messages[messages.length - 1].content += "\n\n请根据以上伦敦现货白银的K线数据进行技术分析，并按照JSON格式输出分析结果。";
+                let analysisInstruction = "\n\n请根据以上伦敦现货白银的K线数据进行技术分析，并按照JSON格式输出分析结果。";
+                
+                // 如果用户填写了当前描述，添加到prompt中
+                if (currentDescription && currentDescription.trim()) {
+                    analysisInstruction += `\n\n当前情况描述：${currentDescription.trim()}\n\n请结合以上当前情况描述，综合考虑市场数据和实际情况，进行更准确的分析。`;
+                }
+                
+                messages[messages.length - 1].content += analysisInstruction;
+                
+                if (currentDescription && currentDescription.trim()) {
+                    console.log('[callAnalysisAPI] 已添加当前描述到prompt:', currentDescription.trim());
+                }
             }
         }
         
