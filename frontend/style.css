@@ -108,7 +108,7 @@ header h1 {
 }
 
 .status-dot.trading {
-    background: #4ade80; /* 交易中：绿色 */
+    background: #3b82f6; /* 交易中：蓝色 */
 }
 
 .status-dot.closed {

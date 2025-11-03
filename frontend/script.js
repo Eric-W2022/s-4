@@ -453,6 +453,142 @@ let londonCurrentBollingerBands = {
     lower: null
 };
 
+// 持仓管理
+let currentPosition = {
+    direction: null, // 'buy' 买多 或 'sell' 卖空
+    lots: 0, // 当前手数
+    entryPrice: 0, // 开仓价格
+    openTime: null // 开仓时间
+};
+
+// 策略防抖管理（避免频繁变化）
+let strategyDebounce = {
+    lastAction: null, // 上一次的操作建议
+    lastActionTime: null, // 上一次操作建议的时间
+    stableAction: null, // 稳定的操作建议
+    stableActionTime: null, // 稳定操作建议的时间
+    changeCount: 0, // 连续变化次数
+    DEBOUNCE_DURATION: 5000 // 防抖持续时间（毫秒），5秒内不变化才确认
+};
+
+// 计算浮动盈亏
+function calculateFloatingPnL(currentPrice) {
+    if (!currentPosition.direction || currentPosition.lots === 0 || !currentPrice) {
+        return {
+            pnl: 0,
+            pnlPercent: 0,
+            isProfit: false
+        };
+    }
+    
+    const priceDiff = currentPrice - currentPosition.entryPrice;
+    let pnl = 0;
+    
+    if (currentPosition.direction === 'buy') {
+        // 买多：价格上涨盈利
+        pnl = priceDiff * currentPosition.lots;
+    } else if (currentPosition.direction === 'sell') {
+        // 卖空：价格下跌盈利
+        pnl = -priceDiff * currentPosition.lots;
+    }
+    
+    const pnlPercent = currentPosition.entryPrice !== 0 
+        ? (priceDiff / currentPosition.entryPrice) * 100 
+        : 0;
+    
+    return {
+        pnl: pnl,
+        pnlPercent: pnlPercent,
+        isProfit: pnl >= 0
+    };
+}
+
+// 开仓函数（用于手动开仓或根据策略自动开仓）
+function openPosition(direction, lots, entryPrice) {
+    if (!direction || !lots || !entryPrice) {
+        return false;
+    }
+    
+    // 如果已有持仓，检查方向是否一致
+    if (currentPosition.direction && currentPosition.direction === direction) {
+        // 同方向加仓，计算加权平均开仓价
+        const totalLots = currentPosition.lots + lots;
+        currentPosition.entryPrice = (currentPosition.entryPrice * currentPosition.lots + entryPrice * lots) / totalLots;
+        currentPosition.lots = totalLots;
+    } else if (currentPosition.direction && currentPosition.direction !== direction) {
+        // 反向持仓，需要先平仓
+        console.warn('已有反向持仓，需要先平仓');
+        return false;
+    } else {
+        // 新开仓
+        currentPosition.direction = direction;
+        currentPosition.lots = lots;
+        currentPosition.entryPrice = entryPrice;
+        currentPosition.openTime = new Date();
+    }
+    
+    // 保存到本地存储
+    try {
+        localStorage.setItem('currentPosition', JSON.stringify(currentPosition));
+    } catch (e) {
+        console.warn('保存持仓到本地存储失败', e);
+    }
+    
+    // 更新策略显示
+    updateTradingStrategy();
+    
+    return true;
+}
+
+// 平仓函数
+function closePosition() {
+    if (!currentPosition.direction || currentPosition.lots === 0) {
+        return false;
+    }
+    
+    const closedPosition = { ...currentPosition };
+    
+    // 清空持仓
+    currentPosition.direction = null;
+    currentPosition.lots = 0;
+    currentPosition.entryPrice = 0;
+    currentPosition.openTime = null;
+    
+    // 清除本地存储
+    try {
+        localStorage.removeItem('currentPosition');
+    } catch (e) {
+        console.warn('清除本地存储失败', e);
+    }
+    
+    // 更新策略显示
+    updateTradingStrategy();
+    
+    return closedPosition;
+}
+
+// 加载保存的持仓
+function loadSavedPosition() {
+    try {
+        const saved = localStorage.getItem('currentPosition');
+        if (saved) {
+            const position = JSON.parse(saved);
+            if (position.direction && position.lots > 0) {
+                currentPosition = position;
+                // 恢复时间对象
+                if (position.openTime) {
+                    currentPosition.openTime = new Date(position.openTime);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('加载保存的持仓失败', e);
+    }
+}
+
+// 页面加载时恢复持仓
+loadSavedPosition();
+
 // 保存24小时前的价格（用于计算24小时涨跌幅）
 let price24hAgo = null;
 let price24hTimestamp = null;
@@ -480,7 +616,9 @@ function analyzeBollingerBands(price, upper, middle, lower) {
     }
     
     const bandWidth = upper - lower;
-    const pricePosition = (price - lower) / bandWidth; // 0-1之间，0=下轨，1=上轨
+    let pricePosition = (price - lower) / bandWidth; // 0-1之间，0=下轨，1=上轨
+    // 限制pricePosition在合理范围内（0-1），超出范围时限制在边界
+    pricePosition = Math.max(0, Math.min(1, pricePosition));
     const distanceFromMiddle = price - middle;
     const distanceFromMiddlePercent = (distanceFromMiddle / middle) * 100;
     
@@ -622,67 +760,175 @@ function analyzeTradingStrategy() {
     let entryPrice = domesticLastTradePrice; // 建议入场价格
     let stopLoss = null; // 止损价格
     let takeProfit = null; // 止盈价格
+    let addPosition = null; // 追加手数建议
+    let addPositionReason = ''; // 追加手数理由
     let reasoning = ''; // 分析理由
+    
+    // 固定差价（±20）
+    const STOP_LOSS_DISTANCE = 20;
+    const TAKE_PROFIT_DISTANCE = 20;
     
     // 伦敦市场方向判断（权重较高）
     const londonSignal = londonAnalysis.signal;
-    const londonPosition = parseFloat(londonAnalysis.pricePosition);
+    const londonPosition = parseFloat(londonAnalysis.pricePosition) / 100; // pricePosition已经是百分比，需要除以100转换为0-1
     
     // 国内市场位置判断
-    const domesticPosition = parseFloat(domesticAnalysis.pricePosition);
+    const domesticPosition = parseFloat(domesticAnalysis.pricePosition) / 100; // pricePosition已经是百分比，需要除以100转换为0-1
+    const domesticSignal = domesticAnalysis.signal;
+    
+    // 计算突破幅度（判断是否持续突破）
+    const londonBandWidth = londonCurrentBollingerBands.upper - londonCurrentBollingerBands.lower;
+    const londonBreakoutDistance = londonSignal === 'bullish' 
+        ? (londonLastTradePrice - londonCurrentBollingerBands.upper) / londonBandWidth
+        : londonSignal === 'bearish'
+        ? (londonCurrentBollingerBands.lower - londonLastTradePrice) / londonBandWidth
+        : 0;
+    
+    const domesticBandWidth = domesticCurrentBollingerBands.upper - domesticCurrentBollingerBands.lower;
+    const domesticBreakoutDistance = domesticSignal === 'bullish'
+        ? (domesticLastTradePrice - domesticCurrentBollingerBands.upper) / domesticBandWidth
+        : domesticSignal === 'bearish'
+        ? (domesticCurrentBollingerBands.lower - domesticLastTradePrice) / domesticBandWidth
+        : 0;
     
     // 价格相关性判断（伦敦和国内的趋势是否一致）
     const priceCorrelation = (londonLastIsUp === domesticLastIsUp) ? 1 : -1;
     
-    // 综合策略判断
-    if (londonSignal === 'bullish' && domesticPosition < 0.7) {
-        // 伦敦看涨，国内价格还在中下位置，可以做多
-        action = '买多';
-        actionColor = '#ef4444';
-        confidence = Math.min(85, 60 + (domesticPosition < 0.3 ? 25 : 0));
-        entryPrice = domesticLastTradePrice;
-        stopLoss = domesticLastTradePrice * 0.98; // 止损2%
-        takeProfit = domesticLastTradePrice * 1.03; // 止盈3%
-        reasoning = `伦敦市场突破上轨看涨，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，有上涨空间`;
-    } else if (londonSignal === 'bearish' && domesticPosition > 0.3) {
-        // 伦敦看跌，国内价格还在中上位置，可以做空
+    // 分析伦敦市场整体走势（用于追加手数判断）
+    // 计算伦敦市场的趋势强度：价格相对中轨的位置和突破幅度
+    const londonTrendStrength = londonPosition; // 0-1，0=下轨，1=上轨
+    const londonTrendDirection = londonLastIsUp ? 1 : -1; // 1=上涨，-1=下跌
+    const londonTrendMomentum = Math.abs(londonLastChangePercent); // 涨跌幅绝对值，代表动量
+    
+    // 综合策略判断（反向思维：突破上轨做空，突破下轨做多）
+    // 但要预防持续突破的情况（突破幅度过大时，可能继续上涨/下跌）
+    
+    if (londonSignal === 'bullish') {
+        // 伦敦向上突破：偏向做空（反向）
+        if (londonBreakoutDistance > 0.3) {
+            // 持续大幅向上突破，可能继续上涨，谨慎观望
+            action = '观望';
+            actionColor = '#fbbf24';
+            confidence = 25;
+            reasoning = `伦敦市场持续大幅向上突破（突破幅度${(londonBreakoutDistance * 100).toFixed(1)}%），可能继续上涨，建议观望等待回调`;
+        } else if (domesticPosition > 0.6) {
+            // 国内也在高位，可以做空等待回调
+            action = '卖空';
+            actionColor = '#4ade80';
+            confidence = Math.min(75, 50 + (domesticPosition > 0.8 ? 25 : 0));
+            entryPrice = domesticLastTradePrice;
+            stopLoss = domesticLastTradePrice + STOP_LOSS_DISTANCE; // 止损：入场价+20
+            takeProfit = domesticLastTradePrice - TAKE_PROFIT_DISTANCE; // 止盈：入场价-20
+            
+            // 追加手数逻辑：结合伦敦市场走势判断
+            // 如果伦敦市场继续上涨但突破幅度不大（<0.2），且国内价格继续上涨10点以上，可以追加摊平
+            if (londonTrendDirection > 0 && londonBreakoutDistance < 0.2 && domesticPosition > 0.75) {
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场上涨但未持续突破，国内价格继续上涨10点以上时可追加0.5手摊平';
+            } else if (londonTrendDirection < 0 && domesticPosition > 0.65) {
+                // 伦敦市场开始回调，国内价格回调至中轨附近时可追加
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场回调，国内价格回调至中轨附近时可追加0.5手';
+            } else if (londonTrendDirection < 0 && domesticPosition > 0.75) {
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场回调确认，国内高位可追加0.5手，等待回调';
+            }
+            
+            reasoning = `伦敦市场向上突破，国内市场价格${(domesticPosition * 100).toFixed(0)}%高位，预计回调，建议做空`;
+        } else {
+            // 国内还在中低位，可能跟随上涨，观望
+            action = '观望';
+            actionColor = '#fbbf24';
+            confidence = 35;
+            reasoning = `伦敦市场向上突破，但国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，可能跟随上涨，建议观望`;
+        }
+    } else if (londonSignal === 'bearish') {
+        // 伦敦向下突破：偏向做多（反向）
+        if (londonBreakoutDistance > 0.3) {
+            // 持续大幅向下突破，可能继续下跌，谨慎观望
+            action = '观望';
+            actionColor = '#fbbf24';
+            confidence = 25;
+            reasoning = `伦敦市场持续大幅向下突破（突破幅度${(londonBreakoutDistance * 100).toFixed(1)}%），可能继续下跌，建议观望等待反弹`;
+        } else if (domesticPosition < 0.4) {
+            // 国内也在低位，可以做多等待反弹
+            action = '买多';
+            actionColor = '#ef4444';
+            confidence = Math.min(75, 50 + (domesticPosition < 0.2 ? 25 : 0));
+            entryPrice = domesticLastTradePrice;
+            stopLoss = domesticLastTradePrice - STOP_LOSS_DISTANCE; // 止损：入场价-20
+            takeProfit = domesticLastTradePrice + TAKE_PROFIT_DISTANCE; // 止盈：入场价+20
+            
+            // 追加手数逻辑：结合伦敦市场走势判断
+            // 如果伦敦市场继续下跌但突破幅度不大（<0.2），且国内价格继续下跌10点以上，可以追加摊平
+            if (londonTrendDirection < 0 && londonBreakoutDistance < 0.2 && domesticPosition < 0.25) {
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场下跌但未持续突破，国内价格继续下跌10点以上时可追加0.5手摊平';
+            } else if (londonTrendDirection > 0 && domesticPosition < 0.35) {
+                // 伦敦市场开始反弹，国内价格反弹至中轨附近时可追加
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场反弹，国内价格反弹至中轨附近时可追加0.5手';
+            } else if (londonTrendDirection > 0 && domesticPosition < 0.25) {
+                addPosition = '0.5手';
+                addPositionReason = '伦敦市场反弹确认，国内低位可追加0.5手，等待反弹';
+            }
+            
+            reasoning = `伦敦市场向下突破，国内市场价格${(domesticPosition * 100).toFixed(0)}%低位，预计反弹，建议做多`;
+        } else {
+            // 国内还在中高位，可能跟随下跌，观望
+            action = '观望';
+            actionColor = '#fbbf24';
+            confidence = 35;
+            reasoning = `伦敦市场向下突破，但国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，可能跟随下跌，建议观望`;
+        }
+    } else if (londonPosition > 0.75 && domesticPosition > 0.7) {
+        // 两个市场都在高位，可以做空
         action = '卖空';
         actionColor = '#4ade80';
-        confidence = Math.min(85, 60 + (domesticPosition > 0.7 ? 25 : 0));
+        confidence = 60;
         entryPrice = domesticLastTradePrice;
-        stopLoss = domesticLastTradePrice * 1.02; // 止损2%
-        takeProfit = domesticLastTradePrice * 0.97; // 止盈3%
-        reasoning = `伦敦市场跌破下轨看跌，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，有下跌空间`;
-    } else if (londonSignal === 'bullish' && domesticPosition >= 0.7) {
-        // 伦敦看涨，但国内已经涨了很多，观望
-        action = '观望';
-        actionColor = '#fbbf24';
-        confidence = 30;
-        reasoning = `伦敦市场看涨，但国内市场已位于${(domesticPosition * 100).toFixed(1)}%高位，等待回调机会`;
-    } else if (londonSignal === 'bearish' && domesticPosition <= 0.3) {
-        // 伦敦看跌，但国内已经跌了很多，观望
-        action = '观望';
-        actionColor = '#fbbf24';
-        confidence = 30;
-        reasoning = `伦敦市场看跌，但国内市场已位于${(domesticPosition * 100).toFixed(1)}%低位，等待反弹机会`;
-    } else if (priceCorrelation > 0 && londonSignal === 'bullish') {
-        // 趋势一致，伦敦看涨
+        stopLoss = domesticLastTradePrice + STOP_LOSS_DISTANCE; // 止损：入场价+20
+        takeProfit = domesticLastTradePrice - TAKE_PROFIT_DISTANCE; // 止盈：入场价-20
+        
+        // 追加手数逻辑：双市场高位，结合伦敦市场走势
+        if (londonTrendDirection < 0) {
+            // 伦敦市场开始回调，可以分批建仓
+            addPosition = '1手';
+            addPositionReason = '双市场高位+伦敦回调，建议分批建仓：先开1手，价格回调5-10点后追加0.5手，盈利15点后可再加0.5手';
+        } else if (londonBreakoutDistance > 0.15) {
+            // 伦敦市场还在突破，谨慎
+            addPosition = '0.5手';
+            addPositionReason = '双市场高位但伦敦仍在突破，建议先开0.5手，等待伦敦回调确认后再追加';
+        } else {
+            addPosition = '1手';
+            addPositionReason = '双市场高位，建议分批建仓：先开1手，价格回调5-10点后追加0.5手，盈利15点后可再加0.5手';
+        }
+        
+        reasoning = `伦敦和国内市场都在高位（伦敦${(londonPosition * 100).toFixed(0)}%，国内${(domesticPosition * 100).toFixed(0)}%），预计回调，建议做空`;
+    } else if (londonPosition < 0.25 && domesticPosition < 0.3) {
+        // 两个市场都在低位，可以做多
         action = '买多';
         actionColor = '#ef4444';
-        confidence = 55;
+        confidence = 60;
         entryPrice = domesticLastTradePrice;
-        stopLoss = domesticLastTradePrice * 0.99; // 止损1%
-        takeProfit = domesticLastTradePrice * 1.02; // 止盈2%
-        reasoning = `伦敦和国内市场趋势一致看涨，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置`;
-    } else if (priceCorrelation > 0 && londonSignal === 'bearish') {
-        // 趋势一致，伦敦看跌
-        action = '卖空';
-        actionColor = '#4ade80';
-        confidence = 55;
-        entryPrice = domesticLastTradePrice;
-        stopLoss = domesticLastTradePrice * 1.01; // 止损1%
-        takeProfit = domesticLastTradePrice * 0.98; // 止盈2%
-        reasoning = `伦敦和国内市场趋势一致看跌，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置`;
+        stopLoss = domesticLastTradePrice - STOP_LOSS_DISTANCE; // 止损：入场价-20
+        takeProfit = domesticLastTradePrice + TAKE_PROFIT_DISTANCE; // 止盈：入场价+20
+        
+        // 追加手数逻辑：双市场低位，结合伦敦市场走势
+        if (londonTrendDirection > 0) {
+            // 伦敦市场开始反弹，可以分批建仓
+            addPosition = '1手';
+            addPositionReason = '双市场低位+伦敦反弹，建议分批建仓：先开1手，价格反弹5-10点后追加0.5手，盈利15点后可再加0.5手';
+        } else if (londonBreakoutDistance > 0.15) {
+            // 伦敦市场还在突破下跌，谨慎
+            addPosition = '0.5手';
+            addPositionReason = '双市场低位但伦敦仍在突破下跌，建议先开0.5手，等待伦敦反弹确认后再追加';
+        } else {
+            addPosition = '1手';
+            addPositionReason = '双市场低位，建议分批建仓：先开1手，价格反弹5-10点后追加0.5手，盈利15点后可再加0.5手';
+        }
+        
+        reasoning = `伦敦和国内市场都在低位（伦敦${(londonPosition * 100).toFixed(0)}%，国内${(domesticPosition * 100).toFixed(0)}%），预计反弹，建议做多`;
     } else {
         // 其他情况，观望
         action = '观望';
@@ -698,11 +944,72 @@ function analyzeTradingStrategy() {
         entryPrice,
         stopLoss,
         takeProfit,
+        addPosition,
+        addPositionReason,
         reasoning,
         londonAnalysis,
         domesticAnalysis
     };
 }
+
+// 应用防抖逻辑，稳定操作建议
+function applyStrategyDebounce(newStrategy) {
+    if (!newStrategy) {
+        return null;
+    }
+    
+    const now = Date.now();
+    const currentAction = newStrategy.action;
+    
+    // 如果是第一次或者操作建议发生变化
+    if (!strategyDebounce.lastAction || strategyDebounce.lastAction !== currentAction) {
+        // 重置计数器，记录新的操作建议
+        strategyDebounce.lastAction = currentAction;
+        strategyDebounce.lastActionTime = now;
+        strategyDebounce.changeCount = 1;
+        
+        // 如果当前操作建议与稳定建议不同，等待一段时间确认
+        if (strategyDebounce.stableAction !== currentAction) {
+            // 如果上一次稳定建议的时间已经过去很久（超过2倍防抖时间），直接更新
+            if (!strategyDebounce.stableActionTime || 
+                (now - strategyDebounce.stableActionTime) > strategyDebounce.DEBOUNCE_DURATION * 2) {
+                strategyDebounce.stableAction = currentAction;
+                strategyDebounce.stableActionTime = now;
+                return newStrategy; // 返回新的策略
+            }
+            // 否则返回null，表示需要保持上一次的稳定建议
+            return null;
+        }
+    } else {
+        // 操作建议相同，检查是否已经稳定足够长时间
+        const timeSinceChange = now - strategyDebounce.lastActionTime;
+        
+        if (timeSinceChange >= strategyDebounce.DEBOUNCE_DURATION) {
+            // 已经稳定足够长时间，更新稳定建议
+            if (strategyDebounce.stableAction !== currentAction) {
+                strategyDebounce.stableAction = currentAction;
+                strategyDebounce.stableActionTime = now;
+                return newStrategy; // 返回新的策略
+            }
+            // 已经是稳定建议，直接返回
+            return newStrategy;
+        } else {
+            // 还不够稳定，返回null，保持上一次的稳定建议
+            return null;
+        }
+    }
+    
+    // 如果当前操作建议与稳定建议相同，直接返回
+    if (strategyDebounce.stableAction === currentAction) {
+        return newStrategy;
+    }
+    
+    // 默认返回null，保持上一次的稳定建议
+    return null;
+}
+
+// 保存上一次稳定的策略（用于防抖）
+let lastStableStrategy = null;
 
 // 更新交易策略显示
 function updateTradingStrategy() {
@@ -711,24 +1018,66 @@ function updateTradingStrategy() {
         return;
     }
     
-    const strategy = analyzeTradingStrategy();
+    const rawStrategy = analyzeTradingStrategy();
     
-    if (!strategy) {
+    if (!rawStrategy) {
         container.innerHTML = '<div class="loading">等待市场数据...</div>';
         return;
     }
     
+    // 应用防抖逻辑
+    const strategy = applyStrategyDebounce(rawStrategy);
+    
+    // 如果没有返回新策略（防抖中），使用上一次的稳定策略
+    const displayStrategy = strategy || lastStableStrategy;
+    
+    if (!displayStrategy) {
+        container.innerHTML = '<div class="loading">等待市场数据...</div>';
+        return;
+    }
+    
+    // 保存当前策略为稳定策略（如果通过了防抖）
+    if (strategy) {
+        lastStableStrategy = strategy;
+    }
+    
     let html = '';
     
+    // 当前持仓信息
+    const floatingPnL = calculateFloatingPnL(domesticLastTradePrice);
+    const hasPosition = currentPosition.direction && currentPosition.lots > 0;
+    
     // 操作建议（大标题）
-    html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 20px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${strategy.actionColor};">
+    html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 20px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${displayStrategy.actionColor};">
         <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px;">操作建议</div>
-        <div style="font-size: 32px; font-weight: 700; color: ${strategy.actionColor}; margin-bottom: 8px;">
-            ${strategy.action}
+        <div style="font-size: 32px; font-weight: 700; color: ${displayStrategy.actionColor}; margin-bottom: 8px;">
+            ${displayStrategy.action}
         </div>
-        <div style="font-size: 14px; color: #9ca3af;">
-            信心度: <span style="color: ${strategy.confidence >= 70 ? '#ef4444' : strategy.confidence >= 50 ? '#fbbf24' : '#9ca3af'}; font-weight: 600;">${strategy.confidence}%</span>
+        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px;">
+            信心度: <span style="color: ${displayStrategy.confidence >= 70 ? '#ef4444' : displayStrategy.confidence >= 50 ? '#fbbf24' : '#9ca3af'}; font-weight: 600;">${displayStrategy.confidence}%</span>
         </div>
+        ${hasPosition ? `
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #1e2548;">
+            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 5px;">当前持仓</div>
+            <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 5px;">
+                ${currentPosition.direction === 'buy' ? '买多' : '卖空'} ${currentPosition.lots}手 | 开仓价: ${Math.round(currentPosition.entryPrice)}
+            </div>
+            <div style="font-size: 14px; font-weight: 600; color: ${floatingPnL.isProfit ? '#4ade80' : '#ef4444'};">
+                浮动盈亏: ${floatingPnL.isProfit ? '+' : ''}${Math.round(floatingPnL.pnl)} (${floatingPnL.isProfit ? '+' : ''}${floatingPnL.pnlPercent.toFixed(2)}%)
+            </div>
+        </div>
+        ` : ''}
+        ${displayStrategy.addPosition ? `
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #1e2548;">
+            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 5px;">追加手数建议</div>
+            <div style="font-size: 14px; font-weight: 600; color: #fbbf24; margin-bottom: 5px;">
+                ${displayStrategy.addPosition}
+            </div>
+            <div style="font-size: 11px; color: #6b7280; line-height: 1.4;">
+                ${displayStrategy.addPositionReason}
+            </div>
+        </div>
+        ` : ''}
     </div>`;
     
     // 价格指引
@@ -736,23 +1085,23 @@ function updateTradingStrategy() {
         <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
             价格指引
         </div>
-        <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
                 <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">入场价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #ffffff;">${Math.round(strategy.entryPrice)}</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ffffff;">${Math.round(displayStrategy.entryPrice)}</div>
             </div>
-            ${strategy.stopLoss ? `
+            ${displayStrategy.stopLoss ? `
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
                 <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止损价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #4ade80;">${Math.round(strategy.stopLoss)}</div>
+                <div style="font-size: 18px; font-weight: 600; color: #4ade80;">${Math.round(displayStrategy.stopLoss)}</div>
             </div>
-            ` : ''}
-            ${strategy.takeProfit ? `
+            ` : '<div></div>'}
+            ${displayStrategy.takeProfit ? `
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
                 <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止盈价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #ef4444;">${Math.round(strategy.takeProfit)}</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ef4444;">${Math.round(displayStrategy.takeProfit)}</div>
             </div>
-            ` : ''}
+            ` : '<div></div>'}
         </div>
     </div>`;
     
@@ -762,7 +1111,7 @@ function updateTradingStrategy() {
             分析理由
         </div>
         <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px; color: #e0e0e0; line-height: 1.6;">
-            ${strategy.reasoning}
+            ${displayStrategy.reasoning}
         </div>
     </div>`;
     
@@ -774,14 +1123,14 @@ function updateTradingStrategy() {
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
                 <div style="font-size: 14px; font-weight: 600; color: #60a5fa; margin-bottom: 8px;">伦敦市场</div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${strategy.londonAnalysis.signalColor};">${strategy.londonAnalysis.positionDesc}</span></div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${strategy.londonAnalysis.signalColor};">${strategy.londonAnalysis.signal === 'bullish' ? '看涨' : strategy.londonAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${displayStrategy.londonAnalysis.signalColor};">${displayStrategy.londonAnalysis.positionDesc}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${displayStrategy.londonAnalysis.signalColor};">${displayStrategy.londonAnalysis.signal === 'bullish' ? '看涨' : displayStrategy.londonAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
                 <div style="font-size: 12px; color: #9ca3af;">价格: ${londonLastTradePrice.toFixed(3)}</div>
             </div>
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
                 <div style="font-size: 14px; font-weight: 600; color: #a78bfa; margin-bottom: 8px;">国内市场</div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${strategy.domesticAnalysis.signalColor};">${strategy.domesticAnalysis.positionDesc}</span></div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${strategy.domesticAnalysis.signalColor};">${strategy.domesticAnalysis.signal === 'bullish' ? '看涨' : strategy.domesticAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${displayStrategy.domesticAnalysis.signalColor};">${displayStrategy.domesticAnalysis.positionDesc}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${displayStrategy.domesticAnalysis.signalColor};">${displayStrategy.domesticAnalysis.signal === 'bullish' ? '看涨' : displayStrategy.domesticAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
                 <div style="font-size: 12px; color: #9ca3af;">价格: ${Math.round(domesticLastTradePrice)}</div>
             </div>
         </div>
