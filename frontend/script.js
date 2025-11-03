@@ -277,10 +277,6 @@ function initCharts() {
                         color: '#1e2548',
                         type: 'dashed'
                     }
-                },
-                name: '价格',
-                nameTextStyle: {
-                    color: '#9ca3af'
                 }
             }
         ],
@@ -670,16 +666,41 @@ function updateBollingerAnalysis(price, bollingerBands, containerId) {
     container.innerHTML = html;
 }
 
-// 更新国内白银成交价显示（不再显示，但保留逻辑用于计算）
+// 更新国内白银成交价显示（显示在标题中）
 function updateDomesticTradeTick(tick) {
-    // 不再更新UI显示，只保留价格数据
-    if (!tick) {
+    const container = document.getElementById('domestic-trade-tick-info');
+    
+    if (!container) {
         return;
     }
     
-    const price = parseFloat(tick.price || 0);
+    // 如果没有数据，显示上一次的价格（如果有）
+    if (!tick) {
+        if (domesticLastTradePrice !== null && domesticLastTradePrice > 0) {
+            const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
+            const changeSign = domesticLastChange >= 0 ? '+' : '';
+            container.innerHTML = `<span style="color: ${changeColor};">${domesticLastTradePrice.toFixed(2)}</span>`;
+        } else {
+            container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
+        }
+        return;
+    }
+    
+    // 处理数据格式
+    let priceData = tick;
+    if (Array.isArray(tick) && tick.length > 0) {
+        priceData = tick[0];
+    }
+    
+    const price = parseFloat(priceData.price || 0);
     
     if (price === 0) {
+        if (domesticLastTradePrice !== null && domesticLastTradePrice > 0) {
+            const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
+            container.innerHTML = `<span style="color: ${changeColor};">${domesticLastTradePrice.toFixed(2)}</span>`;
+        } else {
+            container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
+        }
         return;
     }
     
@@ -702,9 +723,19 @@ function updateDomesticTradeTick(tick) {
     domesticLastChangePercent = changePercent;
     domesticLastIsUp = isUp;
     domesticLastTradePrice = price;
+    
+    const priceColor = isUp ? '#ef4444' : '#4ade80';
+    
+    // 更新标题中的价格显示
+    container.innerHTML = `<span style="color: ${priceColor};">${price.toFixed(2)}</span>`;
+    
+    // 如果国内图表已初始化，更新图表显示实时价格
+    if (domesticChart && domesticChart.getOption) {
+        updateDomesticChartRealtimePrice();
+    }
 }
 
-// 更新伦敦白银成交价显示（显示在标题栏）
+// 更新伦敦白银成交价显示（显示在标题中）
 function updateLondonTradeTick(tick) {
     const container = document.getElementById('london-trade-tick-info');
     
@@ -716,17 +747,9 @@ function updateLondonTradeTick(tick) {
     if (!tick) {
         if (londonLastTradePrice !== null && londonLastTradePrice > 0) {
             const changeColor = londonLastIsUp ? '#ef4444' : '#4ade80';
-            const changeSign = londonLastChange >= 0 ? '+' : '';
-            container.innerHTML = `
-                <span class="price" style="color: ${changeColor}; font-size: 18px; font-weight: 700;">
-                    ${londonLastTradePrice.toFixed(3)}
-                </span>
-                <span class="change ${londonLastIsUp ? 'positive' : 'negative'}" style="color: ${changeColor}; font-size: 14px;">
-                    ${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)
-                </span>
-            `;
+            container.innerHTML = `<span style="color: ${changeColor};">${londonLastTradePrice.toFixed(3)}</span>`;
         } else {
-            container.innerHTML = '<span>加载中...</span>';
+            container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
         }
         return;
     }
@@ -744,17 +767,9 @@ function updateLondonTradeTick(tick) {
     if (price === 0) {
         if (londonLastTradePrice !== null && londonLastTradePrice > 0) {
             const changeColor = londonLastIsUp ? '#ef4444' : '#4ade80';
-            const changeSign = londonLastChange >= 0 ? '+' : '';
-            container.innerHTML = `
-                <span class="price" style="color: ${changeColor}; font-size: 18px; font-weight: 700;">
-                    ${londonLastTradePrice.toFixed(3)}
-                </span>
-                <span class="change ${londonLastIsUp ? 'positive' : 'negative'}" style="color: ${changeColor}; font-size: 14px;">
-                    ${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)
-                </span>
-            `;
+            container.innerHTML = `<span style="color: ${changeColor};">${londonLastTradePrice.toFixed(3)}</span>`;
         } else {
-            container.innerHTML = '<span>加载中...</span>';
+            container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
         }
         return;
     }
@@ -780,22 +795,53 @@ function updateLondonTradeTick(tick) {
     londonLastTradePrice = price;
     
     const priceColor = isUp ? '#ef4444' : '#4ade80';
-    const changeColor = isUp ? '#ef4444' : '#4ade80';
-    const changeSign = change >= 0 ? '+' : '';
     
-    // 更新标题栏显示
-    container.innerHTML = `
-        <span class="price" style="color: ${priceColor}; font-size: 18px; font-weight: 700;">
-            ${price.toFixed(3)}
-        </span>
-        <span class="change ${isUp ? 'positive' : 'negative'}" style="color: ${changeColor}; font-size: 14px;">
-            ${changeSign}${change.toFixed(3)} (${changeSign}${changePercent.toFixed(2)}%)
-        </span>
-    `;
+    // 更新标题中的价格显示
+    container.innerHTML = `<span style="color: ${priceColor};">${price.toFixed(3)}</span>`;
     
     // 如果伦敦图表已初始化，更新图表显示实时价格
     if (londonChart && londonChart.getOption) {
         updateLondonChartRealtimePrice();
+    }
+}
+
+// 更新国内图表实时价格显示（在K线图上）
+function updateDomesticChartRealtimePrice() {
+    if (!domesticChart || !domesticChart.getOption) {
+        return;
+    }
+    
+    try {
+        if (domesticLastTradePrice !== null && domesticLastTradePrice > 0) {
+            const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
+            const changeSign = domesticLastChange >= 0 ? '+' : '';
+            
+            // 更新graphic组件，显示在图表右上角
+            domesticChart.setOption({
+                graphic: [{
+                    type: 'text',
+                    right: 10,
+                    top: 10,
+                    z: 100,
+                    style: {
+                        text: `${domesticLastTradePrice.toFixed(2)}\n${changeSign}${domesticLastChange.toFixed(2)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
+                        fill: changeColor,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textAlign: 'right',
+                        textVerticalAlign: 'top',
+                        backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                        borderColor: changeColor,
+                        borderWidth: 1,
+                        padding: [6, 10],
+                        borderRadius: 4
+                    }
+                }]
+            }, false);
+        }
+    } catch (error) {
+        // 静默失败，避免影响其他功能
+        console.warn('更新国内图表实时价格失败:', error);
     }
 }
 
@@ -806,48 +852,29 @@ function updateLondonChartRealtimePrice() {
     }
     
     try {
-        const option = londonChart.getOption();
-        if (!option || !option.series) {
-            return;
-        }
-        
-        // 查找实时价格系列
-        let realtimePriceSeriesIndex = -1;
-        for (let i = 0; i < option.series.length; i++) {
-            if (option.series[i].name === '实时价格') {
-                realtimePriceSeriesIndex = i;
-                break;
-            }
-        }
-        
-        // 如果已有实时价格系列，更新它
-        if (realtimePriceSeriesIndex >= 0 && londonLastTradePrice !== null && londonLastTradePrice > 0) {
+        if (londonLastTradePrice !== null && londonLastTradePrice > 0) {
             const changeColor = londonLastIsUp ? '#ef4444' : '#4ade80';
             const changeSign = londonLastChange >= 0 ? '+' : '';
             
-            // 获取当前数据
-            const currentSeries = option.series[realtimePriceSeriesIndex];
-            const dataLength = currentSeries.data.length;
-            
-            // 更新最后一个数据点的价格
-            const newData = [...currentSeries.data];
-            newData[dataLength - 1] = londonLastTradePrice;
-            
-            // 更新系列配置
+            // 更新graphic组件，显示在图表右上角
             londonChart.setOption({
-                series: [{
-                    name: '实时价格',
-                    data: newData,
-                    lineStyle: {
-                        color: changeColor
-                    },
-                    itemStyle: {
-                        color: changeColor
-                    },
-                    label: {
-                        show: true,
-                        formatter: `${londonLastTradePrice.toFixed(3)}\n${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)`,
-                        color: changeColor
+                graphic: [{
+                    type: 'text',
+                    right: 10,
+                    top: 10,
+                    z: 100,
+                    style: {
+                        text: `${londonLastTradePrice.toFixed(3)}\n${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)`,
+                        fill: changeColor,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textAlign: 'right',
+                        textVerticalAlign: 'top',
+                        backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                        borderColor: changeColor,
+                        borderWidth: 1,
+                        padding: [6, 10],
+                        borderRadius: 4
                     }
                 }]
             }, false);
@@ -956,20 +983,35 @@ function updateChart(chart, data, infoElementId) {
         item.h  // 最高价
     ]);
     
-    // 计算价格范围，用于设置Y轴范围（包含K线和布林带）
-    const prices = sortedData.flatMap(item => [item.o, item.c, item.h, item.l]);
-    // 添加布林带的上下轨到价格范围
-    const bollingerPrices = [
-        ...bollingerBands.upper.filter(v => v !== null),
-        ...bollingerBands.lower.filter(v => v !== null)
-    ];
-    const allPrices = [...prices, ...bollingerPrices];
-    const minPrice = Math.min(...allPrices);
-    const maxPrice = Math.max(...allPrices);
-    const priceRange = maxPrice - minPrice;
-    // 如果价格范围太小（小于1%），使用更大的padding确保K线可见
-    const paddingPercent = priceRange / maxPrice < 0.01 ? 0.3 : 0.2;
-    const padding = Math.max(priceRange * paddingPercent, maxPrice * 0.01);
+    // 判断是否是伦敦白银
+    const isLondon = infoElementId.includes('london');
+    
+    // 计算价格范围，用于设置Y轴范围
+    let minPrice, maxPrice, padding, yAxisMin, yAxisMax;
+    
+    if (isLondon) {
+        // 伦敦白银：只基于K线的最高最低价，上下各扩展20%
+        const klinePrices = sortedData.flatMap(item => [item.h, item.l]); // 只取最高价和最低价
+        minPrice = Math.min(...klinePrices);
+        maxPrice = Math.max(...klinePrices);
+        const priceRange = maxPrice - minPrice;
+        // 上下各扩展20%
+        padding = priceRange * 0.2;
+        // 计算Y轴的最小值和最大值
+        yAxisMin = minPrice - padding;
+        yAxisMax = maxPrice + padding;
+    } else {
+        // 国内白银：只基于K线的最高最低价，上下各扩展20%
+        const klinePrices = sortedData.flatMap(item => [item.h, item.l]); // 只取最高价和最低价
+        minPrice = Math.min(...klinePrices);
+        maxPrice = Math.max(...klinePrices);
+        const priceRange = maxPrice - minPrice;
+        // 上下各扩展20%
+        padding = priceRange * 0.2;
+        // 计算Y轴的最小值和最大值
+        yAxisMin = minPrice - padding;
+        yAxisMax = maxPrice + padding;
+    }
     
     // 准备时间轴数据
     const timeData = sortedData.map(item => {
@@ -996,52 +1038,61 @@ function updateChart(chart, data, infoElementId) {
     
     // 不再更新今日开盘价，改为在初始化时获取前一日收盘价
     // 更新图表
-    const isLondon = infoElementId.includes('london');
     
-    // 如果是伦敦白银，添加实时价格标记在最后一个K线右侧
+    // 准备实时价格标记在图表右上角
     let graphic = [];
+    
+    // 如果是伦敦白银，添加实时价格标记
     if (isLondon && londonLastTradePrice !== null && londonLastTradePrice > 0 && sortedData.length > 0) {
-        const lastIndex = sortedData.length - 1;
-        const lastData = sortedData[lastIndex];
         const changeColor = londonLastIsUp ? '#ef4444' : '#4ade80';
         const changeSign = londonLastChange >= 0 ? '+' : '';
         
-        // 计算实时价格在图上的位置（最后一个K线的右侧）
-        // 使用graphic组件在图表上添加文本和线
+        // 使用graphic组件在图表右上角添加文本
         graphic.push({
-            type: 'group',
-            left: 'right',
-            top: 'middle',
-            children: [
-                {
-                    type: 'line',
-                    shape: {
-                        x1: 0,
-                        y1: 0,
-                        x2: -30,
-                        y2: 0
-                    },
-                    style: {
-                        stroke: changeColor,
-                        lineWidth: 2
-                    },
-                    position: [sortedData.length - 1, londonLastTradePrice],
-                    z: 100
-                },
-                {
-                    type: 'text',
-                    style: {
-                        text: `${londonLastTradePrice.toFixed(3)}\n${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)`,
-                        fill: changeColor,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        textAlign: 'left',
-                        textVerticalAlign: 'middle'
-                    },
-                    position: [sortedData.length - 1, londonLastTradePrice],
-                    z: 100
-                }
-            ]
+            type: 'text',
+            right: 10,
+            top: 10,
+            z: 100,
+            style: {
+                text: `${londonLastTradePrice.toFixed(3)}\n${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)`,
+                fill: changeColor,
+                fontSize: 12,
+                fontWeight: 600,
+                textAlign: 'right',
+                textVerticalAlign: 'top',
+                backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                borderColor: changeColor,
+                borderWidth: 1,
+                padding: [6, 10],
+                borderRadius: 4
+            }
+        });
+    }
+    
+    // 如果是国内白银，添加实时价格标记
+    if (!isLondon && domesticLastTradePrice !== null && domesticLastTradePrice > 0 && sortedData.length > 0) {
+        const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
+        const changeSign = domesticLastChange >= 0 ? '+' : '';
+        
+        // 使用graphic组件在图表右上角添加文本
+        graphic.push({
+            type: 'text',
+            right: 10,
+            top: 10,
+            z: 100,
+            style: {
+                text: `${domesticLastTradePrice.toFixed(2)}\n${changeSign}${domesticLastChange.toFixed(2)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
+                fill: changeColor,
+                fontSize: 12,
+                fontWeight: 600,
+                textAlign: 'right',
+                textVerticalAlign: 'top',
+                backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                borderColor: changeColor,
+                borderWidth: 1,
+                padding: [6, 10],
+                borderRadius: 4
+            }
         });
     }
     
@@ -1090,32 +1141,33 @@ function updateChart(chart, data, infoElementId) {
                 axisLabel: {
                     color: '#9ca3af',
                     formatter: function(value) {
-                        // 取整，不显示小数
-                        return Math.round(value).toString();
+                        // 对于伦敦白银，显示3位小数；对于国内白银，取整
+                        if (isLondon) {
+                            return value.toFixed(3);
+                        } else {
+                            return Math.round(value).toString();
+                        }
                     },
-                    showMinLabel: false, // 不显示最小值标签（避免重复）
-                    showMaxLabel: false  // 不显示最大值标签（避免重复）
+                    showMinLabel: true,
+                    showMaxLabel: true
                 },
                 splitLine: {
                     lineStyle: {
                         color: '#1e2548',
                         type: 'dashed'
-                    }
+                    },
+                    show: true
                 },
-                name: '价格',
-                nameTextStyle: {
-                    color: '#9ca3af'
-                },
-                min: function(value) {
-                    // 确保最小值不小于0，并且有足够的padding
+                min: isLondon ? yAxisMin : function(value) {
+                    // 国内白银：确保最小值不小于0，并且有足够的padding
                     const minVal = Math.max(0, value.min - padding);
                     return minVal;
                 },
-                max: function(value) {
-                    // 增加最大值，确保K线和布林带都有足够的显示空间
+                max: isLondon ? yAxisMax : function(value) {
+                    // 国内白银：增加最大值，确保K线和布林带都有足够的显示空间
                     return value.max + padding;
                 },
-                splitNumber: 5 // 设置Y轴分割数量，让刻度更清晰
+                splitNumber: isLondon ? 6 : 5 // 伦敦白银设置6个分割点，确保刻度清晰且不重复
             }
         ],
         series: [
@@ -1199,53 +1251,11 @@ function updateChart(chart, data, infoElementId) {
         ]
     };
     
-    // 如果是伦敦白银，添加实时价格显示在最后一个K线右侧
-    if (isLondon && londonLastTradePrice !== null && londonLastTradePrice > 0 && sortedData.length > 0) {
-        const changeColor = londonLastIsUp ? '#ef4444' : '#4ade80';
-        const changeSign = londonLastChange >= 0 ? '+' : '';
-        
-        // 添加实时价格线系列（显示在最后一个K线右侧）
-        const realtimePriceData = new Array(sortedData.length).fill(null);
-        realtimePriceData[sortedData.length - 1] = londonLastTradePrice;
-        
-        option.series.push({
-            name: '实时价格',
-            type: 'line',
-            data: realtimePriceData,
-            xAxisIndex: 0,
-            yAxisIndex: 0,
-            lineStyle: {
-                color: changeColor,
-                width: 2,
-                type: 'dashed'
-            },
-            itemStyle: {
-                color: changeColor
-            },
-            symbol: 'circle',
-            symbolSize: 8,
-            label: {
-                show: true,
-                position: 'right',
-                formatter: `${londonLastTradePrice.toFixed(3)}\n${changeSign}${londonLastChange.toFixed(3)} (${changeSign}${londonLastChangePercent.toFixed(2)}%)`,
-                color: changeColor,
-                fontSize: 12,
-                fontWeight: 600,
-                backgroundColor: 'rgba(19, 23, 43, 0.9)',
-                borderColor: changeColor,
-                borderWidth: 1,
-                padding: [4, 8],
-                borderRadius: 4
-            },
-            z: 10
-        });
-    }
-    
     chart.setOption(option);
 }
 
-// 判断当前是否在交易时间
-function isTradingTime() {
+// 判断当前是否在交易时间（伦敦白银）
+function isLondonTradingTime() {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcDay = now.getUTCDay(); // 0=周日, 6=周六
@@ -1288,18 +1298,75 @@ function isTradingTime() {
     return false;
 }
 
+// 判断当前是否在交易时间（国内白银 - 中国期货市场）
+function isDomesticTradingTime() {
+    const now = new Date();
+    // 获取当前时间戳（毫秒）
+    const utcTime = now.getTime();
+    // 计算北京时间（UTC+8）
+    const beijingOffset = 8 * 60 * 60 * 1000;
+    const beijingTimestamp = utcTime + beijingOffset;
+    
+    // 创建北京时间对象（使用UTC方法，但时间戳是北京时间）
+    const beijingDate = new Date(beijingTimestamp);
+    const beijingHour = beijingDate.getUTCHours();
+    const beijingMinute = beijingDate.getUTCMinutes();
+    const beijingDay = beijingDate.getUTCDay(); // 0=周日, 6=周六
+    
+    // 周末休市
+    if (beijingDay === 0 || beijingDay === 6) {
+        return false;
+    }
+    
+    // 夜盘：21:00-02:30（次日）
+    if (beijingHour >= 21 || beijingHour < 2) {
+        if (beijingHour === 2 && beijingMinute >= 30) {
+            return false; // 02:30之后结束夜盘
+        }
+        return true;
+    }
+    
+    // 日盘：09:00-11:30, 13:30-15:00
+    if (beijingHour >= 9 && beijingHour < 11) {
+        return true;
+    }
+    
+    if (beijingHour === 11 && beijingMinute < 30) {
+        return true;
+    }
+    
+    if (beijingHour >= 13 && beijingHour < 15) {
+        if (beijingHour === 13 && beijingMinute < 30) {
+            return false; // 13:30之前休市
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+// 判断当前是否在交易时间（保持向后兼容）
+function isTradingTime() {
+    return isLondonTradingTime();
+}
+
 // 更新状态
 function updateStatus(status) {
-    const statusDot = document.querySelector('.status-dot');
-    const statusText = document.getElementById('status-text');
-    
-    statusDot.className = `status-dot ${status}`;
-    
     // 判断交易状态
-    const tradingStatus = isTradingTime() ? '交易中' : '休市中';
+    const isLondonTrading = isLondonTradingTime();
+    const isDomesticTrading = isDomesticTradingTime();
     
-    // 只显示交易状态
-    statusText.textContent = tradingStatus;
+    // 更新伦敦现货白银状态点
+    const londonStatusDot = document.getElementById('london-status-dot');
+    if (londonStatusDot) {
+        londonStatusDot.className = `status-dot ${isLondonTrading ? 'trading' : 'closed'}`;
+    }
+    
+    // 更新国内白银主力状态点
+    const domesticStatusDot = document.getElementById('domestic-status-dot');
+    if (domesticStatusDot) {
+        domesticStatusDot.className = `status-dot ${isDomesticTrading ? 'trading' : 'closed'}`;
+    }
 }
 
 // 生成测试数据（用于调试）
@@ -1462,6 +1529,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化WebSocket连接（订阅最新成交价）
     connectAllTickWebSocket();
     
+    // 初始化状态点显示
+    updateStatus();
+    
     // 立即更新一次数据
     updateAllData();
     
@@ -1474,43 +1544,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 开发模式：监听文件变化（热重载）
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.log('🔧 开发模式：已启用热重载功能');
-        // 每3秒检查一次脚本文件是否有更新
-        let lastScriptVersion = Date.now();
-        let lastScriptHash = '';
+        console.log('🔧 开发模式：已启用热重载功能（HTML、CSS、JS）');
         
-        setInterval(() => {
-            fetch(`/script.js?t=${Date.now()}`)
-                .then(response => {
-                    if (response.ok) {
-                        return response.text();
-                    }
-                    return null;
-                })
-                .then(scriptContent => {
-                    if (scriptContent) {
-                        // 计算简单的hash（前100个字符的hash）
-                        const hash = btoa(scriptContent.substring(0, 100)).substring(0, 20);
-                        
-                        if (hash !== lastScriptHash && lastScriptHash !== '') {
-                            console.log('检测到脚本文件更新，3秒后自动刷新页面...');
-                            setTimeout(() => {
-                                if (updateTimer) {
-                                    clearInterval(updateTimer);
-                                }
-                                if (tradeDepthTimer) {
-                                    clearInterval(tradeDepthTimer);
-                                }
-                                window.location.reload();
-                            }, 3000);
-                        }
-                        lastScriptHash = hash;
+        // 检查多个文件的变化
+        const filesToCheck = [
+            { url: '/script.js', name: 'script.js' },
+            { url: '/style.css', name: 'style.css' },
+            { url: '/index.html', name: 'index.html' }
+        ];
+        
+        const fileHashes = {};
+        
+        // 初始化：获取所有文件的初始hash
+        Promise.all(filesToCheck.map(file => 
+            fetch(`${file.url}?t=${Date.now()}`)
+                .then(response => response.ok ? response.text() : null)
+                .then(content => {
+                    if (content) {
+                        // 计算hash（使用前200个字符，更准确）
+                        const hash = btoa(content.substring(0, 200)).substring(0, 30);
+                        fileHashes[file.name] = hash;
+                        console.log(`✅ ${file.name} 已加载，hash: ${hash.substring(0, 10)}...`);
                     }
                 })
-                .catch(error => {
-                    // 静默失败
+                .catch(() => {})
+        )).then(() => {
+            console.log('📦 所有文件已初始化，开始监控文件变化...');
+            
+            // 每2秒检查一次文件是否有更新
+            setInterval(() => {
+                filesToCheck.forEach(file => {
+                    fetch(`${file.url}?t=${Date.now()}`)
+                        .then(response => {
+                            if (response.ok) {
+                                return response.text();
+                            }
+                            return null;
+                        })
+                        .then(content => {
+                            if (content) {
+                                const hash = btoa(content.substring(0, 200)).substring(0, 30);
+                                
+                                if (fileHashes[file.name] && hash !== fileHashes[file.name]) {
+                                    console.log(`🔄 检测到 ${file.name} 文件更新，3秒后自动刷新页面...`);
+                                    console.log(`   旧hash: ${fileHashes[file.name].substring(0, 10)}...`);
+                                    console.log(`   新hash: ${hash.substring(0, 10)}...`);
+                                    
+                                    // 3秒后刷新页面
+                                    setTimeout(() => {
+                                        if (updateTimer) {
+                                            clearInterval(updateTimer);
+                                        }
+                                        if (tradeDepthTimer) {
+                                            clearInterval(tradeDepthTimer);
+                                        }
+                                        console.log('🔄 正在刷新页面...');
+                                        window.location.reload();
+                                    }, 3000);
+                                    
+                                    // 更新hash，避免重复触发
+                                    fileHashes[file.name] = hash;
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            // 静默失败，避免控制台噪音
+                        });
                 });
-        }, 3000);
+            }, 2000); // 每2秒检查一次
+        });
         
         // 监听键盘快捷键：Ctrl+R 刷新数据，Ctrl+Shift+R 重新加载页面
         document.addEventListener('keydown', (e) => {

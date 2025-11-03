@@ -102,56 +102,51 @@ header h1 {
     height: 10px;
     border-radius: 50%;
     background: #4ade80;
+    margin-left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.status-dot.trading {
+    background: #4ade80; /* 交易中：绿色 */
+}
+
+.status-dot.closed {
+    background: #fbbf24; /* 休市中：黄色 */
 }
 
 .status-dot.connected {
     background: #4ade80;
-    animation: pulse-slow 2s infinite;
 }
 
 .status-dot.connecting {
     background: #4ade80;
-    animation: pulse-fast 0.8s infinite;
 }
 
 .status-dot.error {
     background: #ef4444;
-    animation: none;
 }
 
-#status-text {
-    color: #e0e0e0;
-    font-size: 14px;
-    font-weight: 500;
+.chart-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-@keyframes pulse-fast {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.3;
-        transform: scale(0.8);
-    }
+.title-price {
+    margin-left: 10px;
+    font-weight: 600;
+    font-size: 18px;
 }
 
-@keyframes pulse-slow {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.6;
-        transform: scale(0.9);
-    }
-}
 
 .main-content {
     display: flex;
     gap: 20px;
     padding: 20px;
-    padding-top: 70px; /* 为右上角状态指示器留出空间 */
     flex-direction: row; /* 左右布局 */
 }
 

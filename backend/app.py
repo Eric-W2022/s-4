@@ -638,21 +638,36 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 # 添加静态文件路由，使前端资源可以直接访问（放在最后，避免匹配API路由）
 @app.get("/{file_path:path}")
-async def serve_static(file_path: str):
+async def serve_static(file_path: str, request: Request):
     """服务前端静态文件"""
     if file_path in ["", "index.html"]:
-        return FileResponse(str(FRONTEND_DIR / "index.html"))
+        response = FileResponse(str(FRONTEND_DIR / "index.html"))
+        # 开发模式下禁用缓存，方便热重载
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     
     file = FRONTEND_DIR / file_path
     if file.exists() and file.is_file():
-        return FileResponse(str(file))
+        response = FileResponse(str(file))
+        # 开发模式下禁用缓存，方便热重载
+        if file_path.endswith(('.js', '.css', '.html')):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
     
     # 如果是API路径，返回404
     if file_path.startswith("api/") or file_path.startswith("docs") or file_path.startswith("openapi.json"):
         raise HTTPException(status_code=404, detail="Not found")
     
     # 其他情况返回index.html（用于SPA路由）
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+    response = FileResponse(str(FRONTEND_DIR / "index.html"))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 if __name__ == "__main__":

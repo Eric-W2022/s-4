@@ -9,13 +9,7 @@
 </head>
 <body>
     <div class="container">
-        <!-- 右上角浮空状态指示器 -->
-        <div class="floating-status">
-            <div class="status-indicator">
-                <span class="status-dot connecting"></span>
-                <span id="status-text">--</span>
-            </div>
-        </div>
+        <!-- 右上角浮空状态指示器 - 已移除，改为在每个图表标题后显示 -->
 
     <div class="main-content">
         <!-- 左侧：伦敦现货白银K线图 -->
@@ -23,11 +17,12 @@
             <!-- 伦敦现货白银 - 方向指引参考 -->
             <div class="chart-wrapper">
                 <div class="chart-header">
-                    <h2>伦敦现货白银</h2>
+                    <h2>
+                        伦敦现货白银
+                        <span class="status-dot" id="london-status-dot"></span>
+                        <span id="london-trade-tick-info" class="title-price"></span>
+                    </h2>
                     <div class="chart-info" id="london-info">
-                        <div id="london-trade-tick-info" style="display: flex; align-items: center; gap: 15px;">
-                            <div class="loading">加载中...</div>
-                        </div>
                     </div>
                 </div>
                 <div id="london-chart" class="chart" style="height: 600px;"></div>
@@ -39,11 +34,12 @@
             <!-- 国内白银主力 - 主要交易标的 -->
             <div class="chart-wrapper">
                     <div class="chart-header">
-                        <h2>国内白银主力</h2>
+                        <h2>
+                            国内白银主力
+                            <span class="status-dot" id="domestic-status-dot"></span>
+                            <span id="domestic-trade-tick-info" class="title-price"></span>
+                        </h2>
                         <div class="chart-info" id="domestic-info">
-                            <div id="domestic-trade-tick-info" style="display: flex; align-items: center; gap: 15px;">
-                                <span>加载中...</span>
-                            </div>
                         </div>
                     </div>
                 <div id="domestic-chart" class="chart" style="height: 600px;"></div>
