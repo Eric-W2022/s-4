@@ -1542,6 +1542,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTradeAndDepth(); // 立即执行一次
     tradeDepthTimer = setInterval(updateTradeAndDepth, 500);
     
+    // 监控交易时间变化，在交易时间开始时立即刷新数据
+    let lastDomesticTradingState = isDomesticTradingTime();
+    let lastLondonTradingState = isLondonTradingTime();
+    
+    setInterval(() => {
+        const currentDomesticTrading = isDomesticTradingTime();
+        const currentLondonTrading = isLondonTradingTime();
+        
+        // 如果国内交易时间从休市变为交易中，立即刷新数据
+        if (!lastDomesticTradingState && currentDomesticTrading) {
+            console.log('国内交易时间开始，立即刷新数据...');
+            updateAllData();
+            updateTradeAndDepth();
+        }
+        
+        // 如果伦敦交易时间从休市变为交易中，立即刷新数据
+        if (!lastLondonTradingState && currentLondonTrading) {
+            console.log('伦敦交易时间开始，立即刷新数据...');
+            updateAllData();
+            updateTradeAndDepth();
+        }
+        
+        // 更新状态点
+        updateStatus();
+        
+        lastDomesticTradingState = currentDomesticTrading;
+        lastLondonTradingState = currentLondonTrading;
+    }, 1000); // 每秒检查一次交易状态
+    
     // 开发模式：监听文件变化（热重载）
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         console.log('🔧 开发模式：已启用热重载功能（HTML、CSS、JS）');
