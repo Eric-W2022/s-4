@@ -1079,16 +1079,27 @@ let lastStableStrategy = null;
 // 保存AI分析结果
 let aiAnalysisResult = null;
 let currentDescription = ''; // 当前描述，用户输入的当下情况
+let descriptionLoaded = false; // 标记是否已经从localStorage加载过
 
 // 从localStorage加载保存的当前描述
 function loadCurrentDescription() {
+    // 如果已经加载过，就不重复加载
+    if (descriptionLoaded) {
+        return;
+    }
+    
     try {
         const saved = localStorage.getItem('currentDescription');
-        if (saved) {
+        if (saved !== null) {
             currentDescription = saved;
+            console.log('[加载描述] 从localStorage恢复描述，长度:', saved.length);
+        } else {
+            console.log('[加载描述] localStorage中没有保存的描述');
         }
+        descriptionLoaded = true;
     } catch (e) {
         console.warn('加载保存的当前描述失败', e);
+        descriptionLoaded = true; // 即使失败也标记为已加载，避免重复尝试
     }
 }
 
@@ -1096,6 +1107,7 @@ function loadCurrentDescription() {
 function saveCurrentDescription() {
     try {
         localStorage.setItem('currentDescription', currentDescription);
+        console.log('[保存描述] 已保存到localStorage，长度:', currentDescription.length);
     } catch (e) {
         console.warn('保存当前描述到本地存储失败', e);
     }
@@ -1144,6 +1156,11 @@ function updateTradingStrategy() {
     const container = document.getElementById('trading-strategy-content');
     if (!container) {
         return;
+    }
+    
+    // 确保加载了保存的描述（防止某些情况下没有加载）
+    if (!descriptionLoaded) {
+        loadCurrentDescription();
     }
     
     // 检查用户是否正在输入当前描述（如果有焦点），如果是则跳过更新
@@ -1299,6 +1316,11 @@ function renderStrategyFromAI(displayStrategy) {
     const container = document.getElementById('trading-strategy-content');
     if (!container) {
         return;
+    }
+    
+    // 确保加载了保存的描述（防止某些情况下没有加载）
+    if (!descriptionLoaded) {
+        loadCurrentDescription();
     }
     
     // 在重新渲染之前，先保存当前输入框的值（如果存在）
