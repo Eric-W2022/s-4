@@ -679,7 +679,7 @@ function updateDomesticTradeTick(tick) {
         if (domesticLastTradePrice !== null && domesticLastTradePrice > 0) {
             const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
             const changeSign = domesticLastChange >= 0 ? '+' : '';
-            container.innerHTML = `<span style="color: ${changeColor};">${domesticLastTradePrice.toFixed(2)}</span>`;
+            container.innerHTML = `<span style="color: ${changeColor};">${Math.round(domesticLastTradePrice)}</span>`;
         } else {
             container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
         }
@@ -697,7 +697,7 @@ function updateDomesticTradeTick(tick) {
     if (price === 0) {
         if (domesticLastTradePrice !== null && domesticLastTradePrice > 0) {
             const changeColor = domesticLastIsUp ? '#ef4444' : '#4ade80';
-            container.innerHTML = `<span style="color: ${changeColor};">${domesticLastTradePrice.toFixed(2)}</span>`;
+            container.innerHTML = `<span style="color: ${changeColor};">${Math.round(domesticLastTradePrice)}</span>`;
         } else {
             container.innerHTML = '<span style="color: #6b7280;">加载中...</span>';
         }
@@ -727,7 +727,7 @@ function updateDomesticTradeTick(tick) {
     const priceColor = isUp ? '#ef4444' : '#4ade80';
     
     // 更新标题中的价格显示
-    container.innerHTML = `<span style="color: ${priceColor};">${price.toFixed(2)}</span>`;
+    container.innerHTML = `<span style="color: ${priceColor};">${Math.round(price)}</span>`;
     
     // 如果国内图表已初始化，更新图表显示实时价格
     if (domesticChart && domesticChart.getOption) {
@@ -824,7 +824,7 @@ function updateDomesticChartRealtimePrice() {
                     top: 10,
                     z: 100,
                     style: {
-                        text: `${domesticLastTradePrice.toFixed(2)}\n${changeSign}${domesticLastChange.toFixed(2)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
+                        text: `${Math.round(domesticLastTradePrice)}\n${changeSign}${Math.round(domesticLastChange)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
                         fill: changeColor,
                         fontSize: 12,
                         fontWeight: 600,
@@ -987,30 +987,32 @@ function updateChart(chart, data, infoElementId) {
     const isLondon = infoElementId.includes('london');
     
     // 计算价格范围，用于设置Y轴范围
-    let minPrice, maxPrice, padding, yAxisMin, yAxisMax;
+    let minPrice, maxPrice, paddingTop, paddingBottom, yAxisMin, yAxisMax;
     
     if (isLondon) {
-        // 伦敦白银：只基于K线的最高最低价，上下各扩展20%
+        // 伦敦白银：只基于K线的最高最低价，上方扩展15%，下方扩展10%
         const klinePrices = sortedData.flatMap(item => [item.h, item.l]); // 只取最高价和最低价
         minPrice = Math.min(...klinePrices);
         maxPrice = Math.max(...klinePrices);
         const priceRange = maxPrice - minPrice;
-        // 上下各扩展20%
-        padding = priceRange * 0.2;
+        // 上方扩展15%，下方扩展10%
+        paddingTop = priceRange * 0.15;
+        paddingBottom = priceRange * 0.1;
         // 计算Y轴的最小值和最大值
-        yAxisMin = minPrice - padding;
-        yAxisMax = maxPrice + padding;
+        yAxisMin = minPrice - paddingBottom;
+        yAxisMax = maxPrice + paddingTop;
     } else {
-        // 国内白银：只基于K线的最高最低价，上下各扩展20%
+        // 国内白银：只基于K线的最高最低价，上方扩展15%，下方扩展10%
         const klinePrices = sortedData.flatMap(item => [item.h, item.l]); // 只取最高价和最低价
         minPrice = Math.min(...klinePrices);
         maxPrice = Math.max(...klinePrices);
         const priceRange = maxPrice - minPrice;
-        // 上下各扩展20%
-        padding = priceRange * 0.2;
+        // 上方扩展15%，下方扩展10%
+        paddingTop = priceRange * 0.15;
+        paddingBottom = priceRange * 0.1;
         // 计算Y轴的最小值和最大值
-        yAxisMin = minPrice - padding;
-        yAxisMax = maxPrice + padding;
+        yAxisMin = minPrice - paddingBottom;
+        yAxisMax = maxPrice + paddingTop;
     }
     
     // 准备时间轴数据
@@ -1081,7 +1083,7 @@ function updateChart(chart, data, infoElementId) {
             top: 10,
             z: 100,
             style: {
-                text: `${domesticLastTradePrice.toFixed(2)}\n${changeSign}${domesticLastChange.toFixed(2)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
+                text: `${Math.round(domesticLastTradePrice)}\n${changeSign}${Math.round(domesticLastChange)} (${changeSign}${domesticLastChangePercent.toFixed(2)}%)`,
                 fill: changeColor,
                 fontSize: 12,
                 fontWeight: 600,
@@ -1159,13 +1161,13 @@ function updateChart(chart, data, infoElementId) {
                     show: true
                 },
                 min: isLondon ? yAxisMin : function(value) {
-                    // 国内白银：确保最小值不小于0，并且有足够的padding
-                    const minVal = Math.max(0, value.min - padding);
+                    // 国内白银：确保最小值不小于0，并且有足够的paddingBottom
+                    const minVal = Math.max(0, value.min - paddingBottom);
                     return minVal;
                 },
                 max: isLondon ? yAxisMax : function(value) {
-                    // 国内白银：增加最大值，确保K线和布林带都有足够的显示空间
-                    return value.max + padding;
+                    // 国内白银：增加最大值，使用paddingTop确保K线和布林带都有足够的显示空间
+                    return value.max + paddingTop;
                 },
                 splitNumber: isLondon ? 6 : 5 // 伦敦白银设置6个分割点，确保刻度清晰且不重复
             }
