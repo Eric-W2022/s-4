@@ -9,51 +9,45 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <div style="flex: 1;">
-                <h1>白银K线监控</h1>
-            </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div class="status-indicator">
-                    <span class="status-dot connecting"></span>
-                    <span id="status-text">--</span>
-                </div>
-            </div>
-        </header>
-
-        <div class="main-content">
-            <!-- 左侧：K线图 -->
-            <div class="left-panel">
-                <div class="chart-wrapper">
-                    <div class="chart-header">
-                        <h2>伦敦现货白银 (Silver)</h2>
-                        <div class="chart-info" id="london-info">
-                            <span>加载中...</span>
-                        </div>
-                    </div>
-                    <div id="london-chart" class="chart"></div>
-                </div>
-            </div>
-
-            <!-- 右侧：最新成交价和盘口 -->
-            <div class="right-panel">
-                <!-- 最新成交价 -->
-                <div class="info-card">
-                    <h3>最新成交价</h3>
-                    <div id="trade-tick-info" class="tick-info">
-                        <div class="loading">加载中...</div>
-                    </div>
-                </div>
-
-                <!-- 盘口深度 -->
-                <div class="info-card">
-                    <h3>盘口深度</h3>
-                    <div id="depth-tick-info" class="depth-info">
-                        <div class="loading">加载中...</div>
-                    </div>
-                </div>
+        <!-- 右上角浮空状态指示器 -->
+        <div class="floating-status">
+            <div class="status-indicator">
+                <span class="status-dot connecting"></span>
+                <span id="status-text">--</span>
             </div>
         </div>
+
+    <div class="main-content">
+        <!-- 左侧：伦敦现货白银K线图 -->
+        <div class="left-panel">
+            <!-- 伦敦现货白银 - 方向指引参考 -->
+            <div class="chart-wrapper">
+                <div class="chart-header">
+                    <h2>伦敦现货白银</h2>
+                    <div class="chart-info" id="london-info">
+                        <div id="london-trade-tick-info" style="display: flex; align-items: center; gap: 15px;">
+                            <div class="loading">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="london-chart" class="chart" style="height: 600px;"></div>
+            </div>
+        </div>
+
+        <!-- 右侧：国内白银K线图 -->
+        <div class="right-panel">
+            <!-- 国内白银主力 - 主要交易标的 -->
+            <div class="chart-wrapper">
+                <div class="chart-header">
+                    <h2>国内白银主力</h2>
+                    <div class="chart-info" id="domestic-info">
+                        <span>加载中...</span>
+                    </div>
+                </div>
+                <div id="domestic-chart" class="chart" style="height: 600px;"></div>
+            </div>
+        </div>
+    </div>
 
         <footer style="display: none;">
         </footer>

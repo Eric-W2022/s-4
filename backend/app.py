@@ -1,6 +1,7 @@
 """
 FastAPI 后端服务
 提供前端页面和AllTick API数据接口
+同时支持TqSdk获取国内期货数据
 """
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, FileResponse
@@ -13,6 +14,19 @@ from datetime import datetime
 import json
 import uuid
 import urllib.parse
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# 尝试导入TqSdk
+try:
+    from tqsdk import TqApi, TqAuth
+    import pandas as pd
+    TQSDK_AVAILABLE = True
+except ImportError:
+    TQSDK_AVAILABLE = False
+    TqApi = None
+    TqAuth = None
+    pd = None
 
 app = FastAPI(title="白银K线监控", version="1.0.0")
 
@@ -35,6 +49,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# TqSdk配置
+TQ_USERNAME = '17665117821'
+TQ_PASSWORD = 'STC89c51'
+TQ_API = None  # TqApi实例，全局单例
+
+# 线程池执行器（用于运行同步的TqSdk代码）
+if TQSDK_AVAILABLE:
+    executor = ThreadPoolExecutor(max_workers=2)
+else:
+    executor = None
+
 # AllTick API配置
 # 外汇、贵金属、加密货币、原油、CFD指数、商品接口地址
 ALLTICK_BASE_URL = "https://quote.alltick.co/quote-b-api"
@@ -52,6 +77,149 @@ KLINE_TYPE_MAP = {
     "1w": 9,
     "1M": 10
 }
+
+
+def convert_tqsdk_kline_to_standard_format(kline_df) -> list:
+    """将TqSdk的K线DataFrame转换为标准格式"""
+    if kline_df is None or kline_df.empty:
+        return []
+    
+    result = []
+    for _, row in kline_df.iterrows():
+        # TqSdk返回的DataFrame包含datetime、open、high、low、close、volume等列
+        # datetime列可能是Timestamp对象或纳秒时间戳(float)
+        datetime_value = row.get('datetime')
+        if datetime_value is None:
+            continue
+        
+        # 处理时间戳转换
+        try:
+            if hasattr(datetime_value, 'timestamp'):
+                # pandas Timestamp对象
+                timestamp_ms = int(datetime_value.timestamp() * 1000)
+            elif isinstance(datetime_value, (int, float)):
+                # 纳秒时间戳（TqSdk返回的是纳秒）
+                if datetime_value > 1e12:  # 纳秒时间戳
+                    timestamp_ms = int(datetime_value / 1e6)
+                elif datetime_value > 1e9:  # 毫秒时间戳
+                    timestamp_ms = int(datetime_value)
+                else:  # 秒时间戳
+                    timestamp_ms = int(datetime_value * 1000)
+            else:
+                # 尝试转换为Timestamp
+                if pd:
+                    ts = pd.Timestamp(datetime_value)
+                    timestamp_ms = int(ts.timestamp() * 1000)
+                else:
+                    timestamp_ms = 0
+        except Exception as e:
+            logger.warning(f"时间戳转换失败: {datetime_value}, 错误: {e}")
+            continue
+        
+        result.append({
+            "t": timestamp_ms,
+            "o": float(row.get('open', 0)),
+            "c": float(row.get('close', 0)),
+            "h": float(row.get('high', 0)),
+            "l": float(row.get('low', 0)),
+            "v": float(row.get('volume', 0)),
+            "tu": float(row.get('close', 0) * row.get('volume', 0))  # 成交额 = 收盘价 * 成交量
+        })
+    
+    return result
+
+
+def get_tqsdk_api():
+    """获取或创建TqApi实例（单例模式）"""
+    global TQ_API
+    if not TQSDK_AVAILABLE:
+        raise RuntimeError("TqSdk未安装")
+    
+    if TQ_API is None:
+        try:
+            auth = TqAuth(TQ_USERNAME, TQ_PASSWORD)
+            TQ_API = TqApi(auth=auth)
+            logger.info("TqApi实例创建成功")
+        except Exception as e:
+            logger.error(f"创建TqApi实例失败: {e}")
+            raise
+    return TQ_API
+
+
+def fetch_tqsdk_kline(symbol: str, duration_seconds: int, data_length: int):
+    """使用TqSdk获取K线数据（同步函数，在线程池中运行）"""
+    try:
+        api = get_tqsdk_api()
+        # 白银主力合约代码：KQ.m@SHFE.ag
+        if symbol.upper() == 'AG':
+            contract = "KQ.m@SHFE.ag"
+        else:
+            contract = symbol
+        
+        # 获取K线数据
+        kline_df = api.get_kline_serial(contract, duration_seconds=duration_seconds, data_length=data_length)
+        
+        # 转换为标准格式
+        return convert_tqsdk_kline_to_standard_format(kline_df)
+    except Exception as e:
+        logger.error(f"获取TqSdk K线数据失败: {e}")
+        raise
+
+
+def fetch_tqsdk_quote(symbol: str):
+    """使用TqSdk获取实时行情（同步函数，在线程池中运行）"""
+    try:
+        api = get_tqsdk_api()
+        # 白银主力合约代码：KQ.m@SHFE.ag
+        if symbol.upper() == 'AG':
+            contract = "KQ.m@SHFE.ag"
+        else:
+            contract = symbol
+        
+        # 获取实时行情
+        quote = api.get_quote(contract)
+        
+        # TqSdk的quote对象有last_price字段（最新价）
+        # 转换为标准格式
+        if quote:
+            last_price = quote.get('last_price', 0) or 0
+            volume = quote.get('volume', 0) or 0
+            datetime_value = quote.get('datetime', 0) or 0
+            
+            # 时间戳转换（纳秒转毫秒）
+            if datetime_value > 1e12:
+                tick_time_ms = int(datetime_value / 1e6)
+            elif datetime_value > 1e9:
+                tick_time_ms = int(datetime_value)
+            else:
+                tick_time_ms = int(datetime_value * 1000)
+            
+            return {
+                "code": contract,
+                "price": str(last_price),
+                "volume": str(volume),
+                "tick_time": str(tick_time_ms)
+            }
+        return None
+    except Exception as e:
+        logger.error(f"获取TqSdk实时行情失败: {e}", exc_info=True)
+        raise
+
+
+async def get_tqsdk_quote_async(symbol: str):
+    """异步包装器，在线程池中运行同步的TqSdk代码"""
+    if not TQSDK_AVAILABLE or executor is None:
+        raise RuntimeError("TqSdk未安装或未初始化")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, fetch_tqsdk_quote, symbol)
+
+
+async def get_tqsdk_kline_async(symbol: str, duration_seconds: int, data_length: int):
+    """异步包装器，在线程池中运行同步的TqSdk代码"""
+    if not TQSDK_AVAILABLE or executor is None:
+        raise RuntimeError("TqSdk未安装或未初始化")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, fetch_tqsdk_kline, symbol, duration_seconds, data_length)
 
 
 def convert_interval_to_kline_type(interval: str) -> int:
@@ -90,7 +258,7 @@ async def get_kline(
 ):
     """
     获取K线数据接口
-    后端直接请求AllTick API，前端无需传递token
+    国内白银(AG)使用TqSdk，其他产品使用AllTick API
     """
     # 记录请求日志
     client_ip = request.client.host if request.client else "unknown"
@@ -103,6 +271,40 @@ async def get_kline(
     logger.info(f"[API请求] IP: {client_ip} | Symbol: {symbol} | Interval: {interval} | Limit: {limit} | Trace: {trace_id}")
     
     try:
+        # 如果是国内白银(AG)，使用TqSdk获取数据
+        if symbol.upper() == 'AG':
+            logger.info(f"[TqSdk请求] Symbol: {symbol} | Interval: {interval} | Limit: {limit}")
+            
+            # 转换interval为秒数
+            interval_map = {
+                "1m": 60,
+                "5m": 300,
+                "15m": 900,
+                "30m": 1800,
+                "1h": 3600,
+                "1d": 86400
+            }
+            duration_seconds = interval_map.get(interval.lower(), 60)
+            
+            try:
+                # 使用TqSdk获取K线数据
+                standard_data = await get_tqsdk_kline_async(symbol, duration_seconds, limit)
+                
+                logger.info(f"[TqSdk成功] Symbol: {symbol} | 数据条数: {len(standard_data)}")
+                return JSONResponse(
+                    content=standard_data,
+                    status_code=200
+                )
+            except RuntimeError as e:
+                # TqSdk未安装或初始化失败
+                logger.error(f"[TqSdk错误] Symbol: {symbol} | Error: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=503, detail=f"TqSdk服务不可用: {str(e)}")
+            except Exception as e:
+                # 其他TqSdk错误
+                logger.error(f"[TqSdk错误] Symbol: {symbol} | Error: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"TqSdk获取数据失败: {str(e)}")
+        
+        # 其他产品使用AllTick API
         # 转换interval为kline_type
         kline_type = convert_interval_to_kline_type(interval)
         
@@ -207,11 +409,11 @@ async def get_kline(
 @app.get("/api/trade-tick")
 async def get_trade_tick(
     request: Request,
-    symbol: str = Query(..., description="产品代码，如Silver等")
+    symbol: str = Query(..., description="产品代码，如Silver、AG等")
 ):
     """
     获取最新成交价接口
-    后端直接请求AllTick API，前端无需传递token
+    国内白银(AG)使用TqSdk，其他产品使用AllTick API
     """
     client_ip = request.client.host if request.client else "unknown"
     request_time = datetime.now().isoformat()
@@ -219,6 +421,42 @@ async def get_trade_tick(
     
     logger.info(f"[Trade-Tick请求] IP: {client_ip} | Symbol: {symbol} | Trace: {trace_id}")
     
+    # 如果是国内白银(AG)，使用TqSdk获取实时行情
+    if symbol.upper() == 'AG':
+        try:
+            logger.info(f"[TqSdk实时行情请求] Symbol: {symbol}")
+            
+            # 使用TqSdk获取实时行情
+            quote_data = await get_tqsdk_quote_async(symbol)
+            
+            if quote_data:
+                # 转换为AllTick格式
+                result = {
+                    "ret": 200,
+                    "msg": "ok",
+                    "trace": trace_id,
+                    "data": {
+                        "tick_list": [{
+                            "code": quote_data.get("code", symbol),
+                            "price": quote_data.get("price", "0"),
+                            "volume": quote_data.get("volume", "0"),
+                            "tick_time": quote_data.get("tick_time", str(int(datetime.now().timestamp() * 1000)))
+                        }]
+                    }
+                }
+                logger.info(f"[TqSdk实时行情成功] Symbol: {symbol} | Price: {quote_data.get('price')}")
+                return JSONResponse(content=result, status_code=200)
+            else:
+                raise HTTPException(status_code=404, detail="TqSdk未获取到实时行情数据")
+                
+        except RuntimeError as e:
+            logger.error(f"[TqSdk错误] Symbol: {symbol} | Error: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=503, detail=f"TqSdk服务不可用: {str(e)}")
+        except Exception as e:
+            logger.error(f"[TqSdk错误] Symbol: {symbol} | Error: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"TqSdk获取实时行情失败: {str(e)}")
+    
+    # 其他产品使用AllTick API
     try:
         query_data = {
             "trace": trace_id,
@@ -230,11 +468,8 @@ async def get_trade_tick(
         }
         
         query_json = json.dumps(query_data, ensure_ascii=False)
-        # httpx会自动对params进行URL编码，所以我们直接传JSON字符串，不需要手动编码
-        # 但为了避免双重编码问题，我们使用data参数而不是params
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 使用POST请求，query参数放在URL中，data为空
             url = f"{ALLTICK_BASE_URL}/trade-tick?token={ALLTICK_TOKEN}&query={urllib.parse.quote(query_json)}"
             response = await client.post(
                 url,
