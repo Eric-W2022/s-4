@@ -13,7 +13,7 @@ const API_CONFIG = {
     wsToken: '9d7f12b4c30826987a501d532ef75707-c-app',
     wsUrl: 'wss://quote.alltick.co/quote-b-ws-api',
     // 大模型API配置
-    llmApiUrl: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat'
+    llmApiUrl: 'https://1256349444-2ej4ahqihp.ap-singapore.tencentscf.com/chat'
 };
 
 // WebSocket连接管理（订阅交易价格）
@@ -2568,7 +2568,8 @@ async function callAnalysisAPI(klineData) {
         // 构建请求体（prompt参数放系统提示词，messages数组放用户数据）
         const requestBody = {
             prompt: systemPrompt,
-            messages: messages
+            messages: messages,
+            model: 'gemini-2.5-pro' // 使用Gemini 2.5 Pro模型
         };
         
         console.log('[LLM请求] URL:', API_CONFIG.llmApiUrl);
@@ -2576,274 +2577,105 @@ async function callAnalysisAPI(klineData) {
         console.log('[LLM请求] Prompt长度:', systemPrompt.length, '字符');
         console.log('[LLM请求] User prompt长度:', userPrompt.length, '字符');
         
-        // 直接调用大模型API
-        const response = await fetch(API_CONFIG.llmApiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
+        // 创建AbortController用于超时控制（1分钟=60000毫秒）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, 60000); // 60秒超时
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[LLM API错误] Status:', response.status, 'Error:', errorText);
-            throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
-        }
-        
-        const apiResponse = await response.json();
-        console.log('[LLM响应] Status:', response.status);
-        console.log('[LLM响应] 原始响应:', JSON.stringify(apiResponse, null, 2));
-        
-        // 解析新的响应格式：response[0].message 是一个JSON字符串
-        let analysisResult = null;
         try {
-            // 检查响应格式
-            if (apiResponse.response && Array.isArray(apiResponse.response) && apiResponse.response.length > 0) {
-                // 新格式：response[0].message 包含JSON字符串
-                const messageText = apiResponse.response[0].message;
-                if (typeof messageText === 'string') {
-                    // message是一个JSON字符串，需要解析
-                    analysisResult = JSON.parse(messageText);
-                } else if (typeof messageText === 'object') {
-                    // message已经是对象
-                    analysisResult = messageText;
-                }
-            } else if (typeof apiResponse === 'object' && apiResponse.trend) {
-                // 如果响应直接是分析结果对象
-                analysisResult = apiResponse;
-            } else {
-                // 尝试从content或message字段提取
-                let resultText = apiResponse.content || apiResponse.message || JSON.stringify(apiResponse);
-                // 尝试从文本中提取JSON
-                const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    analysisResult = JSON.parse(jsonMatch[0]);
-                } else {
-                    analysisResult = {
-                        error: "无法解析JSON格式的分析结果",
-                        raw_response: resultText
-                    };
-                }
+            // 直接调用大模型API
+            const response = await fetch(API_CONFIG.llmApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'accept': 'application/json'
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal // 添加超时控制
+            });
+            
+            // 清除超时定时器
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[LLM API错误] Status:', response.status, 'Error:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
             }
-        } catch (parseError) {
-            console.warn('[LLM响应] JSON解析失败:', parseError);
-            analysisResult = {
-                error: "JSON解析失败",
-                raw_response: JSON.stringify(apiResponse),
-                parse_error: parseError.message
-            };
+            
+            const apiResponse = await response.json();
+            console.log('[LLM响应] Status:', response.status);
+            console.log('[LLM响应] 原始响应:', JSON.stringify(apiResponse, null, 2));
+            
+            // 解析新的响应格式：response[0].message 是一个JSON字符串
+            let analysisResult = null;
+            try {
+                // 检查响应格式
+                if (apiResponse.response && Array.isArray(apiResponse.response) && apiResponse.response.length > 0) {
+                    // 新格式：response[0].message 包含JSON字符串
+                    const messageText = apiResponse.response[0].message;
+                    if (typeof messageText === 'string') {
+                        // message是一个JSON字符串，需要解析
+                        analysisResult = JSON.parse(messageText);
+                    } else if (typeof messageText === 'object') {
+                        // message已经是对象
+                        analysisResult = messageText;
+                    }
+                } else if (typeof apiResponse === 'object' && apiResponse.trend) {
+                    // 如果响应直接是分析结果对象
+                    analysisResult = apiResponse;
+                } else {
+                    // 尝试从content或message字段提取
+                    let resultText = apiResponse.content || apiResponse.message || JSON.stringify(apiResponse);
+                    // 尝试从文本中提取JSON
+                    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        analysisResult = JSON.parse(jsonMatch[0]);
+                    } else {
+                        analysisResult = {
+                            error: "无法解析JSON格式的分析结果",
+                            raw_response: resultText
+                        };
+                    }
+                }
+            } catch (parseError) {
+                console.warn('[LLM响应] JSON解析失败:', parseError);
+                analysisResult = {
+                    error: "JSON解析失败",
+                    raw_response: JSON.stringify(apiResponse),
+                    parse_error: parseError.message
+                };
+            }
+            
+            console.log('[分析成功] 数据条数:', klineData.length);
+            console.log('[分析结果]', analysisResult);
+            return analysisResult;
+        } catch (error) {
+            // 清除超时定时器（如果请求失败）
+            clearTimeout(timeoutId);
+            
+            // 检查是否是超时错误
+            if (error.name === 'AbortError') {
+                console.error('调用分析API超时（60秒）');
+                throw new Error('请求超时，AI分析时间超过60秒，请稍后重试');
+            }
+            
+            console.error('调用分析API失败:', error);
+            throw error;
         }
-        
-        console.log('[分析成功] 数据条数:', klineData.length);
-        console.log('[分析结果]', analysisResult);
-        return analysisResult;
     } catch (error) {
         console.error('调用分析API失败:', error);
         throw error;
     }
 }
 
-// 渲染AI分析结果
-function renderAnalysisResult(result) {
-    const container = document.getElementById('ai-analysis-content');
-    if (!container) {
-        return;
-    }
-    
-    // 如果返回错误
-    if (result.error) {
-        container.innerHTML = `
-            <div class="analysis-section">
-                <div style="color: #ef4444; padding: 15px; text-align: center;">
-                    <div style="font-size: 18px; margin-bottom: 8px;">分析失败</div>
-                    <div style="font-size: 14px; color: #9ca3af;">${result.error}</div>
-                    ${result.raw_response ? `<div style="margin-top: 10px; font-size: 12px; color: #6b7280; white-space: pre-wrap;">${result.raw_response}</div>` : ''}
-                </div>
-            </div>
-        `;
-        return;
-    }
-    
-    let html = '';
-    
-    // 趋势分析
-    if (result.trend) {
-        const trendColor = result.trend === '上涨' ? '#ef4444' : result.trend === '下跌' ? '#4ade80' : '#9ca3af';
-        html += `
-            <div class="analysis-section">
-                <h3>趋势分析</h3>
-                <div class="analysis-item">
-                    <span class="analysis-label">当前趋势:</span>
-                    <span class="analysis-value highlight" style="color: ${trendColor};">${result.trend}</span>
-                </div>
-                ${result.trendStrength ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">趋势强度:</span>
-                    <span class="analysis-value">${result.trendStrength}</span>
-                </div>
-                ` : ''}
-                ${result.supportLevel ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">支撑位:</span>
-                    <span class="analysis-value highlight">${result.supportLevel}</span>
-                </div>
-                ` : ''}
-                ${result.resistanceLevel ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">阻力位:</span>
-                    <span class="analysis-value highlight">${result.resistanceLevel}</span>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    // 市场情绪和技术指标
-    if (result.marketSentiment || result.momentum || result.volatility) {
-        html += `
-            <div class="analysis-section">
-                <h3>市场指标</h3>
-                ${result.marketSentiment ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">市场情绪:</span>
-                    <span class="analysis-value">${result.marketSentiment}</span>
-                </div>
-                ` : ''}
-                ${result.momentum ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">价格动量:</span>
-                    <span class="analysis-value">${result.momentum}</span>
-                </div>
-                ` : ''}
-                ${result.volatility ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">波动性:</span>
-                    <span class="analysis-value">${result.volatility}</span>
-                </div>
-                ` : ''}
-                ${result.keyPatterns && result.keyPatterns.length > 0 ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">关键形态:</span>
-                    <span class="analysis-value">${result.keyPatterns.join(', ')}</span>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    // 交易建议
-    if (result.tradingAdvice) {
-        const advice = result.tradingAdvice;
-        const actionColor = advice.action === '买入' ? '#ef4444' : advice.action === '卖出' ? '#4ade80' : '#9ca3af';
-        const confidenceColor = advice.confidence >= 70 ? '#ef4444' : advice.confidence >= 50 ? '#fbbf24' : '#9ca3af';
-        const riskColor = advice.riskLevel === '高' ? '#ef4444' : advice.riskLevel === '中' ? '#fbbf24' : '#4ade80';
-        
-        html += `
-            <div class="analysis-section" style="border-left-color: ${actionColor};">
-                <h3>交易建议</h3>
-                <div class="analysis-item" style="margin-bottom: 15px;">
-                    <span class="analysis-label">操作建议:</span>
-                    <span class="analysis-value highlight" style="font-size: 18px; color: ${actionColor}; font-weight: 700;">${advice.action}</span>
-                </div>
-                ${advice.confidence !== undefined ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">信心度:</span>
-                    <span class="analysis-value" style="color: ${confidenceColor}; font-weight: 600;">${advice.confidence}%</span>
-                </div>
-                ` : ''}
-                ${advice.riskLevel ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">风险等级:</span>
-                    <span class="analysis-value" style="color: ${riskColor}; font-weight: 600;">${advice.riskLevel}</span>
-                </div>
-                ` : ''}
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #1e2548;">
-                    ${advice.entryPrice ? `
-                    <div class="analysis-item">
-                        <span class="analysis-label">入场价格:</span>
-                        <span class="analysis-value highlight">${advice.entryPrice}</span>
-                    </div>
-                    ` : ''}
-                    ${advice.stopLoss ? `
-                    <div class="analysis-item">
-                        <span class="analysis-label">止损价格:</span>
-                        <span class="analysis-value" style="color: #4ade80;">${advice.stopLoss}</span>
-                    </div>
-                    ` : ''}
-                    ${advice.takeProfit ? `
-                    <div class="analysis-item">
-                        <span class="analysis-label">止盈价格:</span>
-                        <span class="analysis-value" style="color: #ef4444;">${advice.takeProfit}</span>
-                    </div>
-                    ` : ''}
-                    ${advice.positionSize ? `
-                    <div class="analysis-item">
-                        <span class="analysis-label">建议仓位:</span>
-                        <span class="analysis-value">${advice.positionSize}</span>
-                    </div>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-    }
-    
-    // 详细分析
-    if (result.analysis) {
-        html += `
-            <div class="analysis-section">
-                <h3>详细分析</h3>
-                ${result.analysis.summary ? `
-                <div class="analysis-item">
-                    <span class="analysis-label">分析总结:</span>
-                    <span class="analysis-value">${result.analysis.summary}</span>
-                </div>
-                ` : ''}
-                ${result.analysis.details ? `
-                <div class="analysis-item" style="margin-top: 10px; padding: 10px; background: rgba(19, 23, 43, 0.8); border-radius: 6px; line-height: 1.8;">
-                    ${result.analysis.details}
-                </div>
-                ` : ''}
-                ${result.analysis.opportunities ? `
-                <div class="analysis-item" style="margin-top: 10px;">
-                    <span class="analysis-label" style="color: #4ade80;">机会分析:</span>
-                    <span class="analysis-value" style="color: #4ade80;">${result.analysis.opportunities}</span>
-                </div>
-                ` : ''}
-                ${result.analysis.risks ? `
-                <div class="analysis-item" style="margin-top: 10px;">
-                    <span class="analysis-label" style="color: #ef4444;">风险提示:</span>
-                    <span class="analysis-value" style="color: #ef4444;">${result.analysis.risks}</span>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    // 操作建议
-    if (result.recommendations && result.recommendations.length > 0) {
-        html += `
-            <div class="analysis-section">
-                <h3>操作建议</h3>
-                <ul class="recommendations-list">
-                    ${result.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-    
-    container.innerHTML = html || '<div class="loading">暂无分析结果</div>';
-}
-
 // 执行AI分析
 async function performAnalysis() {
     const analyzeBtn = document.getElementById('analyze-btn');
-    const analysisPanel = document.getElementById('ai-analysis-panel');
-    const analysisContent = document.getElementById('ai-analysis-content');
     
-    if (!analyzeBtn || !analysisPanel || !analysisContent) {
-        console.error('分析元素未找到');
+    if (!analyzeBtn) {
+        console.error('分析按钮未找到');
         return;
     }
     
@@ -2851,9 +2683,11 @@ async function performAnalysis() {
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = '分析中...';
     
-    // 显示分析面板
-    analysisPanel.style.display = 'block';
-    analysisContent.innerHTML = '<div class="loading">正在分析K线数据，请稍候...</div>';
+    // 更新实时交易策略显示为加载状态
+    const strategyContent = document.getElementById('trading-strategy-content');
+    if (strategyContent) {
+        strategyContent.innerHTML = '<div class="loading">正在分析K线数据，请稍候...</div>';
+    }
     
     try {
         // 获取最新的K线数据
@@ -2894,36 +2728,27 @@ async function performAnalysis() {
         // 保存AI分析结果
         aiAnalysisResult = result;
         
-        // 更新实时交易策略显示
+        // 更新实时交易策略显示（会自动使用AI分析结果）
         updateTradingStrategy();
         
-        // 渲染结果到AI分析面板
-        console.log('分析完成，渲染结果...');
-        renderAnalysisResult(result);
+        console.log('分析完成，策略已更新');
         
     } catch (error) {
         console.error('分析失败:', error);
-        analysisContent.innerHTML = `
-            <div class="analysis-section">
+        const strategyContent = document.getElementById('trading-strategy-content');
+        if (strategyContent) {
+            strategyContent.innerHTML = `
                 <div style="color: #ef4444; padding: 15px; text-align: center;">
                     <div style="font-size: 18px; margin-bottom: 8px;">分析失败</div>
                     <div style="font-size: 14px; color: #9ca3af;">${error.message || '未知错误'}</div>
                     <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">请检查网络连接或稍后重试</div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     } finally {
         // 恢复按钮
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = 'AI走势分析';
-    }
-}
-
-// 关闭分析面板
-function closeAnalysisPanel() {
-    const analysisPanel = document.getElementById('ai-analysis-panel');
-    if (analysisPanel) {
-        analysisPanel.style.display = 'none';
     }
 }
 
@@ -2933,12 +2758,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     if (analyzeBtn) {
         analyzeBtn.addEventListener('click', performAnalysis);
-    }
-    
-    // 关闭按钮事件
-    const closeBtn = document.getElementById('close-analysis-btn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeAnalysisPanel);
     }
     
     // 初始化时获取一次K线数据
