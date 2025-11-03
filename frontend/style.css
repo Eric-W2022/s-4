@@ -156,10 +156,44 @@ header h1 {
     flex-direction: column;
 }
 
-.right-panel {
+.middle-panel {
     flex: 1; /* 宽度1:1 */
     display: flex;
     flex-direction: column;
+}
+
+.right-panel {
+    flex: 0 0 380px; /* 固定宽度，不要太宽 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 交易策略面板 */
+.trading-strategy-panel {
+    background: #13172b;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #1e2548;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    height: 100%;
+    position: sticky;
+    top: 20px;
+}
+
+.strategy-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #1e2548;
+}
+
+.strategy-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.strategy-content {
+    color: #e0e0e0;
 }
 
 .info-card {
@@ -351,13 +385,24 @@ footer p {
 }
 
 /* 响应式设计 */
+@media (max-width: 1400px) {
+    .right-panel {
+        flex: 0 0 320px; /* 小屏幕时稍微窄一点 */
+    }
+}
+
 @media (max-width: 1024px) {
     .main-content {
         flex-direction: column;
     }
 
+    .middle-panel {
+        width: 100%;
+    }
+
     .right-panel {
         width: 100%;
+        flex: 1;
     }
 }
 

@@ -447,6 +447,11 @@ let londonLastChange = 0;
 let londonLastChangePercent = 0;
 let londonLastIsUp = false;
 let londonPreviousDayClosePrice = null;
+let londonCurrentBollingerBands = {
+    upper: null,
+    middle: null,
+    lower: null
+};
 
 // 保存24小时前的价格（用于计算24小时涨跌幅）
 let price24hAgo = null;
@@ -584,6 +589,205 @@ function analyzeBollingerBands(price, upper, middle, lower) {
         middle: middle.toFixed(3),
         lower: lower.toFixed(3)
     };
+}
+
+// 综合分析交易策略（结合伦敦市场和国内市场）
+function analyzeTradingStrategy() {
+    // 检查数据完整性
+    if (!londonLastTradePrice || !domesticLastTradePrice || 
+        !londonCurrentBollingerBands.upper || !domesticCurrentBollingerBands.upper) {
+        return null;
+    }
+    
+    // 分析伦敦市场（作为方向指引）
+    const londonAnalysis = analyzeBollingerBands(
+        londonLastTradePrice,
+        londonCurrentBollingerBands.upper,
+        londonCurrentBollingerBands.middle,
+        londonCurrentBollingerBands.lower
+    );
+    
+    // 分析国内市场（作为交易标的）
+    const domesticAnalysis = analyzeBollingerBands(
+        domesticLastTradePrice,
+        domesticCurrentBollingerBands.upper,
+        domesticCurrentBollingerBands.middle,
+        domesticCurrentBollingerBands.lower
+    );
+    
+    // 综合判断
+    let action = '观望'; // 买多、卖空、观望
+    let actionColor = '#9ca3af';
+    let confidence = 0; // 0-100，信心度
+    let entryPrice = domesticLastTradePrice; // 建议入场价格
+    let stopLoss = null; // 止损价格
+    let takeProfit = null; // 止盈价格
+    let reasoning = ''; // 分析理由
+    
+    // 伦敦市场方向判断（权重较高）
+    const londonSignal = londonAnalysis.signal;
+    const londonPosition = parseFloat(londonAnalysis.pricePosition);
+    
+    // 国内市场位置判断
+    const domesticPosition = parseFloat(domesticAnalysis.pricePosition);
+    
+    // 价格相关性判断（伦敦和国内的趋势是否一致）
+    const priceCorrelation = (londonLastIsUp === domesticLastIsUp) ? 1 : -1;
+    
+    // 综合策略判断
+    if (londonSignal === 'bullish' && domesticPosition < 0.7) {
+        // 伦敦看涨，国内价格还在中下位置，可以做多
+        action = '买多';
+        actionColor = '#ef4444';
+        confidence = Math.min(85, 60 + (domesticPosition < 0.3 ? 25 : 0));
+        entryPrice = domesticLastTradePrice;
+        stopLoss = domesticLastTradePrice * 0.98; // 止损2%
+        takeProfit = domesticLastTradePrice * 1.03; // 止盈3%
+        reasoning = `伦敦市场突破上轨看涨，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，有上涨空间`;
+    } else if (londonSignal === 'bearish' && domesticPosition > 0.3) {
+        // 伦敦看跌，国内价格还在中上位置，可以做空
+        action = '卖空';
+        actionColor = '#4ade80';
+        confidence = Math.min(85, 60 + (domesticPosition > 0.7 ? 25 : 0));
+        entryPrice = domesticLastTradePrice;
+        stopLoss = domesticLastTradePrice * 1.02; // 止损2%
+        takeProfit = domesticLastTradePrice * 0.97; // 止盈3%
+        reasoning = `伦敦市场跌破下轨看跌，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置，有下跌空间`;
+    } else if (londonSignal === 'bullish' && domesticPosition >= 0.7) {
+        // 伦敦看涨，但国内已经涨了很多，观望
+        action = '观望';
+        actionColor = '#fbbf24';
+        confidence = 30;
+        reasoning = `伦敦市场看涨，但国内市场已位于${(domesticPosition * 100).toFixed(1)}%高位，等待回调机会`;
+    } else if (londonSignal === 'bearish' && domesticPosition <= 0.3) {
+        // 伦敦看跌，但国内已经跌了很多，观望
+        action = '观望';
+        actionColor = '#fbbf24';
+        confidence = 30;
+        reasoning = `伦敦市场看跌，但国内市场已位于${(domesticPosition * 100).toFixed(1)}%低位，等待反弹机会`;
+    } else if (priceCorrelation > 0 && londonSignal === 'bullish') {
+        // 趋势一致，伦敦看涨
+        action = '买多';
+        actionColor = '#ef4444';
+        confidence = 55;
+        entryPrice = domesticLastTradePrice;
+        stopLoss = domesticLastTradePrice * 0.99; // 止损1%
+        takeProfit = domesticLastTradePrice * 1.02; // 止盈2%
+        reasoning = `伦敦和国内市场趋势一致看涨，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置`;
+    } else if (priceCorrelation > 0 && londonSignal === 'bearish') {
+        // 趋势一致，伦敦看跌
+        action = '卖空';
+        actionColor = '#4ade80';
+        confidence = 55;
+        entryPrice = domesticLastTradePrice;
+        stopLoss = domesticLastTradePrice * 1.01; // 止损1%
+        takeProfit = domesticLastTradePrice * 0.98; // 止盈2%
+        reasoning = `伦敦和国内市场趋势一致看跌，国内市场价格${(domesticPosition * 100).toFixed(1)}%位置`;
+    } else {
+        // 其他情况，观望
+        action = '观望';
+        actionColor = '#9ca3af';
+        confidence = 40;
+        reasoning = `市场信号不明确，伦敦${londonAnalysis.positionDesc}，国内${domesticAnalysis.positionDesc}`;
+    }
+    
+    return {
+        action,
+        actionColor,
+        confidence,
+        entryPrice,
+        stopLoss,
+        takeProfit,
+        reasoning,
+        londonAnalysis,
+        domesticAnalysis
+    };
+}
+
+// 更新交易策略显示
+function updateTradingStrategy() {
+    const container = document.getElementById('trading-strategy-content');
+    if (!container) {
+        return;
+    }
+    
+    const strategy = analyzeTradingStrategy();
+    
+    if (!strategy) {
+        container.innerHTML = '<div class="loading">等待市场数据...</div>';
+        return;
+    }
+    
+    let html = '';
+    
+    // 操作建议（大标题）
+    html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 20px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${strategy.actionColor};">
+        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px;">操作建议</div>
+        <div style="font-size: 32px; font-weight: 700; color: ${strategy.actionColor}; margin-bottom: 8px;">
+            ${strategy.action}
+        </div>
+        <div style="font-size: 14px; color: #9ca3af;">
+            信心度: <span style="color: ${strategy.confidence >= 70 ? '#ef4444' : strategy.confidence >= 50 ? '#fbbf24' : '#9ca3af'}; font-weight: 600;">${strategy.confidence}%</span>
+        </div>
+    </div>`;
+    
+    // 价格指引
+    html += `<div class="strategy-section" style="margin-bottom: 20px;">
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+            价格指引
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">入场价格</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ffffff;">${Math.round(strategy.entryPrice)}</div>
+            </div>
+            ${strategy.stopLoss ? `
+            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止损价格</div>
+                <div style="font-size: 18px; font-weight: 600; color: #4ade80;">${Math.round(strategy.stopLoss)}</div>
+            </div>
+            ` : ''}
+            ${strategy.takeProfit ? `
+            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止盈价格</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ef4444;">${Math.round(strategy.takeProfit)}</div>
+            </div>
+            ` : ''}
+        </div>
+    </div>`;
+    
+    // 分析理由
+    html += `<div class="strategy-section" style="margin-bottom: 20px;">
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+            分析理由
+        </div>
+        <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px; color: #e0e0e0; line-height: 1.6;">
+            ${strategy.reasoning}
+        </div>
+    </div>`;
+    
+    // 市场分析
+    html += `<div class="strategy-section">
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+            市场分析
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div style="font-size: 14px; font-weight: 600; color: #60a5fa; margin-bottom: 8px;">伦敦市场</div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${strategy.londonAnalysis.signalColor};">${strategy.londonAnalysis.positionDesc}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${strategy.londonAnalysis.signalColor};">${strategy.londonAnalysis.signal === 'bullish' ? '看涨' : strategy.londonAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
+                <div style="font-size: 12px; color: #9ca3af;">价格: ${londonLastTradePrice.toFixed(3)}</div>
+            </div>
+            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div style="font-size: 14px; font-weight: 600; color: #a78bfa; margin-bottom: 8px;">国内市场</div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">位置: <span style="color: ${strategy.domesticAnalysis.signalColor};">${strategy.domesticAnalysis.positionDesc}</span></div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">信号: <span style="color: ${strategy.domesticAnalysis.signalColor};">${strategy.domesticAnalysis.signal === 'bullish' ? '看涨' : strategy.domesticAnalysis.signal === 'bearish' ? '看跌' : '中性'}</span></div>
+                <div style="font-size: 12px; color: #9ca3af;">价格: ${Math.round(domesticLastTradePrice)}</div>
+            </div>
+        </div>
+    </div>`;
+    
+    container.innerHTML = html;
 }
 
 // 更新布林带分析显示
@@ -733,6 +937,9 @@ function updateDomesticTradeTick(tick) {
     if (domesticChart && domesticChart.getOption) {
         updateDomesticChartRealtimePrice();
     }
+    
+    // 更新交易策略
+    updateTradingStrategy();
 }
 
 // 更新伦敦白银成交价显示（显示在标题中）
@@ -803,6 +1010,9 @@ function updateLondonTradeTick(tick) {
     if (londonChart && londonChart.getOption) {
         updateLondonChartRealtimePrice();
     }
+    
+    // 更新交易策略
+    updateTradingStrategy();
 }
 
 // 更新国内图表实时价格显示（在K线图上）
@@ -960,6 +1170,7 @@ function updateChart(chart, data, infoElementId) {
     // 保存最新的布林带数据（用于实时分析）
     // 根据infoElementId判断是哪个市场
     const isDomestic = infoElementId.includes('domestic');
+    const isLondon = infoElementId.includes('london');
     if (sortedData.length > 0) {
         const latestIndex = sortedData.length - 1;
         if (bollingerBands.upper[latestIndex] !== null) {
@@ -971,9 +1182,14 @@ function updateChart(chart, data, infoElementId) {
             
             if (isDomestic) {
                 domesticCurrentBollingerBands = bollingerData;
+            } else if (isLondon) {
+                londonCurrentBollingerBands = bollingerData;
             }
         }
     }
+    
+    // 更新交易策略（如果有完整数据）
+    updateTradingStrategy();
     
     // 准备K线数据
     const klineData = sortedData.map(item => [
@@ -982,9 +1198,6 @@ function updateChart(chart, data, infoElementId) {
         item.l, // 最低价
         item.h  // 最高价
     ]);
-    
-    // 判断是否是伦敦白银
-    const isLondon = infoElementId.includes('london');
     
     // 计算价格范围，用于设置Y轴范围
     let minPrice, maxPrice, paddingTop, paddingBottom, yAxisMin, yAxisMax;
