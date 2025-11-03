@@ -1075,6 +1075,9 @@ let lastStableStrategy = null;
 // 保存AI分析结果
 let aiAnalysisResult = null;
 
+// 分析状态标志，防止重复点击
+let isAnalyzing = false;
+
 // 将AI分析结果转换为策略显示格式
 function convertAIResultToStrategy(aiResult) {
     if (!aiResult || aiResult.error) {
@@ -2569,7 +2572,7 @@ async function callAnalysisAPI(klineData) {
         const requestBody = {
             prompt: systemPrompt,
             messages: messages,
-            model: 'gemini-2.5-pro' // 使用Gemini 2.5 Pro模型
+            model: 'deepseek-chat' // 使用DeepSeek Chat模型
         };
         
         console.log('[LLM请求] URL:', API_CONFIG.llmApiUrl);
@@ -2679,7 +2682,14 @@ async function performAnalysis() {
         return;
     }
     
-    // 禁用按钮
+    // 如果正在分析中，直接返回，防止重复点击
+    if (isAnalyzing) {
+        console.log('正在分析中，请勿重复点击');
+        return;
+    }
+    
+    // 立即设置分析状态和按钮状态
+    isAnalyzing = true;
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = '分析中...';
     
@@ -2746,7 +2756,8 @@ async function performAnalysis() {
             `;
         }
     } finally {
-        // 恢复按钮
+        // 恢复按钮和分析状态
+        isAnalyzing = false;
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = 'AI走势分析';
     }
