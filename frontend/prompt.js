@@ -9,11 +9,9 @@ const MAIN_PROMPT = `你是一个专业的金融分析师，擅长分析K线走�
 ## 分析要求：
 
 1. **技术分析**：
-   - 分析当前价格趋势（上涨、下跌、震荡）
-   - 识别关键支撑位和阻力位
+   - 综合分析伦敦现货白银和国内白银的价格趋势（上涨、下跌、震荡）
    - 分析K线形态（如锤子线、十字星、吞没形态等）
-   - 评估交易量变化（如果有）
-   - 分析价格动量和波动性
+   - 分析两个市场的联动关系和相关性
 
 2. **市场情绪**：
    - 评估市场情绪（看涨、看跌、中性）
@@ -21,82 +19,61 @@ const MAIN_PROMPT = `你是一个专业的金融分析师，擅长分析K线走�
    - 识别潜在的转折点
 
 3. **交易建议**：
-   - 提供清晰的操作建议（买入、卖出、观望）
-   - 给出具体的入场价格、止损价格、止盈价格
+   - 提供清晰的操作建议（买多、卖空、观望）
    - 评估风险等级和收益潜力
-   - 提供持仓建议（仓位大小）
 
 ## 输出格式要求：
 
 你必须严格按照以下JSON格式输出分析结果，不要包含任何其他文字说明：
 
+\`\`\`json
 {
-  "trend": "上涨/下跌/震荡",
-  "trendStrength": "强/中/弱",
-  "supportLevel": 数值,
-  "resistanceLevel": 数值,
-  "keyPatterns": ["形态1", "形态2"],
-  "marketSentiment": "看涨/看跌/中性",
-  "momentum": "强/中/弱",
-  "volatility": "高/中/低",
+  "analysisReason": "分析理由（控制在100字内，简洁明了地说明当前市场状况和操作依据）",
   "tradingAdvice": {
-    "action": "买入/卖出/观望",
-    "entryPrice": 数值,
-    "stopLoss": 数值,
-    "takeProfit": 数值,
-    "riskLevel": "高/中/低",
+    "action": "买多/卖空/观望",
     "confidence": 0-100的整数,
-    "positionSize": "建议仓位描述"
-  },
-  "analysis": {
-    "summary": "简要分析总结",
-    "details": "详细分析内容",
-    "risks": "风险提示",
-    "opportunities": "机会分析"
-  },
-  "recommendations": [
-    "建议1",
-    "建议2",
-    "建议3"
-  ]
+    "riskLevel": "高/中/低"
+  }
 }
+\`\`\`
 
 ## 注意事项：
 
-1. 所有数值必须是有效的数字，不能是null或字符串
+1. analysisReason字段必须控制在100字以内，简洁明了
 2. confidence字段必须是0-100之间的整数
-3. 如果没有足够的数据进行分析，请在analysis.details中说明
-4. 始终保持客观、专业的分析态度
-5. 如果数据不足，可以适当降低confidence值并说明原因
+3. action字段只能是"买多"、"卖空"或"观望"之一
+4. riskLevel字段只能是"高"、"中"或"低"之一
+5. 如果没有足够的数据进行分析，请在analysisReason中说明
+6. 始终保持客观、专业的分析态度
 `;
 
 /**
- * 格式化K线数据为提示词文本
+ * 格式化单市场K线数据为提示词文本
  * @param {Array} klineData - K线数据数组
+ * @param {string} marketName - 市场名称（如"伦敦现货白银"或"国内白银"）
+ * @param {string} symbol - 交易品种（如"Silver"或"AG"）
  * @returns {string} 格式化后的提示词文本
  */
-function formatKlineDataForPrompt(klineData) {
-    if (!klineData || klineData.length === 0) {
-        return "暂无K线数据";
-    }
+function formatKlineDataForPrompt(klineData, marketName, symbol) {
+    const lines = [];
     
-    // 格式化K线数据为文本
-    const lines = ["以下是K线数据（格式：时间戳, 开盘价, 收盘价, 最高价, 最低价, 成交量）："];
-    lines.push("");
-    
-    for (const item of klineData) {
-        const timestamp = item.t || item.time || '';
-        const openPrice = item.o || item.open || 0;
-        const closePrice = item.c || item.close || 0;
-        const highPrice = item.h || item.high || 0;
-        const lowPrice = item.l || item.low || 0;
-        const volume = item.v || item.volume || 0;
+    if (klineData && klineData.length > 0) {
+        lines.push(`=== ${marketName}（${symbol}）K线数据（格式：时间戳, 开盘价, 收盘价, 最高价, 最低价, 成交量） ===`);
+        lines.push("");
         
-        lines.push(`${timestamp}, ${openPrice}, ${closePrice}, ${highPrice}, ${lowPrice}, ${volume}`);
+        for (const item of klineData) {
+            const timestamp = item.t || item.time || '';
+            const openPrice = item.o || item.open || 0;
+            const closePrice = item.c || item.close || 0;
+            const highPrice = item.h || item.high || 0;
+            const lowPrice = item.l || item.low || 0;
+            const volume = item.v || item.volume || 0;
+            
+            lines.push(`${timestamp}, ${openPrice}, ${closePrice}, ${highPrice}, ${lowPrice}, ${volume}`);
+        }
+    } else {
+        lines.push(`=== ${marketName}（${symbol}）K线数据：暂无数据 ===`);
     }
-    
-    lines.push("");
-    lines.push("请根据以上K线数据进行技术分析，并按照JSON格式输出分析结果。");
     
     return lines.join("\n");
 }
@@ -108,4 +85,3 @@ if (typeof window !== 'undefined') {
         formatKlineDataForPrompt: formatKlineDataForPrompt
     };
 }
-

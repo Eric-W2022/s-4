@@ -198,6 +198,7 @@ header h1 {
 
 .strategy-content {
     color: #e0e0e0;
+    position: relative;
 }
 
 .info-card {
@@ -582,5 +583,42 @@ footer p {
     left: 0;
     color: #667eea;
     font-weight: bold;
+}
+
+/* 策略内容加载蒙版 */
+.strategy-content-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(19, 23, 43, 0.75);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 12px;
+}
+
+.strategy-content-loading-overlay .loading-text {
+    color: #9ca3af;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.strategy-content-loading-overlay .loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(156, 163, 175, 0.3);
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 

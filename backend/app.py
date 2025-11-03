@@ -72,16 +72,21 @@ def start_tqsdk_subscription():
     
     def subscription_loop():
         """订阅循环"""
-        from config import TQSDK_SUBSCRIPTION_RUNNING, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
+        import config
+        from config import TQ_USERNAME, TQ_PASSWORD
         
         # 使用导入的模块变量
-        import config
         config.TQSDK_SUBSCRIPTION_RUNNING = True
         logger.info("TqSdk订阅任务启动")
         
         try:
-            api = get_tqsdk_api()
+            # 创建新的TqApi实例（在子线程中）
+            from tqsdk import TqApi, TqAuth
+            auth = TqAuth(TQ_USERNAME, TQ_PASSWORD)
+            api = TqApi(auth=auth)
             contract = "KQ.m@SHFE.ag"
+            
+            logger.info(f"TqSdk已连接，订阅合约: {contract}")
             
             # 订阅不同周期的K线
             interval_map = {
@@ -119,20 +124,46 @@ def start_tqsdk_subscription():
                         if kline_df is not None and not kline_df.empty:
                             standard_data = convert_tqsdk_kline_to_standard_format(kline_df)
                             config.TQSDK_KLINE_CACHE['AG'][interval] = standard_data
+                            if update_count % 60 == 0:  # 每60次更新记录一次日志
+                                logger.debug(f"K线数据已更新: {interval}, 数据条数: {len(standard_data)}")
                     
-                    # 更新实时行情
-                    if quote:
+                    # 更新实时行情 - 确保quote对象已更新
+                    if quote is not None:
+                        # 检查quote是否真的有更新（通过检查last_price是否变化）
+                        old_price = None
+                        if 'AG' in config.TQSDK_QUOTE_CACHE:
+                            old_quote = config.TQSDK_QUOTE_CACHE['AG']
+                            if hasattr(old_quote, 'last_price'):
+                                old_price = old_quote.last_price
+                            elif isinstance(old_quote, dict):
+                                old_price = old_quote.get('last_price')
+                        
+                        # 获取新价格
+                        new_price = None
+                        if hasattr(quote, 'last_price'):
+                            new_price = quote.last_price
+                        elif isinstance(quote, dict):
+                            new_price = quote.get('last_price')
+                        
+                        # 始终更新缓存（quote对象本身会更新，我们需要保持引用）
                         config.TQSDK_QUOTE_CACHE['AG'] = quote
+                        
+                        # 记录价格变化（每10次更新记录一次）
+                        if update_count % 10 == 0:
+                            logger.info(f"TqSdk行情更新: Price={new_price}, OldPrice={old_price}, QuoteType={type(quote)}")
                     
                     update_count += 1
                     if update_count % 60 == 0:  # 每60次更新记录一次日志
-                        logger.debug(f"TqSdk订阅任务运行中，已更新 {update_count} 次")
+                        logger.info(f"TqSdk订阅任务运行中，已更新 {update_count} 次")
                         
                 except Exception as e:
                     logger.error(f"TqSdk订阅循环错误: {e}", exc_info=True)
                     # 等待一段时间后重试
                     time.sleep(5)
-                    
+            
+            # 关闭API连接
+            api.close()
+            
         except Exception as e:
             logger.error(f"TqSdk订阅任务失败: {e}", exc_info=True)
             config.TQSDK_SUBSCRIPTION_RUNNING = False
@@ -141,12 +172,10 @@ def start_tqsdk_subscription():
             config.TQSDK_SUBSCRIPTION_RUNNING = False
     
     # 在后台线程中启动订阅任务
-    if executor:
-        executor.submit(subscription_loop)
-    else:
-        import threading
-        thread = threading.Thread(target=subscription_loop, daemon=True)
-        thread.start()
+    import threading
+    thread = threading.Thread(target=subscription_loop, daemon=True)
+    thread.start()
+    logger.info("TqSdk订阅任务线程已启动")
 
 
 @app.get("/health")

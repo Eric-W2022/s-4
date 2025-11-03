@@ -13,7 +13,7 @@ const API_CONFIG = {
     wsToken: '9d7f12b4c30826987a501d532ef75707-c-app',
     wsUrl: 'wss://quote.alltick.co/quote-b-ws-api',
     // 大模型API配置
-    llmApiUrl: 'https://1256349444-2ej4ahqihp.ap-singapore.tencentscf.com/chat'
+    llmApiUrl: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat'
 };
 
 // WebSocket连接管理（订阅交易价格）
@@ -1078,7 +1078,7 @@ let aiAnalysisResult = null;
 // 分析状态标志，防止重复点击
 let isAnalyzing = false;
 
-// 将AI分析结果转换为策略显示格式
+// 将AI分析结果转换为策略显示格式（简化版）
 function convertAIResultToStrategy(aiResult) {
     if (!aiResult || aiResult.error) {
         return null;
@@ -1088,50 +1088,37 @@ function convertAIResultToStrategy(aiResult) {
     
     // 根据action确定颜色
     let actionColor = '#9ca3af';
-    if (advice.action === '买入') {
+    if (advice.action === '买多') {
         actionColor = '#ef4444';
-    } else if (advice.action === '卖出') {
+    } else if (advice.action === '卖空') {
         actionColor = '#4ade80';
     }
     
-    // 根据市场情绪确定信号颜色
-    let signalColor = '#9ca3af';
-    if (aiResult.marketSentiment === '看涨') {
-        signalColor = '#ef4444';
-    } else if (aiResult.marketSentiment === '看跌') {
-        signalColor = '#4ade80';
-    }
-    
-    return {
+    const strategy = {
         action: advice.action || '观望',
         actionColor: actionColor,
         confidence: advice.confidence || 0,
-        entryPrice: advice.entryPrice || 0,
-        stopLoss: advice.stopLoss || 0,
-        takeProfit: advice.takeProfit || 0,
         riskLevel: advice.riskLevel || '中',
-        positionSize: advice.positionSize || '建议观望',
-        reasoning: aiResult.analysis?.details || aiResult.analysis?.summary || '暂无详细分析',
-        trend: aiResult.trend || '未知',
-        trendStrength: aiResult.trendStrength || '未知',
-        supportLevel: aiResult.supportLevel || 0,
-        resistanceLevel: aiResult.resistanceLevel || 0,
-        marketSentiment: aiResult.marketSentiment || '中性',
-        momentum: aiResult.momentum || '未知',
-        volatility: aiResult.volatility || '未知',
-        keyPatterns: aiResult.keyPatterns || [],
-        opportunities: aiResult.analysis?.opportunities || '',
-        risks: aiResult.analysis?.risks || '',
-        recommendations: aiResult.recommendations || []
+        analysisReason: aiResult.analysisReason || '暂无分析理由'
     };
+    
+    return strategy;
 }
 
-// 更新交易策略显示
+// 保存上一次的布林带突破状态，用于检测新的突破
+let lastBollingerBreakout = {
+    domestic: null, // 'upper', 'lower', 'middle', null
+    london: null
+};
+
 function updateTradingStrategy() {
     const container = document.getElementById('trading-strategy-content');
     if (!container) {
         return;
     }
+    
+    // 检测布林带突破，自动触发AI分析
+    checkBollingerBreakoutAndTriggerAnalysis();
     
     // 优先使用AI分析结果
     if (aiAnalysisResult) {
@@ -1172,7 +1159,50 @@ function updateTradingStrategy() {
     */
 }
 
-// 使用AI分析结果渲染策略
+// 检测布林带突破并自动触发AI分析（只检测伦敦市场）
+function checkBollingerBreakoutAndTriggerAnalysis() {
+    // 检查数据完整性（只需要伦敦市场的数据）
+    if (!londonLastTradePrice || !londonCurrentBollingerBands.upper) {
+        return;
+    }
+    
+    // 只分析伦敦市场的布林带位置
+    const londonAnalysis = analyzeBollingerBands(
+        londonLastTradePrice,
+        londonCurrentBollingerBands.upper,
+        londonCurrentBollingerBands.middle,
+        londonCurrentBollingerBands.lower
+    );
+    
+    // 检测突破状态
+    let londonBreakout = null;
+    
+    // 检测伦敦突破
+    if (londonAnalysis.breakout === 'upper' || londonAnalysis.breakout === 'lower') {
+        londonBreakout = londonAnalysis.breakout;
+    } else if (londonAnalysis.position === 'near_upper' || londonAnalysis.position === 'near_lower') {
+        // 接近上下轨也算触发
+        londonBreakout = londonAnalysis.position === 'near_upper' ? 'upper' : 'lower';
+    } else if (londonAnalysis.position === 'middle' || londonAnalysis.position === 'upper_half' || londonAnalysis.position === 'lower_half') {
+        // 价格在中轨附近或上下半部分时，如果之前有突破，现在回到中轨也算触发
+        if (lastBollingerBreakout.london === 'upper' || lastBollingerBreakout.london === 'lower') {
+            londonBreakout = 'middle';
+        }
+    }
+    
+    // 如果检测到新的突破（与上一次不同），触发AI分析
+    if (londonBreakout !== null && londonBreakout !== lastBollingerBreakout.london) {
+        console.log(`[布林带触发] 伦敦市场突破: ${lastBollingerBreakout.london} -> ${londonBreakout}`);
+        lastBollingerBreakout.london = londonBreakout;
+        // 自动触发AI分析（如果不在分析中）
+        if (!isAnalyzing) {
+            console.log('[自动触发] 由于伦敦市场布林带突破，自动触发AI分析');
+            performAnalysis();
+        }
+    }
+}
+
+// 使用AI分析结果渲染策略（简化版：只显示操作建议和分析理由）
 function renderStrategyFromAI(displayStrategy) {
     const container = document.getElementById('trading-strategy-content');
     if (!container) {
@@ -1185,98 +1215,40 @@ function renderStrategyFromAI(displayStrategy) {
     const floatingPnL = calculateFloatingPnL(domesticLastTradePrice);
     const hasPosition = currentPosition.direction && currentPosition.lots > 0;
     
-    // 操作建议（大标题）
-    html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 20px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${displayStrategy.actionColor};">
-        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px;">操作建议</div>
-        <div style="font-size: 32px; font-weight: 700; color: ${displayStrategy.actionColor}; margin-bottom: 8px;">
+    // 操作建议（显示在上面）
+    html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 15px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${displayStrategy.actionColor};">
+        <div style="font-size: 13px; color: #9ca3af; margin-bottom: 6px;">操作建议</div>
+        <div style="font-size: 28px; font-weight: 700; color: ${displayStrategy.actionColor}; margin-bottom: 6px;">
             ${displayStrategy.action}
         </div>
-        <div style="font-size: 14px; color: #9ca3af; margin-bottom: 8px;">
+        <div style="font-size: 13px; color: #9ca3af; margin-bottom: 0;">
             信心度: <span style="color: ${displayStrategy.confidence >= 70 ? '#ef4444' : displayStrategy.confidence >= 50 ? '#fbbf24' : '#9ca3af'}; font-weight: 600;">${displayStrategy.confidence}%</span>
+            <span style="margin-left: 12px;">风险等级: <span style="color: ${displayStrategy.riskLevel === '高' ? '#ef4444' : displayStrategy.riskLevel === '中' ? '#fbbf24' : '#4ade80'}; font-weight: 600;">${displayStrategy.riskLevel}</span></span>
         </div>
         ${hasPosition ? `
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #1e2548;">
-            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 5px;">当前持仓</div>
-            <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 5px;">
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #1e2548;">
+            <div style="font-size: 11px; color: #9ca3af; margin-bottom: 4px;">当前持仓</div>
+            <div style="font-size: 15px; font-weight: 600; color: #ffffff; margin-bottom: 4px;">
                 ${currentPosition.direction === 'buy' ? '买多' : '卖空'} ${currentPosition.lots}手 | 开仓价: ${Math.round(currentPosition.entryPrice)}
             </div>
-            <div style="font-size: 14px; font-weight: 600; color: ${floatingPnL.isProfit ? '#4ade80' : '#ef4444'};">
+            <div style="font-size: 13px; font-weight: 600; color: ${floatingPnL.isProfit ? '#4ade80' : '#ef4444'};">
                 浮动盈亏: ${floatingPnL.isProfit ? '+' : ''}${Math.round(floatingPnL.pnl)} (${floatingPnL.isProfit ? '+' : ''}${floatingPnL.pnlPercent.toFixed(2)}%)
             </div>
         </div>
         ` : ''}
     </div>`;
     
-    // 价格指引
-    html += `<div class="strategy-section" style="margin-bottom: 20px;">
-        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
-            价格指引
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-            ${displayStrategy.entryPrice > 0 ? `
-            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">入场价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #ffffff;">${Math.round(displayStrategy.entryPrice)}</div>
-            </div>
-            ` : '<div></div>'}
-            ${displayStrategy.stopLoss > 0 ? `
-            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止损价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #4ade80;">${Math.round(displayStrategy.stopLoss)}</div>
-            </div>
-            ` : '<div></div>'}
-            ${displayStrategy.takeProfit > 0 ? `
-            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">止盈价格</div>
-                <div style="font-size: 18px; font-weight: 600; color: #ef4444;">${Math.round(displayStrategy.takeProfit)}</div>
-            </div>
-            ` : '<div></div>'}
-        </div>
-    </div>`;
-    
-    // 分析理由
+    // 分析理由（显示在下面）
     html += `<div class="strategy-section" style="margin-bottom: 20px;">
         <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
             分析理由
         </div>
-        <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px; color: #e0e0e0; line-height: 1.6;">
-            ${displayStrategy.reasoning}
+        <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px; color: #e0e0e0; line-height: 1.6; font-size: 13px;">
+            ${displayStrategy.analysisReason || '暂无分析理由'}
         </div>
     </div>`;
     
-    // 市场分析
-    html += `<div class="strategy-section">
-        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
-            市场分析
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="font-size: 14px; font-weight: 600; color: #60a5fa; margin-bottom: 8px;">趋势分析</div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">趋势: <span style="color: ${displayStrategy.actionColor};">${displayStrategy.trend}</span></div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">强度: <span style="color: ${displayStrategy.actionColor};">${displayStrategy.trendStrength}</span></div>
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">情绪: <span style="color: ${displayStrategy.actionColor};">${displayStrategy.marketSentiment}</span></div>
-                <div style="font-size: 12px; color: #9ca3af;">动量: ${displayStrategy.momentum}</div>
-            </div>
-            <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="font-size: 14px; font-weight: 600; color: #a78bfa; margin-bottom: 8px;">支撑阻力</div>
-                ${displayStrategy.supportLevel > 0 ? `
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">支撑位: <span style="color: #4ade80;">${Math.round(displayStrategy.supportLevel)}</span></div>
-                ` : ''}
-                ${displayStrategy.resistanceLevel > 0 ? `
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">阻力位: <span style="color: #ef4444;">${Math.round(displayStrategy.resistanceLevel)}</span></div>
-                ` : ''}
-                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">风险等级: <span style="color: ${displayStrategy.riskLevel === '高' ? '#ef4444' : displayStrategy.riskLevel === '中' ? '#fbbf24' : '#4ade80'}; font-weight: 600;">${displayStrategy.riskLevel}</span></div>
-                <div style="font-size: 12px; color: #9ca3af;">波动性: ${displayStrategy.volatility}</div>
-            </div>
-        </div>
-        ${displayStrategy.keyPatterns && displayStrategy.keyPatterns.length > 0 ? `
-        <div style="margin-top: 10px; padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">关键形态:</div>
-            <div style="font-size: 12px; color: #e0e0e0;">${displayStrategy.keyPatterns.join(', ')}</div>
-        </div>
-        ` : ''}
-    </div>`;
-    
+    // 将HTML渲染到页面
     container.innerHTML = html;
 }
 
@@ -1624,11 +1596,15 @@ function calculateBollingerBands(data, period = 20, stdDev = 2) {
 
 // 更新图表
 function updateChart(chart, data, infoElementId) {
+    // 检查chart是否已初始化
+    console.log(`[图表更新] 开始更新 ${infoElementId}，数据条数:`, data ? data.length : 0);
+    
     if (!data || data.length === 0) {
         const infoElement = document.getElementById(infoElementId);
         if (infoElement) {
             infoElement.innerHTML = '<span style="color: #ef4444;">暂无数据</span>';
         }
+        console.warn(`[图表更新] ${infoElementId} 没有数据`);
         return;
     }
     
@@ -1801,110 +1777,8 @@ function updateChart(chart, data, infoElementId) {
         });
     }
     
-    // 准备价格通道线（从AI分析结果获取支撑位和阻力位）
-    let markLineConfig = null;
-    let markAreaConfig = null;
-    let supportLevel = 0;
-    let resistanceLevel = 0;
-    
-    // 从AI分析结果中获取支撑位和阻力位
-    if (aiAnalysisResult) {
-        const aiStrategy = convertAIResultToStrategy(aiAnalysisResult);
-        if (aiStrategy) {
-            supportLevel = aiStrategy.supportLevel || 0;
-            resistanceLevel = aiStrategy.resistanceLevel || 0;
-        }
-    }
-    
-    // 如果有支撑位和阻力位，添加通道线
-    if (supportLevel > 0 && resistanceLevel > 0) {
-        // 创建markLine数据，绘制横跨整个图表的价格通道
-        markLineConfig = {
-            silent: false,
-            symbol: ['none', 'none'],
-            lineStyle: {
-                color: '#fbbf24',
-                width: 2,
-                type: 'solid',
-                opacity: 0.8
-            },
-            label: {
-                show: true,
-                position: 'end',
-                formatter: function(params) {
-                    return params.name;
-                },
-                color: '#ffffff',
-                backgroundColor: 'rgba(19, 23, 43, 0.9)',
-                padding: [4, 8],
-                borderRadius: 4
-            },
-            data: [
-                // 阻力位（上轨）- 水平线，红色虚线
-                [
-                    {
-                        name: '阻力位',
-                        yAxis: resistanceLevel,
-                        lineStyle: {
-                            color: '#ef4444',
-                            width: 2,
-                            type: 'dashed',
-                            opacity: 0.8
-                        },
-                        label: {
-                            formatter: '阻力位 ' + (isLondon ? resistanceLevel.toFixed(3) : Math.round(resistanceLevel)),
-                            color: '#ef4444'
-                        }
-                    },
-                    {
-                        yAxis: resistanceLevel
-                    }
-                ],
-                // 支撑位（下轨）- 水平线，绿色虚线
-                [
-                    {
-                        name: '支撑位',
-                        yAxis: supportLevel,
-                        lineStyle: {
-                            color: '#4ade80',
-                            width: 2,
-                            type: 'dashed',
-                            opacity: 0.8
-                        },
-                        label: {
-                            formatter: '支撑位 ' + (isLondon ? supportLevel.toFixed(3) : Math.round(supportLevel)),
-                            color: '#4ade80'
-                        }
-                    },
-                    {
-                        yAxis: supportLevel
-                    }
-                ]
-            ]
-        };
-        
-        // 添加通道填充区域（使用markArea）
-        markAreaConfig = {
-            silent: true,
-            itemStyle: {
-                color: 'rgba(251, 191, 36, 0.1)', // 黄色半透明填充
-                borderColor: 'rgba(251, 191, 36, 0.3)',
-                borderWidth: 1
-            },
-            data: [
-                [
-                    {
-                        yAxis: supportLevel,
-                        name: '通道下轨'
-                    },
-                    {
-                        yAxis: resistanceLevel,
-                        name: '通道上轨'
-                    }
-                ]
-            ]
-        };
-    }
+    // 暂时移除价格通道线（markLine和markArea）以排查问题
+    // TODO: 待图表刷新正常后，再考虑是否恢复
     
     const option = {
         graphic: graphic.length > 0 ? graphic : undefined,
@@ -2067,10 +1941,10 @@ function updateChart(chart, data, infoElementId) {
                         borderColor0: '#4ade80',
                         borderWidth: 2
                     }
-                },
-                // 添加价格通道标记线和填充区域
-                markLine: markLineConfig,
-                markArea: markAreaConfig
+                }
+                // 暂时移除价格通道标记线和填充区域
+                // markLine: markLineConfig,
+                // markArea: markAreaConfig
             },
             // 布林带上轨
             {
@@ -2130,6 +2004,8 @@ function updateChart(chart, data, infoElementId) {
     };
     
     chart.setOption(option);
+    
+    console.log(`[图表更新] ${infoElementId} 图表已更新，数据条数: ${sortedData.length}, 图表实例:`, chart ? '有效' : '无效');
 }
 
 // 判断当前是否在交易时间（伦敦白银）
@@ -2296,8 +2172,13 @@ function connectAllTickWebSocket() {
 }
 
 // 更新所有数据
+// 保存上一次的K线数据，用于检查更新
+let lastDomesticKlineData = null;
+let lastLondonKlineData = null;
+
 async function updateAllData() {
     updateStatus('connecting');
+    console.log('[数据更新] 开始更新所有数据...');
     
     try {
         // 同时获取国内和伦敦的K线数据
@@ -2306,13 +2187,88 @@ async function updateAllData() {
             fetchKlineData(API_CONFIG.londonSymbol)
         ]);
         
+        console.log('[数据更新] 获取数据完成 - 国内:', domesticKlineData ? domesticKlineData.length : 'null', '条, 伦敦:', londonKlineData ? londonKlineData.length : 'null', '条');
+        
+        // 检查国内市场数据是否有更新
+        if (domesticKlineData && domesticKlineData.length > 0) {
+            if (lastDomesticKlineData && lastDomesticKlineData.length > 0) {
+                // 比较最新的K线数据
+                const lastKline = lastDomesticKlineData[lastDomesticKlineData.length - 1];
+                const currentKline = domesticKlineData[domesticKlineData.length - 1];
+                
+                const lastTimestamp = lastKline.t || lastKline.time || 0;
+                const currentTimestamp = currentKline.t || currentKline.time || 0;
+                const lastClose = lastKline.c || lastKline.close || 0;
+                const currentClose = currentKline.c || currentKline.close || 0;
+                
+                if (currentTimestamp !== lastTimestamp || currentClose !== lastClose) {
+                    console.log(`[数据更新] ✓ 国内市场数据已更新:`);
+                    console.log(`    时间戳: ${lastTimestamp} -> ${currentTimestamp}`);
+                    console.log(`    收盘价: ${lastClose} -> ${currentClose}`);
+                    console.log(`    数据条数: ${lastDomesticKlineData.length} -> ${domesticKlineData.length}`);
+                } else {
+                    console.log(`[数据更新] - 国内市场数据未变化 (时间戳: ${currentTimestamp}, 收盘价: ${currentClose})`);
+                }
+            } else {
+                console.log(`[数据更新] 国内市场首次获取数据 (时间戳: ${domesticKlineData[domesticKlineData.length - 1]?.t || 'N/A'}, 收盘价: ${domesticKlineData[domesticKlineData.length - 1]?.c || 'N/A'})`);
+            }
+        } else {
+            console.log('[数据更新] ⚠ 国内市场数据为空或获取失败');
+        }
+        
+        // 检查伦敦市场数据是否有更新
+        if (londonKlineData && londonKlineData.length > 0) {
+            if (lastLondonKlineData && lastLondonKlineData.length > 0) {
+                // 比较最新的K线数据
+                const lastKline = lastLondonKlineData[lastLondonKlineData.length - 1];
+                const currentKline = londonKlineData[londonKlineData.length - 1];
+                
+                const lastTimestamp = lastKline.t || lastKline.time || 0;
+                const currentTimestamp = currentKline.t || currentKline.time || 0;
+                const lastClose = lastKline.c || lastKline.close || 0;
+                const currentClose = currentKline.c || currentKline.close || 0;
+                
+                if (currentTimestamp !== lastTimestamp || currentClose !== lastClose) {
+                    console.log(`[数据更新] ✓ 伦敦市场数据已更新:`);
+                    console.log(`    时间戳: ${lastTimestamp} -> ${currentTimestamp}`);
+                    console.log(`    收盘价: ${lastClose} -> ${currentClose}`);
+                    console.log(`    数据条数: ${lastLondonKlineData.length} -> ${londonKlineData.length}`);
+                } else {
+                    console.log(`[数据更新] - 伦敦市场数据未变化 (时间戳: ${currentTimestamp}, 收盘价: ${currentClose})`);
+                }
+            } else {
+                console.log(`[数据更新] 伦敦市场首次获取数据 (时间戳: ${londonKlineData[londonKlineData.length - 1]?.t || 'N/A'}, 收盘价: ${londonKlineData[londonKlineData.length - 1]?.c || 'N/A'})`);
+            }
+        } else {
+            console.log('[数据更新] ⚠ 伦敦市场数据为空或获取失败');
+        }
+        
+        // 保存当前数据供下次比较
+        lastDomesticKlineData = domesticKlineData;
+        lastLondonKlineData = londonKlineData;
+        
         // 保存K线数据供分析使用
         currentDomesticKlineData = domesticKlineData;
         currentLondonKlineData = londonKlineData;
         
         // 更新国内白银K线图
         if (domesticKlineData !== null && domesticKlineData.length > 0) {
-            updateChart(domesticChart, domesticKlineData, 'domestic-info');
+            console.log('[数据更新] 准备更新国内图表，数据条数:', domesticKlineData.length);
+            if (!domesticChart) {
+                console.warn('[数据更新] 国内图表未初始化，尝试重新初始化');
+                const domesticChartElement = document.getElementById('domestic-chart');
+                if (domesticChartElement) {
+                    domesticChart = echarts.init(domesticChartElement, 'dark');
+                    console.log('[数据更新] 国内图表重新初始化成功');
+                } else {
+                    console.error('[数据更新] 找不到国内图表DOM元素');
+                }
+            }
+            if (domesticChart) {
+                updateChart(domesticChart, domesticKlineData, 'domestic-info');
+            } else {
+                console.error('[数据更新] 国内图表初始化失败，无法更新图表');
+            }
         } else {
             const domesticInfo = document.getElementById('domestic-info');
             if (domesticInfo) {
@@ -2547,26 +2503,69 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==================== AI走势分析功能 ====================
 
 // 调用AI分析API
-async function callAnalysisAPI(klineData) {
+async function callAnalysisAPI(domesticData, londonData) {
+    console.log('[callAnalysisAPI] 函数被调用');
+    console.log('[callAnalysisAPI] domesticData:', domesticData ? domesticData.length : 0, '条');
+    console.log('[callAnalysisAPI] londonData:', londonData ? londonData.length : 0, '条');
+    
     try {
         // 检查prompt.js是否已加载
         if (!window.PROMPT_CONFIG) {
+            console.error('[callAnalysisAPI] Prompt配置文件未加载');
             throw new Error('Prompt配置文件未加载，请刷新页面重试');
         }
+        
+        console.log('[callAnalysisAPI] Prompt配置已加载');
         
         // 加载系统提示词
         const systemPrompt = window.PROMPT_CONFIG.MAIN_PROMPT;
         
-        // 格式化用户提示词（K线数据）
-        const userPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(klineData);
+        // 构建消息数组：第一个消息是伦敦数据，第二个消息是国内数据
+        const messages = [];
         
-        // 构建消息数组（只包含用户消息）
-        const messages = [
-            {
+        // 第一个user消息：伦敦数据
+        if (londonData && londonData.length > 0) {
+            const londonPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
+                londonData, 
+                '伦敦现货白银', 
+                'Silver'
+            );
+            messages.push({
                 role: "user",
-                content: userPrompt
+                content: londonPrompt
+            });
+            console.log('[callAnalysisAPI] 已添加伦敦数据到messages，数据条数:', londonData.length);
+        } else {
+            console.warn('[callAnalysisAPI] 伦敦数据为空，跳过');
+        }
+        
+        // 第二个user消息：国内数据
+        if (domesticData && domesticData.length > 0) {
+            const domesticPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
+                domesticData, 
+                '国内白银', 
+                'AG'
+            );
+            // 如果是最后一个消息，添加分析要求
+            const analysisInstruction = domesticPrompt + "\n\n请综合分析以上两个市场的K线数据（伦敦现货白银和国内白银），注意它们之间的关联性，并按照JSON格式输出分析结果。";
+            messages.push({
+                role: "user",
+                content: analysisInstruction
+            });
+            console.log('[callAnalysisAPI] 已添加国内数据到messages，数据条数:', domesticData.length);
+        } else {
+            console.warn('[callAnalysisAPI] 国内数据为空，跳过');
+            // 如果只有伦敦数据，在最后一个消息中添加分析要求
+            if (londonData && londonData.length > 0 && messages.length > 0) {
+                messages[messages.length - 1].content += "\n\n请根据以上伦敦现货白银的K线数据进行技术分析，并按照JSON格式输出分析结果。";
             }
-        ];
+        }
+        
+        // 验证messages数组
+        console.log('[callAnalysisAPI] messages数组长度:', messages.length);
+        if (messages.length === 0) {
+            throw new Error('没有可用的K线数据');
+        }
         
         // 构建请求体（prompt参数放系统提示词，messages数组放用户数据）
         const requestBody = {
@@ -2574,11 +2573,6 @@ async function callAnalysisAPI(klineData) {
             messages: messages,
             model: 'deepseek-chat' // 使用DeepSeek Chat模型
         };
-        
-        console.log('[LLM请求] URL:', API_CONFIG.llmApiUrl);
-        console.log('[LLM请求] 接收K线数据条数:', klineData.length);
-        console.log('[LLM请求] Prompt长度:', systemPrompt.length, '字符');
-        console.log('[LLM请求] User prompt长度:', userPrompt.length, '字符');
         
         // 创建AbortController用于超时控制（1分钟=60000毫秒）
         const controller = new AbortController();
@@ -2598,8 +2592,12 @@ async function callAnalysisAPI(klineData) {
                 signal: controller.signal // 添加超时控制
             });
             
+            console.log('[callAnalysisAPI] fetch请求已发送，等待响应...');
+            
             // 清除超时定时器
             clearTimeout(timeoutId);
+            
+            console.log('[callAnalysisAPI] 收到响应，Status:', response.status);
             
             if (!response.ok) {
                 const errorText = await response.text();
@@ -2618,32 +2616,63 @@ async function callAnalysisAPI(klineData) {
                 if (apiResponse.response && Array.isArray(apiResponse.response) && apiResponse.response.length > 0) {
                     // 新格式：response[0].message 包含JSON字符串
                     const messageText = apiResponse.response[0].message;
+                    console.log('[解析响应] messageText类型:', typeof messageText);
+                    console.log('[解析响应] messageText前100字符:', messageText ? messageText.substring(0, 100) : 'null');
+                    
                     if (typeof messageText === 'string') {
                         // message是一个JSON字符串，需要解析
-                        analysisResult = JSON.parse(messageText);
+                        // 清理可能的转义字符
+                        let cleanedText = messageText.trim();
+                        // 如果字符串包含转义的换行符，先处理
+                        cleanedText = cleanedText.replace(/\\n/g, '\n');
+                        console.log('[解析响应] 清理后的文本前100字符:', cleanedText.substring(0, 100));
+                        
+                        try {
+                            analysisResult = JSON.parse(cleanedText);
+                            console.log('[解析响应] JSON解析成功');
+                        } catch (parseErr) {
+                            console.error('[解析响应] JSON解析失败:', parseErr);
+                            console.error('[解析响应] 尝试解析的文本:', cleanedText);
+                            // 尝试提取JSON部分
+                            const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) {
+                                analysisResult = JSON.parse(jsonMatch[0]);
+                                console.log('[解析响应] 通过正则提取JSON成功');
+                            } else {
+                                throw parseErr;
+                            }
+                        }
                     } else if (typeof messageText === 'object') {
                         // message已经是对象
                         analysisResult = messageText;
+                        console.log('[解析响应] message已经是对象');
+                    } else {
+                        console.warn('[解析响应] message格式未知:', typeof messageText);
                     }
                 } else if (typeof apiResponse === 'object' && apiResponse.trend) {
                     // 如果响应直接是分析结果对象
                     analysisResult = apiResponse;
+                    console.log('[解析响应] 响应直接是分析结果对象');
                 } else {
+                    console.warn('[解析响应] 无法识别的响应格式');
                     // 尝试从content或message字段提取
                     let resultText = apiResponse.content || apiResponse.message || JSON.stringify(apiResponse);
                     // 尝试从文本中提取JSON
                     const jsonMatch = resultText.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         analysisResult = JSON.parse(jsonMatch[0]);
+                        console.log('[解析响应] 通过正则提取JSON成功（备用方法）');
                     } else {
                         analysisResult = {
                             error: "无法解析JSON格式的分析结果",
                             raw_response: resultText
                         };
+                        console.error('[解析响应] 无法提取JSON');
                     }
                 }
             } catch (parseError) {
-                console.warn('[LLM响应] JSON解析失败:', parseError);
+                console.error('[LLM响应] JSON解析失败:', parseError);
+                console.error('[LLM响应] 原始响应:', JSON.stringify(apiResponse, null, 2));
                 analysisResult = {
                     error: "JSON解析失败",
                     raw_response: JSON.stringify(apiResponse),
@@ -2651,8 +2680,20 @@ async function callAnalysisAPI(klineData) {
                 };
             }
             
-            console.log('[分析成功] 数据条数:', klineData.length);
+            console.log('[分析成功] 国内数据条数:', domesticData ? domesticData.length : 0, ', 伦敦数据条数:', londonData ? londonData.length : 0);
             console.log('[分析结果]', analysisResult);
+            console.log('[分析结果类型]', typeof analysisResult);
+            console.log('[分析结果是否有错误]', analysisResult.error);
+            
+            // 检查解析结果
+            if (!analysisResult) {
+                throw new Error('AI分析返回结果为空');
+            }
+            
+            if (analysisResult.error) {
+                throw new Error(`AI分析错误: ${analysisResult.error}`);
+            }
+            
             return analysisResult;
         } catch (error) {
             // 清除超时定时器（如果请求失败）
@@ -2675,87 +2716,103 @@ async function callAnalysisAPI(klineData) {
 
 // 执行AI分析
 async function performAnalysis() {
+    console.log('[performAnalysis] 函数被调用');
+    
     const analyzeBtn = document.getElementById('analyze-btn');
     
     if (!analyzeBtn) {
-        console.error('分析按钮未找到');
+        console.error('[performAnalysis] 分析按钮未找到');
         return;
     }
     
     // 如果正在分析中，直接返回，防止重复点击
     if (isAnalyzing) {
-        console.log('正在分析中，请勿重复点击');
+        console.log('[performAnalysis] 正在分析中，请勿重复点击');
         return;
     }
+    
+    console.log('[performAnalysis] 开始执行分析流程');
     
     // 立即设置分析状态和按钮状态
     isAnalyzing = true;
     analyzeBtn.disabled = true;
     analyzeBtn.textContent = '分析中...';
     
-    // 更新实时交易策略显示为加载状态
-    const strategyContent = document.getElementById('trading-strategy-content');
-    if (strategyContent) {
-        strategyContent.innerHTML = '<div class="loading">正在分析K线数据，请稍候...</div>';
-    }
-    
     try {
-        // 获取最新的K线数据
-        let klineDataToAnalyze = [];
+        console.log('[performAnalysis] 开始获取K线数据');
         
-        // 优先使用国内白银数据，如果没有则使用伦敦数据
-        if (currentDomesticKlineData && currentDomesticKlineData.length > 0) {
-            klineDataToAnalyze = currentDomesticKlineData;
-            console.log(`使用国内白银数据进行分析，数据条数: ${klineDataToAnalyze.length}`);
-        } else if (currentLondonKlineData && currentLondonKlineData.length > 0) {
-            klineDataToAnalyze = currentLondonKlineData;
-            console.log(`使用伦敦白银数据进行分析，数据条数: ${klineDataToAnalyze.length}`);
+        // 强制获取最新的K线数据（国内和伦敦），不使用缓存，确保数据是最新的
+        console.log('[performAnalysis] 实时获取最新K线数据...');
+        const [domesticData, londonData] = await Promise.all([
+            fetchKlineData(API_CONFIG.domesticSymbol),
+            fetchKlineData(API_CONFIG.londonSymbol)
+        ]);
+        
+        let domesticDataToAnalyze = null;
+        let londonDataToAnalyze = null;
+        
+        if (domesticData && domesticData.length > 0) {
+            domesticDataToAnalyze = domesticData;
+            currentDomesticKlineData = domesticData; // 更新缓存
+            console.log(`[performAnalysis] 获取到国内白银数据，数据条数: ${domesticDataToAnalyze.length}`);
         } else {
-            // 如果缓存中没有数据，实时获取
-            console.log('缓存中没有数据，实时获取...');
-            const [domesticData, londonData] = await Promise.all([
-                fetchKlineData(API_CONFIG.domesticSymbol),
-                fetchKlineData(API_CONFIG.londonSymbol)
-            ]);
-            
-            if (domesticData && domesticData.length > 0) {
-                klineDataToAnalyze = domesticData;
-            } else if (londonData && londonData.length > 0) {
-                klineDataToAnalyze = londonData;
-            } else {
-                throw new Error('无法获取K线数据，请稍后重试');
-            }
+            console.warn('[performAnalysis] 国内白银数据获取失败或为空');
         }
         
-        if (klineDataToAnalyze.length === 0) {
-            throw new Error('K线数据为空，无法进行分析');
+        if (londonData && londonData.length > 0) {
+            londonDataToAnalyze = londonData;
+            currentLondonKlineData = londonData; // 更新缓存
+            console.log(`[performAnalysis] 获取到伦敦白银数据，数据条数: ${londonDataToAnalyze.length}`);
+        } else {
+            console.warn('[performAnalysis] 伦敦白银数据获取失败或为空');
         }
         
-        // 调用分析API
-        console.log('正在调用分析API...');
-        const result = await callAnalysisAPI(klineDataToAnalyze);
+        // 检查是否有至少一个市场的数据
+        if ((!domesticDataToAnalyze || domesticDataToAnalyze.length === 0) && 
+            (!londonDataToAnalyze || londonDataToAnalyze.length === 0)) {
+            throw new Error('无法获取K线数据，请稍后重试');
+        }
+        
+        // 调用分析API，同时传递国内和伦敦的数据
+        console.log('[performAnalysis] 准备调用callAnalysisAPI');
+        console.log('[performAnalysis] 国内数据条数:', domesticDataToAnalyze ? domesticDataToAnalyze.length : 0);
+        console.log('[performAnalysis] 伦敦数据条数:', londonDataToAnalyze ? londonDataToAnalyze.length : 0);
+        
+        const result = await callAnalysisAPI(domesticDataToAnalyze, londonDataToAnalyze);
+        
+        console.log('[performAnalysis] callAnalysisAPI调用完成');
+        
+        console.log('[执行分析] API调用完成，结果:', result);
+        console.log('[执行分析] 结果类型:', typeof result);
+        console.log('[执行分析] 结果是否有trend字段:', result.trend);
         
         // 保存AI分析结果
         aiAnalysisResult = result;
+        console.log('[执行分析] 已保存到aiAnalysisResult:', aiAnalysisResult);
         
         // 更新实时交易策略显示（会自动使用AI分析结果）
+        console.log('[执行分析] 准备更新交易策略显示...');
         updateTradingStrategy();
         
-        console.log('分析完成，策略已更新');
+        console.log('[执行分析] 策略更新完成');
         
     } catch (error) {
-        console.error('分析失败:', error);
+        console.error('[performAnalysis] 分析失败，错误详情:', error);
+        console.error('[performAnalysis] 错误堆栈:', error.stack);
+        console.error('[performAnalysis] 错误消息:', error.message);
+        
         const strategyContent = document.getElementById('trading-strategy-content');
         if (strategyContent) {
             strategyContent.innerHTML = `
                 <div style="color: #ef4444; padding: 15px; text-align: center;">
                     <div style="font-size: 18px; margin-bottom: 8px;">分析失败</div>
                     <div style="font-size: 14px; color: #9ca3af;">${error.message || '未知错误'}</div>
-                    <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">请检查网络连接或稍后重试</div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">请检查浏览器控制台查看详细错误信息</div>
                 </div>
             `;
         }
     } finally {
+        console.log('[performAnalysis] 恢复按钮和分析状态');
         // 恢复按钮和分析状态
         isAnalyzing = false;
         analyzeBtn.disabled = false;
@@ -2771,7 +2828,7 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzeBtn.addEventListener('click', performAnalysis);
     }
     
-    // 初始化时获取一次K线数据
+    // 初始化时获取一次K线数据并自动触发AI分析
     setTimeout(async () => {
         try {
             const [domesticData, londonData] = await Promise.all([
@@ -2781,6 +2838,14 @@ document.addEventListener('DOMContentLoaded', () => {
             currentDomesticKlineData = domesticData;
             currentLondonKlineData = londonData;
             console.log('K线数据已缓存，可用于分析');
+            
+            // 自动触发AI分析
+            if ((domesticData && domesticData.length > 0) || (londonData && londonData.length > 0)) {
+                console.log('[自动触发] 页面加载完成，自动触发AI分析');
+                performAnalysis();
+            } else {
+                console.warn('[自动触发] 没有足够的K线数据，跳过自动分析');
+            }
         } catch (error) {
             console.warn('初始化K线数据失败:', error);
         }
