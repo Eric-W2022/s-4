@@ -181,56 +181,119 @@ def fetch_tqsdk_quote(symbol: str):
         # 获取实时行情
         quote = api.get_quote(contract)
         
+        # 等待数据更新（确保获取最新数据）
+        import time
+        deadline = time.time() + 1
+        api.wait_update(deadline=deadline)
+        
         # TqSdk的quote对象有last_price字段（最新价）
         # 转换为标准格式
         if quote:
-            # 处理last_price，可能是None、字符串或数字
-            last_price = quote.get('last_price', 0)
-            if last_price is None:
-                last_price = 0
-            elif isinstance(last_price, str):
+            # 调试：打印quote对象类型和属性
+            logging.debug(f"[TqSdk调试] Quote类型: {type(quote)}")
+            if hasattr(quote, '__dict__'):
+                logging.debug(f"[TqSdk调试] Quote属性: {dir(quote)[:20]}")
+            
+            # 处理last_price - quote对象可能是对象属性或dict
+            last_price = 0
+            if hasattr(quote, 'last_price'):
+                # 如果是对象属性
                 try:
-                    last_price = float(last_price)
-                except (ValueError, TypeError):
+                    last_price = float(quote.last_price) if quote.last_price is not None else 0
+                    logging.debug(f"[TqSdk调试] 从last_price属性获取: {last_price}")
+                except (ValueError, TypeError, AttributeError) as e:
+                    logging.debug(f"[TqSdk调试] 获取last_price属性失败: {e}")
+                    pass
+            elif isinstance(quote, dict):
+                # 如果是dict
+                last_price = quote.get('last_price', 0)
+                if last_price is None:
                     last_price = 0
-            else:
-                try:
-                    last_price = float(last_price) if last_price else 0
-                except (ValueError, TypeError):
-                    last_price = 0
+                elif isinstance(last_price, str):
+                    try:
+                        last_price = float(last_price)
+                    except (ValueError, TypeError):
+                        last_price = 0
+                else:
+                    try:
+                        last_price = float(last_price) if last_price else 0
+                    except (ValueError, TypeError):
+                        last_price = 0
+                logging.debug(f"[TqSdk调试] 从dict获取last_price: {last_price}")
+            
+            # 如果last_price为0，尝试其他价格字段
+            if last_price == 0:
+                logging.warning(f"[TqSdk警告] last_price为0，尝试其他价格字段")
+                if hasattr(quote, 'price'):
+                    try:
+                        last_price = float(quote.price) if quote.price is not None else 0
+                        logging.debug(f"[TqSdk调试] 从price属性获取: {last_price}")
+                    except:
+                        pass
+                if last_price == 0 and hasattr(quote, 'open'):
+                    try:
+                        last_price = float(quote.open) if quote.open is not None else 0
+                        logging.warning(f"[TqSdk警告] 使用open价格: {last_price}")
+                    except:
+                        pass
             
             # 处理volume
-            volume = quote.get('volume', 0)
-            if volume is None:
-                volume = 0
-            elif isinstance(volume, str):
+            volume = 0
+            if hasattr(quote, 'volume'):
                 try:
-                    volume = float(volume)
-                except (ValueError, TypeError):
+                    volume = float(quote.volume) if quote.volume is not None else 0
+                except (ValueError, TypeError, AttributeError):
+                    pass
+            elif isinstance(quote, dict):
+                volume = quote.get('volume', 0)
+                if volume is None:
                     volume = 0
-            else:
-                try:
-                    volume = float(volume) if volume else 0
-                except (ValueError, TypeError):
-                    volume = 0
+                elif isinstance(volume, str):
+                    try:
+                        volume = float(volume)
+                    except (ValueError, TypeError):
+                        volume = 0
+                else:
+                    try:
+                        volume = float(volume) if volume else 0
+                    except (ValueError, TypeError):
+                        volume = 0
             
             # 处理datetime
-            datetime_value = quote.get('datetime', 0)
-            if datetime_value is None:
-                datetime_value = 0
-            elif isinstance(datetime_value, str):
+            datetime_value = 0
+            if hasattr(quote, 'datetime'):
                 try:
-                    datetime_value = float(datetime_value)
-                except (ValueError, TypeError):
+                    datetime_str = quote.datetime
+                    # 如果是字符串，需要解析
+                    if isinstance(datetime_str, str):
+                        # 格式: "2025-11-04 00:12:58.000000"
+                        from datetime import datetime as dt
+                        try:
+                            dt_obj = dt.strptime(datetime_str.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                            datetime_value = dt_obj.timestamp() * 1e9  # 转为纳秒时间戳
+                        except:
+                            datetime_value = datetime.now().timestamp() * 1e9
+                    elif isinstance(datetime_str, (int, float)):
+                        datetime_value = datetime_str
+                except (ValueError, TypeError, AttributeError):
+                    pass
+            elif isinstance(quote, dict):
+                datetime_value = quote.get('datetime', 0)
+                if datetime_value is None:
                     datetime_value = 0
-            else:
-                try:
-                    datetime_value = float(datetime_value) if datetime_value else 0
-                except (ValueError, TypeError):
+                elif isinstance(datetime_value, str):
+                    try:
+                        from datetime import datetime as dt
+                        dt_obj = dt.strptime(datetime_value.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                        datetime_value = dt_obj.timestamp() * 1e9
+                    except:
+                        datetime_value = datetime.now().timestamp() * 1e9
+                elif isinstance(datetime_value, (int, float)):
+                    datetime_value = datetime_value
+                else:
                     datetime_value = 0
             
             # 时间戳转换（纳秒转毫秒）
-            # 确保datetime_value是数字类型再进行比较
             if isinstance(datetime_value, (int, float)) and datetime_value > 0:
                 if datetime_value > 1e12:
                     tick_time_ms = int(datetime_value / 1e6)
@@ -241,12 +304,14 @@ def fetch_tqsdk_quote(symbol: str):
             else:
                 tick_time_ms = int(datetime.now().timestamp() * 1000)
             
-            return {
+            result = {
                 "code": contract,
                 "price": str(last_price),
                 "volume": str(volume),
                 "tick_time": str(tick_time_ms)
             }
+            logging.info(f"[TqSdk行情获取] Symbol: {symbol} | Price: {last_price} | Volume: {volume} | Time: {tick_time_ms}")
+            return result
         return None
     except Exception as e:
         logging.error(f"获取TqSdk实时行情失败: {e}", exc_info=True)

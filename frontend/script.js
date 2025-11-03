@@ -12,8 +12,12 @@ const API_CONFIG = {
     // WebSocket配置
     wsToken: '9d7f12b4c30826987a501d532ef75707-c-app',
     wsUrl: 'wss://quote.alltick.co/quote-b-ws-api',
-    // 大模型API配置
-    llmApiUrl: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat'
+    // 大模型API配置（根据代理状态动态设置）
+    llmApiUrl: null, // 将在检测代理后动态设置
+    // 不开代理时使用的API URL（国内）
+    llmApiUrlChina: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat',
+    // 开代理时使用的API URL（新加坡）
+    llmApiUrlSingapore: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat' // TODO: 需要设置新加坡的API URL
 };
 
 // WebSocket连接管理（订阅交易价格）
@@ -1597,14 +1601,19 @@ function calculateBollingerBands(data, period = 20, stdDev = 2) {
 // 更新图表
 function updateChart(chart, data, infoElementId) {
     // 检查chart是否已初始化
-    console.log(`[图表更新] 开始更新 ${infoElementId}，数据条数:`, data ? data.length : 0);
+    if (!chart) {
+        console.warn(`[图表更新] 图表未初始化: ${infoElementId}`);
+        return;
+    }
     
     if (!data || data.length === 0) {
         const infoElement = document.getElementById(infoElementId);
         if (infoElement) {
             infoElement.innerHTML = '<span style="color: #ef4444;">暂无数据</span>';
         }
-        console.warn(`[图表更新] ${infoElementId} 没有数据`);
+        if (infoElementId.includes('domestic')) {
+            console.warn(`[图表更新] ${infoElementId} 没有数据`);
+        }
         return;
     }
     
@@ -2004,8 +2013,6 @@ function updateChart(chart, data, infoElementId) {
     };
     
     chart.setOption(option);
-    
-    console.log(`[图表更新] ${infoElementId} 图表已更新，数据条数: ${sortedData.length}, 图表实例:`, chart ? '有效' : '无效');
 }
 
 // 判断当前是否在交易时间（伦敦白银）
@@ -2178,7 +2185,6 @@ let lastLondonKlineData = null;
 
 async function updateAllData() {
     updateStatus('connecting');
-    console.log('[数据更新] 开始更新所有数据...');
     
     try {
         // 同时获取国内和伦敦的K线数据
@@ -2186,8 +2192,6 @@ async function updateAllData() {
             fetchKlineData(API_CONFIG.domesticSymbol),
             fetchKlineData(API_CONFIG.londonSymbol)
         ]);
-        
-        console.log('[数据更新] 获取数据完成 - 国内:', domesticKlineData ? domesticKlineData.length : 'null', '条, 伦敦:', londonKlineData ? londonKlineData.length : 'null', '条');
         
         // 检查国内市场数据是否有更新
         if (domesticKlineData && domesticKlineData.length > 0) {
@@ -2216,7 +2220,7 @@ async function updateAllData() {
             console.log('[数据更新] ⚠ 国内市场数据为空或获取失败');
         }
         
-        // 检查伦敦市场数据是否有更新
+        // 检查伦敦市场数据是否有更新（不打印日志）
         if (londonKlineData && londonKlineData.length > 0) {
             if (lastLondonKlineData && lastLondonKlineData.length > 0) {
                 // 比较最新的K线数据
@@ -2228,19 +2232,8 @@ async function updateAllData() {
                 const lastClose = lastKline.c || lastKline.close || 0;
                 const currentClose = currentKline.c || currentKline.close || 0;
                 
-                if (currentTimestamp !== lastTimestamp || currentClose !== lastClose) {
-                    console.log(`[数据更新] ✓ 伦敦市场数据已更新:`);
-                    console.log(`    时间戳: ${lastTimestamp} -> ${currentTimestamp}`);
-                    console.log(`    收盘价: ${lastClose} -> ${currentClose}`);
-                    console.log(`    数据条数: ${lastLondonKlineData.length} -> ${londonKlineData.length}`);
-                } else {
-                    console.log(`[数据更新] - 伦敦市场数据未变化 (时间戳: ${currentTimestamp}, 收盘价: ${currentClose})`);
-                }
-            } else {
-                console.log(`[数据更新] 伦敦市场首次获取数据 (时间戳: ${londonKlineData[londonKlineData.length - 1]?.t || 'N/A'}, 收盘价: ${londonKlineData[londonKlineData.length - 1]?.c || 'N/A'})`);
+                // 不打印日志，静默更新
             }
-        } else {
-            console.log('[数据更新] ⚠ 伦敦市场数据为空或获取失败');
         }
         
         // 保存当前数据供下次比较
@@ -2253,7 +2246,6 @@ async function updateAllData() {
         
         // 更新国内白银K线图
         if (domesticKlineData !== null && domesticKlineData.length > 0) {
-            console.log('[数据更新] 准备更新国内图表，数据条数:', domesticKlineData.length);
             if (!domesticChart) {
                 console.warn('[数据更新] 国内图表未初始化，尝试重新初始化');
                 const domesticChartElement = document.getElementById('domestic-chart');
@@ -2502,6 +2494,87 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ==================== AI走势分析功能 ====================
 
+// 代理检测缓存
+let proxyDetectionCache = {
+    isProxyEnabled: null, // null表示未检测，true表示开了代理，false表示没开代理
+    lastCheckTime: null
+};
+
+/**
+ * 检测浏览器是否开启了代理
+ * 通过检测网络连接和特定域名可达性来判断
+ * @returns {Promise<boolean>} true表示开了代理，false表示没开代理
+ */
+async function detectProxy() {
+    // 如果已经检测过，直接返回缓存结果
+    if (proxyDetectionCache.isProxyEnabled !== null) {
+        return proxyDetectionCache.isProxyEnabled;
+    }
+    
+    try {
+        // 检测是否能访问Google或GitHub（开了代理通常能访问）
+        // 使用超时控制来快速检测
+        const timeout = 3000; // 3秒超时
+        
+        // 创建带超时的fetch请求辅助函数
+        const fetchWithTimeout = (url, options = {}) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            return fetch(url, {
+                ...options,
+                signal: controller.signal,
+                method: 'HEAD',
+                mode: 'no-cors',
+                cache: 'no-cache'
+            }).then(() => {
+                clearTimeout(timeoutId);
+                return true;
+            }).catch(() => {
+                clearTimeout(timeoutId);
+                return false;
+            });
+        };
+        
+        const proxyCheckPromises = [
+            // 尝试访问Google，如果能访问说明可能开了代理
+            fetchWithTimeout('https://www.google.com/favicon.ico'),
+            
+            // 尝试访问GitHub，如果能访问说明可能开了代理
+            fetchWithTimeout('https://github.com/favicon.ico')
+        ];
+        
+        // 并行检测多个服务，如果任何一个能访问，说明可能开了代理
+        const results = await Promise.allSettled(proxyCheckPromises);
+        const accessibleCount = results.filter(r => r.status === 'fulfilled' && r.value === true).length;
+        
+        // 如果至少有一个服务能访问，认为开了代理
+        const isProxyEnabled = accessibleCount > 0;
+        
+        proxyDetectionCache.isProxyEnabled = isProxyEnabled;
+        proxyDetectionCache.lastCheckTime = Date.now();
+        
+        // 根据代理状态设置API URL
+        if (isProxyEnabled) {
+            API_CONFIG.llmApiUrl = API_CONFIG.llmApiUrlSingapore;
+            console.log('[代理检测] 检测到浏览器开启了代理，使用新加坡API:', API_CONFIG.llmApiUrl);
+        } else {
+            API_CONFIG.llmApiUrl = API_CONFIG.llmApiUrlChina;
+            console.log('[代理检测] 检测到浏览器未开启代理，使用国内API:', API_CONFIG.llmApiUrl);
+        }
+        
+        return isProxyEnabled;
+        
+    } catch (error) {
+        console.error('[代理检测] 代理检测失败:', error);
+        // 默认假设没开代理，使用国内API
+        API_CONFIG.llmApiUrl = API_CONFIG.llmApiUrlChina;
+        proxyDetectionCache.isProxyEnabled = false;
+        proxyDetectionCache.lastCheckTime = Date.now();
+        return false;
+    }
+}
+
 // 调用AI分析API
 async function callAnalysisAPI(domesticData, londonData) {
     console.log('[callAnalysisAPI] 函数被调用');
@@ -2509,6 +2582,20 @@ async function callAnalysisAPI(domesticData, londonData) {
     console.log('[callAnalysisAPI] londonData:', londonData ? londonData.length : 0, '条');
     
     try {
+        // 先检测代理状态并设置API URL（如果还未检测）
+        if (API_CONFIG.llmApiUrl === null) {
+            console.log('[callAnalysisAPI] 开始检测代理状态...');
+            await detectProxy();
+        }
+        
+        // 确保API URL已设置
+        if (!API_CONFIG.llmApiUrl) {
+            console.warn('[callAnalysisAPI] API URL未设置，使用默认国内API');
+            API_CONFIG.llmApiUrl = API_CONFIG.llmApiUrlChina;
+        }
+        
+        console.log('[callAnalysisAPI] 使用的API URL:', API_CONFIG.llmApiUrl);
+        
         // 检查prompt.js是否已加载
         if (!window.PROMPT_CONFIG) {
             console.error('[callAnalysisAPI] Prompt配置文件未加载');
@@ -2616,8 +2703,6 @@ async function callAnalysisAPI(domesticData, londonData) {
                 if (apiResponse.response && Array.isArray(apiResponse.response) && apiResponse.response.length > 0) {
                     // 新格式：response[0].message 包含JSON字符串
                     const messageText = apiResponse.response[0].message;
-                    console.log('[解析响应] messageText类型:', typeof messageText);
-                    console.log('[解析响应] messageText前100字符:', messageText ? messageText.substring(0, 100) : 'null');
                     
                     if (typeof messageText === 'string') {
                         // message是一个JSON字符串，需要解析
@@ -2625,19 +2710,14 @@ async function callAnalysisAPI(domesticData, londonData) {
                         let cleanedText = messageText.trim();
                         // 如果字符串包含转义的换行符，先处理
                         cleanedText = cleanedText.replace(/\\n/g, '\n');
-                        console.log('[解析响应] 清理后的文本前100字符:', cleanedText.substring(0, 100));
                         
                         try {
                             analysisResult = JSON.parse(cleanedText);
-                            console.log('[解析响应] JSON解析成功');
                         } catch (parseErr) {
-                            console.error('[解析响应] JSON解析失败:', parseErr);
-                            console.error('[解析响应] 尝试解析的文本:', cleanedText);
                             // 尝试提取JSON部分
                             const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
                             if (jsonMatch) {
                                 analysisResult = JSON.parse(jsonMatch[0]);
-                                console.log('[解析响应] 通过正则提取JSON成功');
                             } else {
                                 throw parseErr;
                             }
@@ -2645,29 +2725,22 @@ async function callAnalysisAPI(domesticData, londonData) {
                     } else if (typeof messageText === 'object') {
                         // message已经是对象
                         analysisResult = messageText;
-                        console.log('[解析响应] message已经是对象');
-                    } else {
-                        console.warn('[解析响应] message格式未知:', typeof messageText);
                     }
                 } else if (typeof apiResponse === 'object' && apiResponse.trend) {
                     // 如果响应直接是分析结果对象
                     analysisResult = apiResponse;
-                    console.log('[解析响应] 响应直接是分析结果对象');
                 } else {
-                    console.warn('[解析响应] 无法识别的响应格式');
                     // 尝试从content或message字段提取
                     let resultText = apiResponse.content || apiResponse.message || JSON.stringify(apiResponse);
                     // 尝试从文本中提取JSON
                     const jsonMatch = resultText.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         analysisResult = JSON.parse(jsonMatch[0]);
-                        console.log('[解析响应] 通过正则提取JSON成功（备用方法）');
                     } else {
                         analysisResult = {
                             error: "无法解析JSON格式的分析结果",
                             raw_response: resultText
                         };
-                        console.error('[解析响应] 无法提取JSON');
                     }
                 }
             } catch (parseError) {
@@ -2679,11 +2752,6 @@ async function callAnalysisAPI(domesticData, londonData) {
                     parse_error: parseError.message
                 };
             }
-            
-            console.log('[分析成功] 国内数据条数:', domesticData ? domesticData.length : 0, ', 伦敦数据条数:', londonData ? londonData.length : 0);
-            console.log('[分析结果]', analysisResult);
-            console.log('[分析结果类型]', typeof analysisResult);
-            console.log('[分析结果是否有错误]', analysisResult.error);
             
             // 检查解析结果
             if (!analysisResult) {
@@ -2716,8 +2784,6 @@ async function callAnalysisAPI(domesticData, londonData) {
 
 // 执行AI分析
 async function performAnalysis() {
-    console.log('[performAnalysis] 函数被调用');
-    
     const analyzeBtn = document.getElementById('analyze-btn');
     
     if (!analyzeBtn) {
@@ -2727,11 +2793,8 @@ async function performAnalysis() {
     
     // 如果正在分析中，直接返回，防止重复点击
     if (isAnalyzing) {
-        console.log('[performAnalysis] 正在分析中，请勿重复点击');
         return;
     }
-    
-    console.log('[performAnalysis] 开始执行分析流程');
     
     // 立即设置分析状态和按钮状态
     isAnalyzing = true;
@@ -2739,10 +2802,7 @@ async function performAnalysis() {
     analyzeBtn.textContent = '分析中...';
     
     try {
-        console.log('[performAnalysis] 开始获取K线数据');
-        
         // 强制获取最新的K线数据（国内和伦敦），不使用缓存，确保数据是最新的
-        console.log('[performAnalysis] 实时获取最新K线数据...');
         const [domesticData, londonData] = await Promise.all([
             fetchKlineData(API_CONFIG.domesticSymbol),
             fetchKlineData(API_CONFIG.londonSymbol)
@@ -2754,7 +2814,6 @@ async function performAnalysis() {
         if (domesticData && domesticData.length > 0) {
             domesticDataToAnalyze = domesticData;
             currentDomesticKlineData = domesticData; // 更新缓存
-            console.log(`[performAnalysis] 获取到国内白银数据，数据条数: ${domesticDataToAnalyze.length}`);
         } else {
             console.warn('[performAnalysis] 国内白银数据获取失败或为空');
         }
@@ -2762,7 +2821,6 @@ async function performAnalysis() {
         if (londonData && londonData.length > 0) {
             londonDataToAnalyze = londonData;
             currentLondonKlineData = londonData; // 更新缓存
-            console.log(`[performAnalysis] 获取到伦敦白银数据，数据条数: ${londonDataToAnalyze.length}`);
         } else {
             console.warn('[performAnalysis] 伦敦白银数据获取失败或为空');
         }
@@ -2774,27 +2832,13 @@ async function performAnalysis() {
         }
         
         // 调用分析API，同时传递国内和伦敦的数据
-        console.log('[performAnalysis] 准备调用callAnalysisAPI');
-        console.log('[performAnalysis] 国内数据条数:', domesticDataToAnalyze ? domesticDataToAnalyze.length : 0);
-        console.log('[performAnalysis] 伦敦数据条数:', londonDataToAnalyze ? londonDataToAnalyze.length : 0);
-        
         const result = await callAnalysisAPI(domesticDataToAnalyze, londonDataToAnalyze);
-        
-        console.log('[performAnalysis] callAnalysisAPI调用完成');
-        
-        console.log('[执行分析] API调用完成，结果:', result);
-        console.log('[执行分析] 结果类型:', typeof result);
-        console.log('[执行分析] 结果是否有trend字段:', result.trend);
         
         // 保存AI分析结果
         aiAnalysisResult = result;
-        console.log('[执行分析] 已保存到aiAnalysisResult:', aiAnalysisResult);
         
         // 更新实时交易策略显示（会自动使用AI分析结果）
-        console.log('[执行分析] 准备更新交易策略显示...');
         updateTradingStrategy();
-        
-        console.log('[执行分析] 策略更新完成');
         
     } catch (error) {
         console.error('[performAnalysis] 分析失败，错误详情:', error);
@@ -2812,7 +2856,6 @@ async function performAnalysis() {
             `;
         }
     } finally {
-        console.log('[performAnalysis] 恢复按钮和分析状态');
         // 恢复按钮和分析状态
         isAnalyzing = false;
         analyzeBtn.disabled = false;
@@ -2827,6 +2870,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (analyzeBtn) {
         analyzeBtn.addEventListener('click', performAnalysis);
     }
+    
+    // 页面加载时提前检测代理状态（后台进行，不阻塞页面）
+    detectProxy().then(isProxyEnabled => {
+        console.log('[页面初始化] 代理检测完成，是否开启代理:', isProxyEnabled);
+        console.log('[页面初始化] 使用的API URL:', API_CONFIG.llmApiUrl);
+    }).catch(error => {
+        console.warn('[页面初始化] 代理检测失败，将在调用API时重试:', error);
+    });
     
     // 初始化时获取一次K线数据并自动触发AI分析
     setTimeout(async () => {

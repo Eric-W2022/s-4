@@ -51,24 +51,10 @@ async def get_kline(
     logger.info(f"[API请求] IP: {client_ip} | Symbol: {symbol} | Interval: {interval} | Limit: {limit} | Trace: {trace_id}")
     
     try:
-        # 如果是国内白银(AG)，使用TqSdk获取数据
+        # 如果是国内白银(AG)，使用TqSdk获取数据（优先使用缓存）
         if symbol.upper() == 'AG':
             logger.info(f"[TqSdk请求] Symbol: {symbol} | Interval: {interval} | Limit: {limit}")
             
-            # 检查是否有订阅缓存数据
-            if TQSDK_SUBSCRIPTION_RUNNING and interval.lower() in TQSDK_KLINE_CACHE.get('AG', {}):
-                cached_data = TQSDK_KLINE_CACHE['AG'][interval.lower()]
-                if cached_data and len(cached_data) > 0:
-                    # 从缓存中返回数据（限制数量）
-                    result_data = cached_data[-limit:] if len(cached_data) > limit else cached_data
-                    logger.info(f"[TqSdk缓存] Symbol: {symbol} | Interval: {interval} | 数据条数: {len(result_data)}")
-                    return JSONResponse(
-                        content=result_data,
-                        status_code=200
-                    )
-            
-            # 如果缓存中没有数据，尝试直接获取（兼容模式）
-            logger.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
             interval_map = {
                 "1m": 60,
                 "5m": 300,
@@ -80,7 +66,20 @@ async def get_kline(
             duration_seconds = interval_map.get(interval.lower(), 60)
             
             try:
-                # 使用TqSdk获取K线数据
+                # 优先使用订阅缓存的实时数据
+                if TQSDK_SUBSCRIPTION_RUNNING and TQSDK_KLINE_CACHE.get('AG') and TQSDK_KLINE_CACHE['AG'].get(interval.lower()):
+                    cached_data = TQSDK_KLINE_CACHE['AG'][interval.lower()]
+                    if cached_data and len(cached_data) > 0:
+                        # 返回最新的limit条数据
+                        standard_data = cached_data[-limit:] if len(cached_data) > limit else cached_data
+                        logger.info(f"[TqSdk缓存] Symbol: {symbol} | Interval: {interval} | 数据条数: {len(standard_data)}")
+                        return JSONResponse(
+                            content=standard_data,
+                            status_code=200
+                        )
+                
+                # 如果缓存中没有数据，使用直接获取（兼容模式）
+                logger.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
                 standard_data = await get_tqsdk_kline_async(symbol, duration_seconds, limit)
                 
                 logger.info(f"[TqSdk成功] Symbol: {symbol} | 数据条数: {len(standard_data)}")
@@ -214,146 +213,12 @@ async def get_trade_tick(
     
     logger.info(f"[Trade-Tick请求] IP: {client_ip} | Symbol: {symbol} | Trace: {trace_id}")
     
-    # 如果是国内白银(AG)，使用TqSdk获取实时行情
+    # 如果是国内白银(AG)，使用TqSdk获取实时行情（直接获取，不使用缓存）
     if symbol.upper() == 'AG':
         try:
             logger.info(f"[TqSdk实时行情请求] Symbol: {symbol}")
             
-            # 优先从订阅缓存中获取实时行情
-            if TQSDK_SUBSCRIPTION_RUNNING and TQSDK_QUOTE_CACHE.get('AG'):
-                quote = TQSDK_QUOTE_CACHE['AG']
-                if quote:
-                    # 处理last_price - 优先使用最新的价格字段
-                    # TqSdk的quote对象可能是pandas Series或dict，需要特殊处理
-                    last_price = 0
-                    if hasattr(quote, 'last_price'):
-                        # 如果是pandas Series或对象属性
-                        try:
-                            last_price = float(quote.last_price) if quote.last_price is not None else 0
-                        except (ValueError, TypeError, AttributeError):
-                            pass
-                    elif isinstance(quote, dict):
-                        # 如果是dict
-                        last_price = quote.get('last_price', 0)
-                        if last_price is None:
-                            last_price = 0
-                        elif isinstance(last_price, str):
-                            try:
-                                last_price = float(last_price)
-                            except (ValueError, TypeError):
-                                last_price = 0
-                        else:
-                            try:
-                                last_price = float(last_price) if last_price else 0
-                            except (ValueError, TypeError):
-                                last_price = 0
-                    
-                    # 如果last_price为0，尝试其他价格字段
-                    if last_price == 0:
-                        # 尝试使用最新价字段
-                        if hasattr(quote, 'last_price'):
-                            try:
-                                last_price = float(quote.last_price) if quote.last_price is not None else 0
-                            except:
-                                pass
-                        elif isinstance(quote, dict):
-                            # 尝试多种价格字段
-                            for price_key in ['last_price', 'price', 'close', 'current_price']:
-                                if price_key in quote and quote[price_key]:
-                                    try:
-                                        last_price = float(quote[price_key])
-                                        break
-                                    except:
-                                        continue
-                    
-                    # 处理datetime - quote对象的datetime是字符串格式，需要解析
-                    datetime_value = 0
-                    if hasattr(quote, 'datetime'):
-                        try:
-                            datetime_str = quote.datetime
-                            # 如果是字符串，需要解析
-                            if isinstance(datetime_str, str):
-                                # 格式: "2025-11-03 22:33:53.500000"
-                                from datetime import datetime as dt
-                                try:
-                                    # 尝试解析字符串
-                                    dt_obj = dt.strptime(datetime_str.split('.')[0], '%Y-%m-%d %H:%M:%S')
-                                    datetime_value = dt_obj.timestamp() * 1e9  # 转为纳秒时间戳
-                                except:
-                                    # 如果解析失败，使用当前时间
-                                    datetime_value = datetime.now().timestamp() * 1e9
-                            elif isinstance(datetime_str, (int, float)):
-                                datetime_value = datetime_str
-                        except (ValueError, TypeError, AttributeError):
-                            pass
-                    elif isinstance(quote, dict):
-                        datetime_value = quote.get('datetime', 0)
-                        if datetime_value is None:
-                            datetime_value = 0
-                        elif isinstance(datetime_value, str):
-                            # 字符串格式，需要解析
-                            try:
-                                from datetime import datetime as dt
-                                dt_obj = dt.strptime(datetime_value.split('.')[0], '%Y-%m-%d %H:%M:%S')
-                                datetime_value = dt_obj.timestamp() * 1e9
-                            except:
-                                datetime_value = datetime.now().timestamp() * 1e9
-                        elif isinstance(datetime_value, (int, float)):
-                            datetime_value = datetime_value
-                        else:
-                            datetime_value = 0
-                    
-                    # 时间戳转换（纳秒转毫秒）
-                    if isinstance(datetime_value, (int, float)) and datetime_value > 0:
-                        if datetime_value > 1e12:
-                            tick_time_ms = int(datetime_value / 1e6)
-                        elif datetime_value > 1e9:
-                            tick_time_ms = int(datetime_value)
-                        else:
-                            tick_time_ms = int(datetime_value * 1000)
-                    else:
-                        tick_time_ms = int(datetime.now().timestamp() * 1000)
-                    
-                    # 处理volume
-                    volume = 0
-                    if hasattr(quote, 'volume'):
-                        try:
-                            volume = float(quote.volume) if quote.volume is not None else 0
-                        except (ValueError, TypeError, AttributeError):
-                            pass
-                    elif isinstance(quote, dict):
-                        volume = quote.get('volume', 0)
-                        if volume is None:
-                            volume = 0
-                        elif isinstance(volume, str):
-                            try:
-                                volume = float(volume)
-                            except (ValueError, TypeError):
-                                volume = 0
-                        else:
-                            try:
-                                volume = float(volume) if volume else 0
-                            except (ValueError, TypeError):
-                                volume = 0
-                    
-                    result = {
-                        "ret": 200,
-                        "msg": "ok",
-                        "trace": trace_id,
-                        "data": {
-                            "tick_list": [{
-                                "code": "KQ.m@SHFE.ag",
-                                "price": str(last_price),
-                                "volume": str(volume),
-                                "tick_time": str(tick_time_ms)
-                            }]
-                        }
-                    }
-                    logger.info(f"[TqSdk缓存行情] Symbol: {symbol} | Price: {last_price} | Volume: {volume} | Time: {tick_time_ms}")
-                    return JSONResponse(content=result, status_code=200)
-            
-            # 如果缓存中没有数据，使用直接获取（兼容模式）
-            logger.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
+            # 直接获取实时行情数据（不使用缓存）
             quote_data = await get_tqsdk_quote_async(symbol)
             
             if quote_data:

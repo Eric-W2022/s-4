@@ -125,7 +125,7 @@ def start_tqsdk_subscription():
                             standard_data = convert_tqsdk_kline_to_standard_format(kline_df)
                             config.TQSDK_KLINE_CACHE['AG'][interval] = standard_data
                             if update_count % 60 == 0:  # 每60次更新记录一次日志
-                                logger.debug(f"K线数据已更新: {interval}, 数据条数: {len(standard_data)}")
+                                logger.info(f"K线数据已更新: {interval}, 数据条数: {len(standard_data)}")
                     
                     # 更新实时行情 - 确保quote对象已更新
                     if quote is not None:
