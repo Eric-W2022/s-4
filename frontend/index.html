@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>白银K线监控</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="flex: 1;">
+                <h1>白银K线监控</h1>
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="status-indicator">
+                    <span class="status-dot connecting"></span>
+                    <span id="status-text">--</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- 左侧：K线图 -->
+            <div class="left-panel">
+                <div class="chart-wrapper">
+                    <div class="chart-header">
+                        <h2>伦敦现货白银 (Silver)</h2>
+                        <div class="chart-info" id="london-info">
+                            <span>加载中...</span>
+                        </div>
+                    </div>
+                    <div id="london-chart" class="chart"></div>
+                </div>
+            </div>
+
+            <!-- 右侧：最新成交价和盘口 -->
+            <div class="right-panel">
+                <!-- 最新成交价 -->
+                <div class="info-card">
+                    <h3>最新成交价</h3>
+                    <div id="trade-tick-info" class="tick-info">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+
+                <!-- 盘口深度 -->
+                <div class="info-card">
+                    <h3>盘口深度</h3>
+                    <div id="depth-tick-info" class="depth-info">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer style="display: none;">
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // 添加版本号，便于检测更新
+        window.APP_VERSION = '1.0.0';
+    </script>
+</body>
+</html>
+
