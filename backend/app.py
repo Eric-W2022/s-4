@@ -49,6 +49,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 禁用httpx的INFO级别日志（避免打印HTTP请求详情）
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # TqSdk配置
 TQ_USERNAME = '17665117821'
 TQ_PASSWORD = 'STC89c51'
@@ -182,17 +185,62 @@ def fetch_tqsdk_quote(symbol: str):
         # TqSdk的quote对象有last_price字段（最新价）
         # 转换为标准格式
         if quote:
-            last_price = quote.get('last_price', 0) or 0
-            volume = quote.get('volume', 0) or 0
-            datetime_value = quote.get('datetime', 0) or 0
+            # 处理last_price，可能是None、字符串或数字
+            last_price = quote.get('last_price', 0)
+            if last_price is None:
+                last_price = 0
+            elif isinstance(last_price, str):
+                try:
+                    last_price = float(last_price)
+                except (ValueError, TypeError):
+                    last_price = 0
+            else:
+                try:
+                    last_price = float(last_price) if last_price else 0
+                except (ValueError, TypeError):
+                    last_price = 0
+            
+            # 处理volume
+            volume = quote.get('volume', 0)
+            if volume is None:
+                volume = 0
+            elif isinstance(volume, str):
+                try:
+                    volume = float(volume)
+                except (ValueError, TypeError):
+                    volume = 0
+            else:
+                try:
+                    volume = float(volume) if volume else 0
+                except (ValueError, TypeError):
+                    volume = 0
+            
+            # 处理datetime
+            datetime_value = quote.get('datetime', 0)
+            if datetime_value is None:
+                datetime_value = 0
+            elif isinstance(datetime_value, str):
+                try:
+                    datetime_value = float(datetime_value)
+                except (ValueError, TypeError):
+                    datetime_value = 0
+            else:
+                try:
+                    datetime_value = float(datetime_value) if datetime_value else 0
+                except (ValueError, TypeError):
+                    datetime_value = 0
             
             # 时间戳转换（纳秒转毫秒）
-            if datetime_value > 1e12:
-                tick_time_ms = int(datetime_value / 1e6)
-            elif datetime_value > 1e9:
-                tick_time_ms = int(datetime_value)
+            # 确保datetime_value是数字类型再进行比较
+            if isinstance(datetime_value, (int, float)) and datetime_value > 0:
+                if datetime_value > 1e12:
+                    tick_time_ms = int(datetime_value / 1e6)
+                elif datetime_value > 1e9:
+                    tick_time_ms = int(datetime_value)
+                else:
+                    tick_time_ms = int(datetime_value * 1000)
             else:
-                tick_time_ms = int(datetime_value * 1000)
+                tick_time_ms = int(datetime.now().timestamp() * 1000)
             
             return {
                 "code": contract,

@@ -189,8 +189,9 @@ class AllTickWebSocket {
     }
 }
 
-// WebSocket实例（只用于伦敦白银）
-let londonWS = null; // 伦敦白银WebSocket
+// WebSocket实例
+let domesticWS = null; // 国内白银WebSocket（TqSdk）
+let londonWS = null; // 伦敦白银WebSocket（AllTick）
 
 // 图表实例
 let domesticChart = null; // 国内白银图表
