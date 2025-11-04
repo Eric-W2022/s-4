@@ -2428,6 +2428,8 @@ function updateChart(chart, data, infoElementId) {
         return;
     }
     
+    console.log(`[图表更新] 开始更新: ${infoElementId}, 数据条数: ${data ? data.length : 0}`);
+    
     if (!data || data.length === 0) {
         const infoElement = document.getElementById(infoElementId);
         if (infoElement) {
@@ -2463,6 +2465,22 @@ function updateChart(chart, data, infoElementId) {
     
     // 计算布林带
     const bollingerBands = calculateBollingerBands(sortedData, 20, 2);
+    
+    // 验证并修正布林带数据（确保上轨 > 下轨）
+    if (sortedData.length > 0) {
+        for (let i = 0; i < bollingerBands.upper.length; i++) {
+            if (bollingerBands.upper[i] !== null && bollingerBands.lower[i] !== null) {
+                const upper = bollingerBands.upper[i];
+                const lower = bollingerBands.lower[i];
+                if (upper < lower) {
+                    console.warn(`[布林带] 索引 ${i}: 上轨(${upper}) < 下轨(${lower})，交换值`);
+                    // 交换上下轨
+                    bollingerBands.upper[i] = lower;
+                    bollingerBands.lower[i] = upper;
+                }
+            }
+        }
+    }
     
     // 保存最新的布林带数据（用于实时分析）
     // 根据infoElementId判断是哪个市场
@@ -2681,6 +2699,9 @@ function updateChart(chart, data, infoElementId) {
     let priceMarkLines = [];
     // 只在1分钟K线图上显示（domestic-info 或 london-info），不包括15分钟和90日K线图
     if (!infoElementId.includes('daily') && !infoElementId.includes('15m')) {
+        console.log('[价格标记线] 准备标记线，infoElementId:', infoElementId);
+        console.log('[价格标记线] lastPriceAdvice:', lastPriceAdvice);
+        
         const formatPrice = (price) => {
             if (isLondon) {
                 return price.toFixed(3);
@@ -2692,15 +2713,13 @@ function updateChart(chart, data, infoElementId) {
         // 开仓价标记线（黄色）
         if (lastPriceAdvice.entryPrice) {
             const entryPrice = lastPriceAdvice.entryPrice;
+            console.log('[价格标记线] 添加开仓价标记线:', entryPrice);
             priceMarkLines.push({
-                silent: false,
-                symbol: 'none',
+                yAxis: entryPrice,
                 label: {
                     show: true,
                     position: 'end',
-                    formatter: function(params) {
-                        return `开仓价: ${formatPrice(entryPrice)}`;
-                    },
+                    formatter: `开仓价: ${formatPrice(entryPrice)}`,
                     color: '#ffffff',
                     backgroundColor: 'rgba(19, 23, 43, 0.9)',
                     borderColor: '#fbbf24',
@@ -2714,34 +2733,20 @@ function updateChart(chart, data, infoElementId) {
                     color: '#fbbf24', // 黄色，表示开仓价
                     width: 2,
                     type: 'dashed'
-                },
-                data: [
-                    [
-                        {
-                            coord: [0, entryPrice],
-                            symbol: 'none'
-                        },
-                        {
-                            coord: [timeData.length - 1, entryPrice],
-                            symbol: 'none'
-                        }
-                    ]
-                ]
+                }
             });
         }
         
         // 止损价标记线（绿色）
         if (lastPriceAdvice.stopLoss) {
             const stopLoss = lastPriceAdvice.stopLoss;
+            console.log('[价格标记线] 添加止损价标记线:', stopLoss);
             priceMarkLines.push({
-                silent: false,
-                symbol: 'none',
+                yAxis: stopLoss,
                 label: {
                     show: true,
                     position: 'end',
-                    formatter: function(params) {
-                        return `止损价: ${formatPrice(stopLoss)}`;
-                    },
+                    formatter: `止损价: ${formatPrice(stopLoss)}`,
                     color: '#ffffff',
                     backgroundColor: 'rgba(19, 23, 43, 0.9)',
                     borderColor: '#4ade80',
@@ -2755,34 +2760,20 @@ function updateChart(chart, data, infoElementId) {
                     color: '#4ade80', // 绿色，表示止损价
                     width: 2,
                     type: 'dashed'
-                },
-                data: [
-                    [
-                        {
-                            coord: [0, stopLoss],
-                            symbol: 'none'
-                        },
-                        {
-                            coord: [timeData.length - 1, stopLoss],
-                            symbol: 'none'
-                        }
-                    ]
-                ]
+                }
             });
         }
         
         // 止盈价标记线（红色）
         if (lastPriceAdvice.takeProfit) {
             const takeProfit = lastPriceAdvice.takeProfit;
+            console.log('[价格标记线] 添加止盈价标记线:', takeProfit);
             priceMarkLines.push({
-                silent: false,
-                symbol: 'none',
+                yAxis: takeProfit,
                 label: {
                     show: true,
                     position: 'end',
-                    formatter: function(params) {
-                        return `止盈价: ${formatPrice(takeProfit)}`;
-                    },
+                    formatter: `止盈价: ${formatPrice(takeProfit)}`,
                     color: '#ffffff',
                     backgroundColor: 'rgba(19, 23, 43, 0.9)',
                     borderColor: '#ef4444',
@@ -2796,21 +2787,11 @@ function updateChart(chart, data, infoElementId) {
                     color: '#ef4444', // 红色，表示止盈价
                     width: 2,
                     type: 'dashed'
-                },
-                data: [
-                    [
-                        {
-                            coord: [0, takeProfit],
-                            symbol: 'none'
-                        },
-                        {
-                            coord: [timeData.length - 1, takeProfit],
-                            symbol: 'none'
-                        }
-                    ]
-                ]
+                }
             });
         }
+        
+        console.log('[价格标记线] 总共添加了', priceMarkLines.length, '条标记线');
     }
     
     const option = {
@@ -2908,6 +2889,47 @@ function updateChart(chart, data, infoElementId) {
                     }
                 });
                 
+                // 添加价格建议信息（只在1分钟K线图上显示，不包括15分钟和90日K线）
+                if (!infoElementId.includes('daily') && !infoElementId.includes('15m')) {
+                    let priceAdviceAdded = false;
+                    
+                    // 开仓价
+                    if (lastPriceAdvice.entryPrice) {
+                        if (!priceAdviceAdded) {
+                            result += '<br/><span style="color:#9ca3af;font-size:11px;">━━━━━━━━━━━━━━</span><br/>';
+                            priceAdviceAdded = true;
+                        }
+                        const formatPrice = isLondonChart ? lastPriceAdvice.entryPrice.toFixed(3) : Math.round(lastPriceAdvice.entryPrice).toString();
+                        result += '<span style="display:inline-block;margin-right:5px;border-radius:2px;width:10px;height:10px;background-color:#fbbf24;"></span>';
+                        result += '<span style="color:#fbbf24;">建议开仓价</span>: ';
+                        result += '<span style="color:#ffffff;font-weight:600;">' + formatPrice + '</span><br/>';
+                    }
+                    
+                    // 止损价
+                    if (lastPriceAdvice.stopLoss) {
+                        if (!priceAdviceAdded) {
+                            result += '<br/><span style="color:#9ca3af;font-size:11px;">━━━━━━━━━━━━━━</span><br/>';
+                            priceAdviceAdded = true;
+                        }
+                        const formatPrice = isLondonChart ? lastPriceAdvice.stopLoss.toFixed(3) : Math.round(lastPriceAdvice.stopLoss).toString();
+                        result += '<span style="display:inline-block;margin-right:5px;border-radius:2px;width:10px;height:10px;background-color:#4ade80;"></span>';
+                        result += '<span style="color:#4ade80;">止损价</span>: ';
+                        result += '<span style="color:#ffffff;font-weight:600;">' + formatPrice + '</span><br/>';
+                    }
+                    
+                    // 止盈价
+                    if (lastPriceAdvice.takeProfit) {
+                        if (!priceAdviceAdded) {
+                            result += '<br/><span style="color:#9ca3af;font-size:11px;">━━━━━━━━━━━━━━</span><br/>';
+                            priceAdviceAdded = true;
+                        }
+                        const formatPrice = isLondonChart ? lastPriceAdvice.takeProfit.toFixed(3) : Math.round(lastPriceAdvice.takeProfit).toString();
+                        result += '<span style="display:inline-block;margin-right:5px;border-radius:2px;width:10px;height:10px;background-color:#ef4444;"></span>';
+                        result += '<span style="color:#ef4444;">止盈价</span>: ';
+                        result += '<span style="color:#ffffff;font-weight:600;">' + formatPrice + '</span><br/>';
+                    }
+                }
+                
                 return result;
             }
         },
@@ -2978,7 +3000,7 @@ function updateChart(chart, data, infoElementId) {
                 axisLabel: {
                     color: '#9ca3af',
                     formatter: function(value) {
-                        // 对于伦敦白银，显示3位小数；对于国内白银，取整
+                        // 对于伦敦白银，显示3位小数；对于国内白银，显示整数
                         if (isLondon) {
                             return value.toFixed(3);
                         } else {
@@ -3050,7 +3072,11 @@ function updateChart(chart, data, infoElementId) {
                     }
                 },
                 // 添加价格标记线（开仓价、止损价、止盈价）
-                markLine: priceMarkLines.length > 0 ? priceMarkLines : undefined
+                markLine: priceMarkLines.length > 0 ? {
+                    data: priceMarkLines,
+                    silent: false,
+                    symbol: 'none'
+                } : undefined
             },
             // 布林带上轨
             {
@@ -3174,6 +3200,39 @@ function updateChart(chart, data, infoElementId) {
     }
     
     chart.setOption(option);
+    
+    console.log(`[图表更新] 完成更新: ${infoElementId}`);
+    
+    // 如果有价格标记线，确保它们被正确应用
+    if (priceMarkLines.length > 0 && !infoElementId.includes('daily') && !infoElementId.includes('15m')) {
+        console.log('[价格标记线] 应用标记线到图表，数量:', priceMarkLines.length);
+        console.log('[价格标记线] 标记线数据:', JSON.stringify(priceMarkLines.map(line => line.data[0])));
+        
+        // 更新K线series的markLine，使用正确的格式
+        // ECharts的markLine data格式应该是数组，每个元素是一条线 [[{coord}, {coord}], ...]
+        const markLineData = priceMarkLines.map(line => line.data[0]);
+        
+        chart.setOption({
+            series: [{
+                markLine: {
+                    data: markLineData,
+                    silent: false,
+                    symbol: 'none',
+                    label: {
+                        show: true,
+                        position: 'end'
+                    },
+                    lineStyle: {
+                        width: 2,
+                        type: 'dashed'
+                    }
+                }
+            }],
+            notMerge: false
+        });
+        
+        console.log('[价格标记线] 标记线已应用，数据:', markLineData);
+    }
     
     // 在setOption之后添加事件监听器（避免重复添加）
     if (!infoElementId.includes('daily')) {
@@ -3866,6 +3925,11 @@ async function updateTradeAndDepth() {
 
 // 刷新数据按钮
 document.addEventListener('DOMContentLoaded', async () => {
+    // 清空控制台日志
+    console.clear();
+    console.log('🚀 页面已加载，控制台日志已清空');
+    console.log('=' .repeat(50));
+    
     initCharts();
     
     // 获取前一日收盘价（用于计算涨跌幅）
@@ -4606,6 +4670,9 @@ function analyzeBtnClickHandler(e) {
 
 // 初始化分析功能（页面加载完成后）
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('=' .repeat(50));
+    console.log('📊 初始化AI分析功能...');
+    console.log('=' .repeat(50));
     // 分析按钮事件 - 确保绑定成功
     const analyzeBtn = document.getElementById('analyze-btn');
     if (analyzeBtn) {

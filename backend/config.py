@@ -149,16 +149,39 @@ def get_tqsdk_api():
 
 
 def fetch_tqsdk_kline(symbol: str, duration_seconds: int, data_length: int):
-    """使用TqSdk获取K线数据（同步函数，在线程池中运行）"""
+    """使用TqSdk获取K线数据（优先使用订阅缓存，由后台订阅线程维护）"""
     try:
-        api = get_tqsdk_api()
         # 白银主力合约代码：KQ.m@SHFE.ag
         if symbol.upper() == 'AG':
             contract = "KQ.m@SHFE.ag"
+            
+            # 将 duration_seconds 转换为 interval 格式
+            interval_map = {
+                60: '1m',
+                300: '5m',
+                900: '15m',
+                1800: '30m',
+                3600: '1h',
+                86400: '1d'
+            }
+            interval = interval_map.get(duration_seconds)
+            
+            # 优先使用订阅缓存
+            if interval and interval in TQSDK_KLINE_CACHE.get('AG', {}):
+                cached_data = TQSDK_KLINE_CACHE['AG'][interval]
+                if cached_data:
+                    logging.info(f"[TqSdk] 使用订阅缓存的K线数据: {interval}")
+                    # 返回指定长度的数据
+                    return cached_data[-data_length:] if len(cached_data) > data_length else cached_data
+                else:
+                    logging.warning(f"[TqSdk回退] 缓存无数据，使用直接获取方式")
+            else:
+                logging.warning(f"[TqSdk回退] 缓存中没有对应周期({duration_seconds}s)，使用直接获取方式")
         else:
             contract = symbol
         
-        # 获取K线数据
+        # 回退方案：直接获取（非AG品种或缓存未就绪时）
+        api = get_tqsdk_api()
         kline_df = api.get_kline_serial(contract, duration_seconds=duration_seconds, data_length=data_length)
         
         # 转换为标准格式
@@ -169,22 +192,35 @@ def fetch_tqsdk_kline(symbol: str, duration_seconds: int, data_length: int):
 
 
 def fetch_tqsdk_quote(symbol: str):
-    """使用TqSdk获取实时行情（同步函数，在线程池中运行）"""
+    """使用TqSdk获取实时行情（只从订阅缓存读取，由后台订阅线程维护）"""
     try:
-        api = get_tqsdk_api()
+        import time
         # 白银主力合约代码：KQ.m@SHFE.ag
         if symbol.upper() == 'AG':
             contract = "KQ.m@SHFE.ag"
         else:
             contract = symbol
         
-        # 获取实时行情
-        quote = api.get_quote(contract)
+        # 尝试从缓存获取数据，如果为空则等待并重试（最多5次，每次等待1.5秒，总共最多7.5秒）
+        cached_quote = None
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            cached_quote = TQSDK_QUOTE_CACHE.get('AG')
+            if cached_quote is not None:
+                if attempt > 0:
+                    logging.info(f"[TqSdk] 订阅缓存已就绪 (等待了 {attempt} 次)")
+                break
+            if attempt < max_attempts - 1:  # 最后一次不等待
+                logging.info(f"[TqSdk] 订阅缓存为空，等待后台订阅初始化... (尝试 {attempt + 1}/{max_attempts})")
+                time.sleep(1.5)
         
-        # 等待数据更新（确保获取最新数据）
-        import time
-        deadline = time.time() + 1
-        api.wait_update(deadline=deadline)
+        if cached_quote is None:
+            # 所有重试后仍为空
+            logging.error(f"[TqSdk] 订阅缓存始终为空，后台订阅任务可能未启动")
+            raise RuntimeError("TqSdk订阅数据尚未就绪，请稍后重试")
+        
+        quote = cached_quote
+        logging.info(f"[TqSdk] 使用订阅缓存的行情数据")
         
         # TqSdk的quote对象有last_price字段（最新价）
         # 转换为标准格式

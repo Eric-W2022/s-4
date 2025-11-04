@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from contextlib import asynccontextmanager
 import uvicorn
 import logging
 from datetime import datetime
@@ -28,7 +29,29 @@ from config import (
 # 导入路由模块
 from routes import data
 
-app = FastAPI(title="白银K线监控", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时执行
+    if TQSDK_AVAILABLE:
+        logger.info("正在启动TqSdk订阅任务...")
+        # 延迟启动，确保TqApi实例已创建
+        await asyncio.sleep(2)
+        # 在后台线程中启动订阅任务
+        start_tqsdk_subscription()
+    else:
+        logger.warning("TqSdk未安装，跳过订阅任务启动")
+    
+    yield  # 应用运行中
+    
+    # 关闭时执行
+    import config
+    config.TQSDK_SUBSCRIPTION_RUNNING = False
+    logger.info("TqSdk订阅任务已停止")
+
+
+app = FastAPI(title="白银K线监控", version="1.0.0", lifespan=lifespan)
 
 # 注册路由
 app.include_router(data.router)
@@ -40,6 +63,14 @@ LOGS_DIR = BASE_DIR / "logs"
 
 # 创建logs目录
 LOGS_DIR.mkdir(exist_ok=True)
+
+# 清空之前的日志文件
+for log_file in LOGS_DIR.glob("*.log"):
+    try:
+        log_file.unlink()
+        print(f"已删除旧日志: {log_file.name}")
+    except Exception as e:
+        print(f"删除日志文件失败 {log_file.name}: {e}")
 
 # 配置日志
 logging.basicConfig(
@@ -185,28 +216,6 @@ async def health_check():
 
 # 挂载前端静态文件（CSS、JS等）
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
-
-
-# 添加静态文件路由，使前端资源可以直接访问（放在最后，避免匹配API路由）
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时启动TqSdk订阅任务"""
-    if TQSDK_AVAILABLE:
-        logger.info("正在启动TqSdk订阅任务...")
-        # 延迟启动，确保TqApi实例已创建
-        await asyncio.sleep(2)
-        # 在后台线程中启动订阅任务
-        start_tqsdk_subscription()
-    else:
-        logger.warning("TqSdk未安装，跳过订阅任务启动")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭时停止TqSdk订阅任务"""
-    import config
-    config.TQSDK_SUBSCRIPTION_RUNNING = False
-    logger.info("TqSdk订阅任务已停止")
 
 
 @app.get("/{file_path:path}")
