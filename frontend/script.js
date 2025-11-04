@@ -916,7 +916,12 @@ function analyzeTradingStrategy() {
     // 计算伦敦市场的趋势强度：价格相对中轨的位置和突破幅度
     const londonTrendStrength = londonPosition; // 0-1，0=下轨，1=上轨
     const londonTrendDirection = londonLastIsUp ? 1 : -1; // 1=上涨，-1=下跌
-    const londonTrendMomentum = Math.abs(londonLastChangePercent); // 涨跌幅绝对值，代表动量
+    // 计算涨跌强度（结合涨跌幅和成交量）
+    const londonTrendMomentum = calculateTrendMomentum(
+        londonLastChangePercent, 
+        currentLondonKlineData,
+        londonLastIsUp
+    ); // 综合强度指标（0-1）
     
     // 综合策略判断（反向思维：突破上轨做空，突破下轨做多）
     // 但要预防持续突破的情况（突破幅度过大时，可能继续上涨/下跌）
@@ -2078,6 +2083,95 @@ function calculateBollingerBands(data, period = 20, stdDev = 2) {
     }
     
     return { upper, middle, lower };
+}
+
+/**
+ * 计算涨跌强度（结合涨跌幅和成交量）
+ * @param {number} changePercent - 涨跌幅百分比（可以为正或负）
+ * @param {Array} klineData - K线数据数组，格式：[{t, o, c, h, l, v, ...}, ...] 或 [{o, c, h, l, v, ...}, ...]
+ * @param {boolean} isUp - 是否上涨（true=上涨，false=下跌）
+ * @param {number} lookbackPeriod - 回看周期（分钟数），默认20分钟
+ * @returns {number} 综合强度指标，范围0-1，值越大表示强度越高
+ */
+function calculateTrendMomentum(changePercent, klineData, isUp, lookbackPeriod = 20) {
+    // 如果没有涨跌幅数据，返回0
+    if (changePercent === null || changePercent === undefined || changePercent === 0) {
+        return 0;
+    }
+    
+    // 1. 价格强度：涨跌幅的绝对值，归一化到0-1
+    // 假设涨跌幅通常在-10%到+10%之间，10%为最大值
+    const priceStrength = Math.min(Math.abs(changePercent) / 10, 1);
+    
+    // 2. 成交量强度：计算量比（当前成交量 vs 平均成交量）
+    let volumeStrength = 0.5; // 默认中等强度
+    
+    // 检查是否有K线数据和成交量数据
+    if (klineData && Array.isArray(klineData) && klineData.length >= 2) {
+        try {
+            // 获取最近的K线数据（最多lookbackPeriod根）
+            const recentKlines = klineData.slice(-lookbackPeriod);
+            
+            // 检查数据结构，可能有两种格式：
+            // 格式1: [{t, o, c, h, l, v, ...}, ...]
+            // 格式2: [{o, c, h, l, v, ...}, ...]
+            // 提取成交量字段
+            const getVolume = (item) => {
+                if (typeof item === 'object' && item !== null) {
+                    return parseFloat(item.v || item.volume || 0);
+                }
+                return 0;
+            };
+            
+            // 当前K线的成交量（最后一根）
+            const currentVolume = getVolume(recentKlines[recentKlines.length - 1]);
+            
+            // 计算前N-1根K线的平均成交量
+            const previousVolumes = recentKlines.slice(0, -1)
+                .map(getVolume)
+                .filter(v => v > 0);
+            
+            if (previousVolumes.length > 0 && currentVolume > 0) {
+                const avgVolume = previousVolumes.reduce((sum, v) => sum + v, 0) / previousVolumes.length;
+                
+                // 量比 = 当前成交量 / 平均成交量
+                const volumeRatio = avgVolume > 0 ? currentVolume / avgVolume : 1;
+                
+                // 归一化量比到0-1：
+                // 量比 = 1 时，强度 = 0.5（中等）
+                // 量比 = 2 时，强度 = 1（很强）
+                // 量比 = 0.5 时，强度 = 0（很弱）
+                // 使用对数函数平滑处理：volumeStrength = log2(volumeRatio + 1) / 2
+                if (volumeRatio >= 0.5) {
+                    volumeStrength = Math.min(Math.log2(volumeRatio + 1) / 2, 1);
+                } else {
+                    // 如果量比 < 0.5，说明成交量萎缩，强度降低
+                    volumeStrength = volumeRatio; // 直接使用量比，范围0-0.5
+                }
+            } else {
+                // 如果没有有效的成交量数据，使用默认值0.5
+                volumeStrength = 0.5;
+            }
+        } catch (error) {
+            console.warn('计算成交量强度失败:', error);
+            // 如果计算出错，使用默认值0.5
+            volumeStrength = 0.5;
+        }
+    }
+    
+    // 3. 综合强度 = 价格强度 × 成交量强度
+    // 这意味着：
+    // - 如果涨跌幅大但成交量小，强度中等（可能缺乏资金支持）
+    // - 如果涨跌幅大且成交量大，强度高（有资金支持）
+    // - 如果涨跌幅小但成交量大，强度中等（可能只是试探）
+    // - 如果涨跌幅小且成交量小，强度低（市场平淡）
+    const combinedStrength = priceStrength * volumeStrength;
+    
+    // 4. 方向加权：上涨时略提高强度（市场情绪偏向看涨），下跌时略降低强度
+    const directionWeight = isUp ? 1.1 : 0.9;
+    const finalStrength = Math.min(combinedStrength * directionWeight, 1);
+    
+    return finalStrength;
 }
 
 // 更新图表
