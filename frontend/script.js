@@ -204,6 +204,8 @@ let domesticChart = null; // 国内白银图表
 let londonChart = null; // 伦敦白银图表（1分钟K线）
 let londonDailyChart = null; // 伦敦白银90日K线图表
 let domesticDailyChart = null; // 国内白银90日K线图表
+let london15mChart = null; // 伦敦白银15分钟K线图表
+let domestic15mChart = null; // 国内白银15分钟K线图表
 
 // 保存滑动条状态（用于保持缩放状态）
 let dataZoomState = {
@@ -237,6 +239,8 @@ function initCharts() {
     const londonInfo = document.getElementById('london-info');
     const londonDailyInfo = document.getElementById('london-daily-info');
     const domesticDailyInfo = document.getElementById('domestic-daily-info');
+    const london15mInfo = document.getElementById('london-15m-info');
+    const domestic15mInfo = document.getElementById('domestic-15m-info');
     if (domesticInfo) {
         domesticInfo.innerHTML = '';
     }
@@ -249,12 +253,30 @@ function initCharts() {
     if (domesticDailyInfo) {
         domesticDailyInfo.innerHTML = '';
     }
+    if (london15mInfo) {
+        london15mInfo.innerHTML = '';
+    }
+    if (domestic15mInfo) {
+        domestic15mInfo.innerHTML = '';
+    }
     
     // 国内白银图表（主要交易标的）
     domesticChart = echarts.init(document.getElementById('domestic-chart'), 'dark');
     
     // 伦敦现货白银图表（方向指引参考）- 1分钟K线
     londonChart = echarts.init(document.getElementById('london-chart'), 'dark');
+    
+    // 伦敦现货白银15分钟K线图表
+    const london15mChartElement = document.getElementById('london-15m-chart');
+    if (london15mChartElement) {
+        london15mChart = echarts.init(london15mChartElement, 'dark');
+    }
+    
+    // 国内白银15分钟K线图表
+    const domestic15mChartElement = document.getElementById('domestic-15m-chart');
+    if (domestic15mChartElement) {
+        domestic15mChart = echarts.init(domestic15mChartElement, 'dark');
+    }
     
     // 伦敦现货白银90日K线图表
     const londonDailyChartElement = document.getElementById('london-daily-chart');
@@ -393,6 +415,12 @@ function initCharts() {
     
     domesticChart.setOption(initialOption);
     londonChart.setOption(initialOption);
+    if (london15mChart) {
+        london15mChart.setOption(initialOption);
+    }
+    if (domestic15mChart) {
+        domestic15mChart.setOption(initialOption);
+    }
     if (londonDailyChart) {
         londonDailyChart.setOption(initialOption);
     }
@@ -1764,13 +1792,13 @@ function renderStrategyFromAI(displayStrategy) {
                     ${priceToShow.stopLoss ? `
                     <div style="text-align: center;">
                         <div style="color: #9ca3af; margin-bottom: 4px;">止损价</div>
-                        <div style="color: #ef4444; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.stopLoss)}</div>
+                        <div style="color: #4ade80; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.stopLoss)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.takeProfit ? `
                     <div style="text-align: center;">
                         <div style="color: #9ca3af; margin-bottom: 4px;">止盈价</div>
-                        <div style="color: #4ade80; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.takeProfit)}</div>
+                        <div style="color: #ef4444; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.takeProfit)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.lots ? `
@@ -2601,12 +2629,58 @@ function updateChart(chart, data, infoElementId) {
         });
     }
     
+    // 如果是1分钟K线图，添加价格建议标记（开仓价、止损价、止盈价）
+    if (!infoElementId.includes('daily') && !infoElementId.includes('15m') && lastPriceAdvice.entryPrice) {
+        const formatPrice = (price) => {
+            if (isLondon) {
+                return price.toFixed(3);
+            } else {
+                return Math.round(price).toString();
+            }
+        };
+        
+        // 在图表左上角显示价格建议
+        let priceText = '';
+        if (lastPriceAdvice.entryPrice) {
+            priceText += `开仓: ${formatPrice(lastPriceAdvice.entryPrice)}\n`;
+        }
+        if (lastPriceAdvice.stopLoss) {
+            priceText += `止损: ${formatPrice(lastPriceAdvice.stopLoss)}\n`;
+        }
+        if (lastPriceAdvice.takeProfit) {
+            priceText += `止盈: ${formatPrice(lastPriceAdvice.takeProfit)}`;
+        }
+        
+        if (priceText) {
+            graphic.push({
+                type: 'text',
+                left: 10,
+                top: 10,
+                z: 100,
+                style: {
+                    text: priceText,
+                    fill: '#ffffff',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textAlign: 'left',
+                    textVerticalAlign: 'top',
+                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    borderColor: '#1e2548',
+                    borderWidth: 1,
+                    padding: [8, 12],
+                    borderRadius: 4
+                }
+            });
+        }
+    }
+    
     // 暂时移除价格通道线（markLine和markArea）以排查问题
     // TODO: 待图表刷新正常后，再考虑是否恢复
     
-    // 准备价格标记线（开仓价、止损价、止盈价，只在1分钟K线图上显示，不在90日K线图上显示）
+    // 准备价格标记线（开仓价、止损价、止盈价，只在1分钟K线图上显示，不在15分钟和90日K线图上显示）
     let priceMarkLines = [];
-    if (!infoElementId.includes('daily')) {
+    // 只在1分钟K线图上显示（domestic-info 或 london-info），不包括15分钟和90日K线图
+    if (!infoElementId.includes('daily') && !infoElementId.includes('15m')) {
         const formatPrice = (price) => {
             if (isLondon) {
                 return price.toFixed(3);
@@ -2656,7 +2730,7 @@ function updateChart(chart, data, infoElementId) {
             });
         }
         
-        // 止损价标记线（红色）
+        // 止损价标记线（绿色）
         if (lastPriceAdvice.stopLoss) {
             const stopLoss = lastPriceAdvice.stopLoss;
             priceMarkLines.push({
@@ -2670,7 +2744,7 @@ function updateChart(chart, data, infoElementId) {
                     },
                     color: '#ffffff',
                     backgroundColor: 'rgba(19, 23, 43, 0.9)',
-                    borderColor: '#ef4444',
+                    borderColor: '#4ade80',
                     borderWidth: 1,
                     padding: [4, 8],
                     borderRadius: 4,
@@ -2678,7 +2752,7 @@ function updateChart(chart, data, infoElementId) {
                     fontWeight: 600
                 },
                 lineStyle: {
-                    color: '#ef4444', // 红色，表示止损价
+                    color: '#4ade80', // 绿色，表示止损价
                     width: 2,
                     type: 'dashed'
                 },
@@ -2697,7 +2771,7 @@ function updateChart(chart, data, infoElementId) {
             });
         }
         
-        // 止盈价标记线（绿色）
+        // 止盈价标记线（红色）
         if (lastPriceAdvice.takeProfit) {
             const takeProfit = lastPriceAdvice.takeProfit;
             priceMarkLines.push({
@@ -2711,7 +2785,7 @@ function updateChart(chart, data, infoElementId) {
                     },
                     color: '#ffffff',
                     backgroundColor: 'rgba(19, 23, 43, 0.9)',
-                    borderColor: '#4ade80',
+                    borderColor: '#ef4444',
                     borderWidth: 1,
                     padding: [4, 8],
                     borderRadius: 4,
@@ -2719,7 +2793,7 @@ function updateChart(chart, data, infoElementId) {
                     fontWeight: 600
                 },
                 lineStyle: {
-                    color: '#4ade80', // 绿色，表示止盈价
+                    color: '#ef4444', // 红色，表示止盈价
                     width: 2,
                     type: 'dashed'
                 },
@@ -3380,11 +3454,13 @@ async function updateAllData() {
     
     try {
         // 同时获取国内和伦敦的K线数据
-        // 伦敦现货白银：1分钟K线（实时图表）和90日K线（历史图表）
-        // 国内白银：1分钟K线（实时图表）和90日K线（历史图表）
-        const [domesticKlineData, londonKlineData, londonDailyKlineData, domesticDailyKlineData] = await Promise.all([
+        // 伦敦现货白银：1分钟K线（实时图表）、15分钟K线（中期图表）和90日K线（历史图表）
+        // 国内白银：1分钟K线（实时图表）、15分钟K线（中期图表）和90日K线（历史图表）
+        const [domesticKlineData, londonKlineData, london15mKlineData, domestic15mKlineData, londonDailyKlineData, domesticDailyKlineData] = await Promise.all([
             fetchKlineData(API_CONFIG.domesticSymbol), // 国内1分钟K线
             fetchKlineData(API_CONFIG.londonSymbol), // 伦敦1分钟K线
+            fetchKlineData(API_CONFIG.londonSymbol, '15m', 100), // 伦敦15分钟K线数据（100根）
+            fetchKlineData(API_CONFIG.domesticSymbol, '15m', 100), // 国内15分钟K线数据（100根）
             fetchKlineData(API_CONFIG.londonSymbol, '1d', 90), // 伦敦90日K线数据
             fetchKlineData(API_CONFIG.domesticSymbol, '1d', 90) // 国内90日K线数据
         ]);
@@ -3543,6 +3619,67 @@ async function updateAllData() {
             }
         }
         
+        // 更新伦敦白银15分钟K线图
+        if (london15mKlineData !== null && london15mKlineData.length > 0) {
+            if (!london15mChart) {
+                const london15mChartElement = document.getElementById('london-15m-chart');
+                if (london15mChartElement) {
+                    london15mChart = echarts.init(london15mChartElement, 'dark');
+                    const initialOption = {
+                        backgroundColor: 'transparent',
+                        grid: [
+                            {
+                                left: '8%',
+                                right: '4%',
+                                top: '6%',
+                                height: '88%',
+                                containLabel: true
+                            }
+                        ],
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'cross'
+                            },
+                            backgroundColor: 'rgba(30, 37, 72, 0.95)',
+                            borderColor: '#1e2548',
+                            textStyle: {
+                                color: '#e0e0e0'
+                            }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: [],
+                            boundaryGap: false,
+                            axisLine: { lineStyle: { color: '#4b5563' } },
+                            axisLabel: { color: '#9ca3af' }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            scale: true,
+                            axisLine: { lineStyle: { color: '#4b5563' } },
+                            axisLabel: { color: '#9ca3af' },
+                            splitLine: { lineStyle: { color: '#1e2548' } }
+                        },
+                        series: []
+                    };
+                    london15mChart.setOption(initialOption);
+                }
+            }
+            if (london15mChart) {
+                updateChart(london15mChart, london15mKlineData, 'london-15m-info');
+            }
+        } else {
+            const london15mInfo = document.getElementById('london-15m-info');
+            if (london15mInfo) {
+                if (london15mKlineData === null) {
+                    london15mInfo.innerHTML = '<span style="color: #ef4444;">API请求失败，请检查浏览器控制台</span>';
+                } else {
+                    london15mInfo.innerHTML = '<span style="color: #fbbf24;">返回空数据，可能是产品代码不正确</span>';
+                }
+            }
+        }
+        
         // 更新国内白银90日K线图
         if (domesticDailyKlineData !== null && domesticDailyKlineData.length > 0) {
             if (!domesticDailyChart) {
@@ -3604,6 +3741,67 @@ async function updateAllData() {
             }
         }
         
+        // 更新国内白银15分钟K线图
+        if (domestic15mKlineData !== null && domestic15mKlineData.length > 0) {
+            if (!domestic15mChart) {
+                const domestic15mChartElement = document.getElementById('domestic-15m-chart');
+                if (domestic15mChartElement) {
+                    domestic15mChart = echarts.init(domestic15mChartElement, 'dark');
+                    const initialOption = {
+                        backgroundColor: 'transparent',
+                        grid: [
+                            {
+                                left: '8%',
+                                right: '4%',
+                                top: '6%',
+                                height: '88%',
+                                containLabel: true
+                            }
+                        ],
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'cross'
+                            },
+                            backgroundColor: 'rgba(30, 37, 72, 0.95)',
+                            borderColor: '#1e2548',
+                            textStyle: {
+                                color: '#e0e0e0'
+                            }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: [],
+                            boundaryGap: false,
+                            axisLine: { lineStyle: { color: '#4b5563' } },
+                            axisLabel: { color: '#9ca3af' }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            scale: true,
+                            axisLine: { lineStyle: { color: '#4b5563' } },
+                            axisLabel: { color: '#9ca3af' },
+                            splitLine: { lineStyle: { color: '#1e2548' } }
+                        },
+                        series: []
+                    };
+                    domestic15mChart.setOption(initialOption);
+                }
+            }
+            if (domestic15mChart) {
+                updateChart(domestic15mChart, domestic15mKlineData, 'domestic-15m-info');
+            }
+        } else {
+            const domestic15mInfo = document.getElementById('domestic-15m-info');
+            if (domestic15mInfo) {
+                if (domestic15mKlineData === null) {
+                    domestic15mInfo.innerHTML = '<span style="color: #ef4444;">API请求失败，请检查浏览器控制台</span>';
+                } else {
+                    domestic15mInfo.innerHTML = '<span style="color: #fbbf24;">返回空数据，可能是产品代码不正确</span>';
+                }
+            }
+        }
+        
         // 更新状态（只显示交易状态）
         if ((domesticKlineData !== null && domesticKlineData.length > 0) || 
             (londonKlineData !== null && londonKlineData.length > 0)) {
@@ -3628,8 +3826,14 @@ window.addEventListener('resize', () => {
     if (londonDailyChart) {
         londonDailyChart.resize();
     }
+    if (london15mChart) {
+        london15mChart.resize();
+    }
     if (domesticDailyChart) {
         domesticDailyChart.resize();
+    }
+    if (domestic15mChart) {
+        domestic15mChart.resize();
     }
 });
 
@@ -3965,7 +4169,7 @@ async function detectProxy() {
 }
 
 // 调用AI分析API
-async function callAnalysisAPI(domesticData, londonData, domesticDailyData = null, londonDailyData = null) {
+async function callAnalysisAPI(domesticData, londonData, domesticDailyData = null, londonDailyData = null, domestic15mData = null, london15mData = null) {
     console.log('[callAnalysisAPI] 函数被调用');
     console.log('[callAnalysisAPI] domesticData:', domesticData ? domesticData.length : 0, '条');
     console.log('[callAnalysisAPI] londonData:', londonData ? londonData.length : 0, '条');
@@ -4075,7 +4279,39 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.warn('[callAnalysisAPI] 国内1分钟K线数据为空，跳过');
         }
         
-        // 第五个user消息：国内日K线数据
+        // 第五个user消息：国内15分钟K线数据
+        if (domestic15mData && domestic15mData.length > 0) {
+            const domestic15mPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
+                domestic15mData, 
+                '国内白银（15分钟K线）', 
+                'AG'
+            );
+            messages.push({
+                role: "user",
+                content: domestic15mPrompt
+            });
+            console.log('[callAnalysisAPI] 已添加国内15分钟K线数据到messages，数据条数:', domestic15mData.length);
+        } else {
+            console.warn('[callAnalysisAPI] 国内15分钟K线数据为空，跳过');
+        }
+        
+        // 第六个user消息：伦敦15分钟K线数据
+        if (london15mData && london15mData.length > 0) {
+            const london15mPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
+                london15mData, 
+                '伦敦现货白银（15分钟K线）', 
+                'Silver'
+            );
+            messages.push({
+                role: "user",
+                content: london15mPrompt
+            });
+            console.log('[callAnalysisAPI] 已添加伦敦15分钟K线数据到messages，数据条数:', london15mData.length);
+        } else {
+            console.warn('[callAnalysisAPI] 伦敦15分钟K线数据为空，跳过');
+        }
+        
+        // 第七个user消息：国内日K线数据
         if (domesticDailyData && domesticDailyData.length > 0) {
             const domesticDailyPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
                 domesticDailyData, 
@@ -4258,16 +4494,20 @@ async function performAnalysis() {
     analyzeBtn.textContent = '分析中...';
     
     try {
-        // 强制获取最新的K线数据（国内和伦敦的1分钟K线和日K线），不使用缓存，确保数据是最新的
-        const [domesticData, londonData, domesticDailyData, londonDailyData] = await Promise.all([
+        // 强制获取最新的K线数据（国内和伦敦的1分钟K线、15分钟K线和日K线），不使用缓存，确保数据是最新的
+        const [domesticData, londonData, domestic15mData, london15mData, domesticDailyData, londonDailyData] = await Promise.all([
             fetchKlineData(API_CONFIG.domesticSymbol), // 国内1分钟K线
             fetchKlineData(API_CONFIG.londonSymbol), // 伦敦1分钟K线
+            fetchKlineData(API_CONFIG.domesticSymbol, '15m', 100), // 国内15分钟K线数据（100根）
+            fetchKlineData(API_CONFIG.londonSymbol, '15m', 100), // 伦敦15分钟K线数据（100根）
             fetchKlineData(API_CONFIG.domesticSymbol, '1d', 90), // 国内日K线数据
             fetchKlineData(API_CONFIG.londonSymbol, '1d', 90) // 伦敦日K线数据
         ]);
         
         let domesticDataToAnalyze = null;
         let londonDataToAnalyze = null;
+        let domestic15mDataToAnalyze = null;
+        let london15mDataToAnalyze = null;
         let domesticDailyDataToAnalyze = null;
         let londonDailyDataToAnalyze = null;
         
@@ -4297,6 +4537,18 @@ async function performAnalysis() {
             console.warn('[performAnalysis] 伦敦白银日K线数据获取失败或为空');
         }
         
+        if (domestic15mData && domestic15mData.length > 0) {
+            domestic15mDataToAnalyze = domestic15mData;
+        } else {
+            console.warn('[performAnalysis] 国内白银15分钟K线数据获取失败或为空');
+        }
+        
+        if (london15mData && london15mData.length > 0) {
+            london15mDataToAnalyze = london15mData;
+        } else {
+            console.warn('[performAnalysis] 伦敦白银15分钟K线数据获取失败或为空');
+        }
+        
         // 检查是否有至少一个市场的数据（1分钟K线或日K线都可以）
         if ((!domesticDataToAnalyze || domesticDataToAnalyze.length === 0) && 
             (!londonDataToAnalyze || londonDataToAnalyze.length === 0) &&
@@ -4305,8 +4557,8 @@ async function performAnalysis() {
             throw new Error('无法获取K线数据，请稍后重试');
         }
         
-        // 调用分析API，同时传递国内和伦敦的1分钟K线和日K线数据
-        const result = await callAnalysisAPI(domesticDataToAnalyze, londonDataToAnalyze, domesticDailyDataToAnalyze, londonDailyDataToAnalyze);
+        // 调用分析API，同时传递国内和伦敦的1分钟K线、15分钟K线和日K线数据
+        const result = await callAnalysisAPI(domesticDataToAnalyze, londonDataToAnalyze, domesticDailyDataToAnalyze, londonDailyDataToAnalyze, domestic15mDataToAnalyze, london15mDataToAnalyze);
         
         // 保存AI分析结果
         aiAnalysisResult = result;
