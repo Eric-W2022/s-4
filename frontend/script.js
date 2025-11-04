@@ -4690,10 +4690,10 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
 
 // K线预测API调用（独立于主分析）
 async function callKlinePredictionAPI(marketType, klineData, londonPrediction = null) {
-    console.log(`[K线预测] 开始预测 ${marketType} 的后续5根K线`);
+    console.log(`[K线预测] 开始预测 ${marketType} 的后续30个价格点`);
     console.log(`[K线预测] 输入数据条数: ${klineData ? klineData.length : 0}`);
     if (londonPrediction) {
-        console.log(`[K线预测] 包含伦敦市场预测参考`);
+        console.log(`[K线预测] 包含伦敦市场预测参考（30个价格点）`);
     }
     
     if (!klineData || klineData.length < 20) {
@@ -4752,7 +4752,7 @@ ${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}分�
         // 添加最终指令
         messages.push({
             role: "user",
-            content: "请根据以上数据预测后续15个价格点（每分钟），按JSON格式输出价格数组。"
+            content: "请根据以上数据预测后续30个价格点（每分钟），按JSON格式输出价格数组。"
         });
         
         // 构建请求体
@@ -5023,50 +5023,15 @@ async function predictKlinesInBackground() {
         }
         
         // 更新图表以显示预测K线（只更新1分钟图）
+        // 不自动调整dataZoom，避免图表跳动，让用户手动滑动查看
         if (londonChart && londonPrediction) {
-            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线');
+            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线（30个点）');
             updateChart(londonChart, currentLondonKlineData, 'london-info');
-            
-            // 确保预测点完全可见：自动调整dataZoom
-            setTimeout(() => {
-                if (londonChart) {
-                    const totalPoints = (currentLondonKlineData?.length || 0) + 15;
-                    const visiblePoints = Math.min(totalPoints, 100); // 至少显示100个点
-                    const startPercent = Math.max(0, ((totalPoints - visiblePoints) / totalPoints) * 100);
-                    
-                    londonChart.setOption({
-                        dataZoom: [{
-                            type: 'slider',
-                            start: startPercent,
-                            end: 100
-                        }]
-                    });
-                    console.log('[K线预测后台任务] 伦敦图表已调整显示范围，确保预测点可见');
-                }
-            }, 100);
         }
         
         if (domesticChart && domesticPrediction) {
-            console.log('[K线预测后台任务] 更新国内图表以显示预测K线');
+            console.log('[K线预测后台任务] 更新国内图表以显示预测K线（30个点）');
             updateChart(domesticChart, currentDomesticKlineData, 'domestic-info');
-            
-            // 确保预测点完全可见：自动调整dataZoom
-            setTimeout(() => {
-                if (domesticChart) {
-                    const totalPoints = (currentDomesticKlineData?.length || 0) + 15;
-                    const visiblePoints = Math.min(totalPoints, 100); // 至少显示100个点
-                    const startPercent = Math.max(0, ((totalPoints - visiblePoints) / totalPoints) * 100);
-                    
-                    domesticChart.setOption({
-                        dataZoom: [{
-                            type: 'slider',
-                            start: startPercent,
-                            end: 100
-                        }]
-                    });
-                    console.log('[K线预测后台任务] 国内图表已调整显示范围，确保预测点可见');
-                }
-            }, 100);
         }
         
         console.log('[K线预测后台任务] 执行完成');
