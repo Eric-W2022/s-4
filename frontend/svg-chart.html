@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG图表展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 40px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+        
+        .chart-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        svg {
+            width: 100%;
+            height: auto;
+        }
+        
+        /* 折线图样式 */
+        .line-chart .line {
+            fill: none;
+            stroke: #667eea;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            animation: drawLine 2s ease-in-out;
+        }
+        
+        @keyframes drawLine {
+            from {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 1000;
+            }
+            to {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        .line-chart .dot {
+            fill: #667eea;
+            transition: r 0.3s ease;
+        }
+        
+        .line-chart .dot:hover {
+            r: 8;
+            fill: #764ba2;
+        }
+        
+        .line-chart .area {
+            fill: url(#lineGradient);
+            opacity: 0.3;
+        }
+        
+        /* 柱状图样式 */
+        .bar-chart .bar {
+            transition: fill 0.3s ease, transform 0.3s ease;
+            transform-origin: bottom;
+            animation: growBar 1.5s ease-out;
+        }
+        
+        @keyframes growBar {
+            from {
+                transform: scaleY(0);
+            }
+            to {
+                transform: scaleY(1);
+            }
+        }
+        
+        .bar-chart .bar:hover {
+            fill: #764ba2;
+            opacity: 0.8;
+        }
+        
+        /* 饼图样式 */
+        .pie-chart .slice {
+            transition: transform 0.3s ease;
+            transform-origin: center;
+        }
+        
+        .pie-chart .slice:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+        
+        /* 文字样式 */
+        .axis-label, .data-label {
+            font-family: inherit;
+            fill: #666;
+        }
+        
+        .axis-line, .grid-line {
+            stroke: #ddd;
+            stroke-width: 1;
+        }
+        
+        .grid-line {
+            opacity: 0.5;
+        }
+        
+        /* 图例 */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 SVG 动态图表展示</h1>
+        
+        <div class="charts-grid">
+            <!-- 折线图 -->
+            <div class="chart-container">
+                <div class="chart-title">📈 月度销售趋势</div>
+                <svg class="line-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.8" />
+                            <stop offset="100%" style="stop-color:#667eea;stop-opacity:0" />
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- 网格线 -->
+                    <line class="grid-line" x1="80" y1="50" x2="80" y2="300" />
+                    <line class="grid-line" x1="80" y1="300" x2="550" y2="300" />
+                    
+                    <!-- Y轴刻度 -->
+                    <line class="grid-line" x1="75" y1="75" x2="550" y2="75" />
+                    <line class="grid-line" x1="75" y1="150" x2="550" y2="150" />
+                    <line class="grid-line" x1="75" y1="225" x2="550" y2="225" />
+                    
+                    <!-- Y轴标签 -->
+                    <text class="axis-label" x="60" y="80" text-anchor="end">100</text>
+                    <text class="axis-label" x="60" y="155" text-anchor="end">75</text>
+                    <text class="axis-label" x="60" y="230" text-anchor="end">50</text>
+                    <text class="axis-label" x="60" y="305" text-anchor="end">0</text>
+                    
+                    <!-- X轴标签 -->
+                    <text class="axis-label" x="120" y="330" text-anchor="middle">1月</text>
+                    <text class="axis-label" x="200" y="330" text-anchor="middle">2月</text>
+                    <text class="axis-label" x="280" y="330" text-anchor="middle">3月</text>
+                    <text class="axis-label" x="360" y="330" text-anchor="middle">4月</text>
+                    <text class="axis-label" x="440" y="330" text-anchor="middle">5月</text>
+                    <text class="axis-label" x="520" y="330" text-anchor="middle">6月</text>
+                    
+                    <!-- 面积填充 -->
+                    <path class="area" d="M 120,200 L 200,150 L 280,180 L 360,100 L 440,130 L 520,80 L 520,300 L 440,300 L 360,300 L 280,300 L 200,300 L 120,300 Z" />
+                    
+                    <!-- 折线 -->
+                    <path class="line" d="M 120,200 L 200,150 L 280,180 L 360,100 L 440,130 L 520,80" />
+                    
+                    <!-- 数据点 -->
+                    <circle class="dot" cx="120" cy="200" r="5">
+                        <title>1月: 55万</title>
+                    </circle>
+                    <circle class="dot" cx="200" cy="150" r="5">
+                        <title>2月: 75万</title>
+                    </circle>
+                    <circle class="dot" cx="280" cy="180" r="5">
+                        <title>3月: 65万</title>
+                    </circle>
+                    <circle class="dot" cx="360" cy="100" r="5">
+                        <title>4月: 90万</title>
+                    </circle>
+                    <circle class="dot" cx="440" cy="130" r="5">
+                        <title>5月: 82万</title>
+                    </circle>
+                    <circle class="dot" cx="520" cy="80" r="5">
+                        <title>6月: 95万</title>
+                    </circle>
+                </svg>
+            </div>
+            
+            <!-- 柱状图 -->
+            <div class="chart-container">
+                <div class="chart-title">📊 季度营收对比</div>
+                <svg class="bar-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="barGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="barGradient2" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="barGradient3" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="barGradient4" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#43e97b;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#38f9d7;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- 坐标轴 -->
+                    <line class="axis-line" x1="80" y1="50" x2="80" y2="300" />
+                    <line class="axis-line" x1="80" y1="300" x2="550" y2="300" />
+                    
+                    <!-- Y轴刻度线 -->
+                    <line class="grid-line" x1="75" y1="75" x2="550" y2="75" />
+                    <line class="grid-line" x1="75" y1="150" x2="550" y2="150" />
+                    <line class="grid-line" x1="75" y1="225" x2="550" y2="225" />
+                    
+                    <!-- Y轴标签 -->
+                    <text class="axis-label" x="60" y="80" text-anchor="end">300</text>
+                    <text class="axis-label" x="60" y="155" text-anchor="end">200</text>
+                    <text class="axis-label" x="60" y="230" text-anchor="end">100</text>
+                    <text class="axis-label" x="60" y="305" text-anchor="end">0</text>
+                    
+                    <!-- 柱状图 -->
+                    <rect class="bar" x="130" y="125" width="80" height="175" fill="url(#barGradient1)" rx="5">
+                        <title>Q1: 235万</title>
+                    </rect>
+                    <rect class="bar" x="240" y="100" width="80" height="200" fill="url(#barGradient2)" rx="5">
+                        <title>Q2: 268万</title>
+                    </rect>
+                    <rect class="bar" x="350" y="150" width="80" height="150" fill="url(#barGradient3)" rx="5">
+                        <title>Q3: 202万</title>
+                    </rect>
+                    <rect class="bar" x="460" y="75" width="80" height="225" fill="url(#barGradient4)" rx="5">
+                        <title>Q4: 302万</title>
+                    </rect>
+                    
+                    <!-- X轴标签 -->
+                    <text class="axis-label" x="170" y="330" text-anchor="middle" font-weight="bold">Q1</text>
+                    <text class="axis-label" x="280" y="330" text-anchor="middle" font-weight="bold">Q2</text>
+                    <text class="axis-label" x="390" y="330" text-anchor="middle" font-weight="bold">Q3</text>
+                    <text class="axis-label" x="500" y="330" text-anchor="middle" font-weight="bold">Q4</text>
+                    
+                    <!-- 数值标签 -->
+                    <text class="data-label" x="170" y="115" text-anchor="middle" font-weight="bold" fill="#667eea">235</text>
+                    <text class="data-label" x="280" y="90" text-anchor="middle" font-weight="bold" fill="#f5576c">268</text>
+                    <text class="data-label" x="390" y="140" text-anchor="middle" font-weight="bold" fill="#4facfe">202</text>
+                    <text class="data-label" x="500" y="65" text-anchor="middle" font-weight="bold" fill="#43e97b">302</text>
+                </svg>
+            </div>
+            
+            <!-- 饼图 -->
+            <div class="chart-container">
+                <div class="chart-title">🥧 产品市场占比</div>
+                <svg class="pie-chart" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <filter id="shadow">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+                        </filter>
+                    </defs>
+                    
+                    <!-- 饼图切片 -->
+                    <!-- 产品A: 35% (126度) -->
+                    <path class="slice" d="M 300,200 L 300,100 A 100,100 0 0,1 386.6,150 Z" 
+                          fill="#667eea" filter="url(#shadow)">
+                        <title>产品A: 35%</title>
+                    </path>
+                    
+                    <!-- 产品B: 28% (100.8度) -->
+                    <path class="slice" d="M 300,200 L 386.6,150 A 100,100 0 0,1 386.6,250 Z" 
+                          fill="#f093fb" filter="url(#shadow)">
+                        <title>产品B: 28%</title>
+                    </path>
+                    
+                    <!-- 产品C: 22% (79.2度) -->
+                    <path class="slice" d="M 300,200 L 386.6,250 A 100,100 0 0,1 300,300 Z" 
+                          fill="#4facfe" filter="url(#shadow)">
+                        <title>产品C: 22%</title>
+                    </path>
+                    
+                    <!-- 产品D: 15% (54度) -->
+                    <path class="slice" d="M 300,200 L 300,300 A 100,100 0 0,1 213.4,250 Z" 
+                          fill="#43e97b" filter="url(#shadow)">
+                        <title>产品D: 15%</title>
+                    </path>
+                    
+                    <!-- 中心圆（制作环形图效果，可选） -->
+                    <circle cx="300" cy="200" r="60" fill="white" />
+                    <text x="300" y="195" text-anchor="middle" font-size="16" fill="#333" font-weight="bold">总销售额</text>
+                    <text x="300" y="215" text-anchor="middle" font-size="20" fill="#667eea" font-weight="bold">1007万</text>
+                    
+                    <!-- 百分比标签 -->
+                    <text x="350" y="135" text-anchor="middle" font-size="18" fill="white" font-weight="bold">35%</text>
+                    <text x="420" y="200" text-anchor="middle" font-size="18" fill="white" font-weight="bold">28%</text>
+                    <text x="350" y="270" text-anchor="middle" font-size="18" fill="white" font-weight="bold">22%</text>
+                    <text x="250" y="260" text-anchor="middle" font-size="18" fill="white" font-weight="bold">15%</text>
+                </svg>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #667eea;"></div>
+                        <span>产品A (35%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f093fb;"></div>
+                        <span>产品B (28%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4facfe;"></div>
+                        <span>产品C (22%)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #43e97b;"></div>
+                        <span>产品D (15%)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 雷达图 -->
+            <div class="chart-container">
+                <div class="chart-title">🎯 产品评分雷达图</div>
+                <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.4" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:0.4" />
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- 雷达图背景网格 -->
+                    <g transform="translate(300, 200)">
+                        <!-- 5层同心多边形 -->
+                        <polygon points="0,-140 121,-70 121,70 0,140 -121,70 -121,-70" 
+                                 fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.3"/>
+                        <polygon points="0,-112 96.8,-56 96.8,56 0,112 -96.8,56 -96.8,-56" 
+                                 fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.3"/>
+                        <polygon points="0,-84 72.6,-42 72.6,42 0,84 -72.6,42 -72.6,-42" 
+                                 fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.3"/>
+                        <polygon points="0,-56 48.4,-28 48.4,28 0,56 -48.4,28 -48.4,-28" 
+                                 fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.3"/>
+                        <polygon points="0,-28 24.2,-14 24.2,14 0,28 -24.2,14 -24.2,-14" 
+                                 fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.3"/>
+                        
+                        <!-- 轴线 -->
+                        <line x1="0" y1="0" x2="0" y2="-140" stroke="#ccc" stroke-width="1"/>
+                        <line x1="0" y1="0" x2="121" y2="-70" stroke="#ccc" stroke-width="1"/>
+                        <line x1="0" y1="0" x2="121" y2="70" stroke="#ccc" stroke-width="1"/>
+                        <line x1="0" y1="0" x2="0" y2="140" stroke="#ccc" stroke-width="1"/>
+                        <line x1="0" y1="0" x2="-121" y2="70" stroke="#ccc" stroke-width="1"/>
+                        <line x1="0" y1="0" x2="-121" y2="-70" stroke="#ccc" stroke-width="1"/>
+                        
+                        <!-- 数据多边形 -->
+                        <polygon points="0,-126 108.9,-63 96.8,56 0,112 -96.8,49 -108.9,-56" 
+                                 fill="url(#radarGradient)" stroke="#667eea" stroke-width="3"/>
+                        
+                        <!-- 数据点 -->
+                        <circle cx="0" cy="-126" r="6" fill="#667eea"/>
+                        <circle cx="108.9" cy="-63" r="6" fill="#667eea"/>
+                        <circle cx="96.8" cy="56" r="6" fill="#667eea"/>
+                        <circle cx="0" cy="112" r="6" fill="#667eea"/>
+                        <circle cx="-96.8" cy="49" r="6" fill="#667eea"/>
+                        <circle cx="-108.9" cy="-56" r="6" fill="#667eea"/>
+                        
+                        <!-- 标签 -->
+                        <text x="0" y="-160" text-anchor="middle" font-size="14" fill="#666" font-weight="bold">性能 (90)</text>
+                        <text x="140" y="-80" text-anchor="start" font-size="14" fill="#666" font-weight="bold">质量 (90)</text>
+                        <text x="140" y="80" text-anchor="start" font-size="14" fill="#666" font-weight="bold">价格 (80)</text>
+                        <text x="0" y="170" text-anchor="middle" font-size="14" fill="#666" font-weight="bold">服务 (80)</text>
+                        <text x="-140" y="80" text-anchor="end" font-size="14" fill="#666" font-weight="bold">口碑 (70)</text>
+                        <text x="-140" y="-80" text-anchor="end" font-size="14" fill="#666" font-weight="bold">创新 (90)</text>
+                    </g>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 添加交互效果
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('SVG图表已加载完成！');
+            
+            // 可以在这里添加更多的交互逻辑
+            const chartContainers = document.querySelectorAll('.chart-container');
+            chartContainers.forEach(container => {
+                container.addEventListener('click', function() {
+                    console.log('点击了图表:', this.querySelector('.chart-title').textContent);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+

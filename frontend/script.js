@@ -436,7 +436,8 @@ async function fetchKlineData(symbol, interval = null, limit = null) {
         const params = new URLSearchParams({
             symbol: symbol,
             interval: interval || API_CONFIG.interval,
-            limit: (limit || API_CONFIG.limit).toString()
+            limit: (limit || API_CONFIG.limit).toString(),
+            _t: Date.now() // 添加时间戳，防止缓存
         });
         
         const url = `${API_CONFIG.baseUrl}?${params.toString()}`;
@@ -445,12 +446,13 @@ async function fetchKlineData(symbol, interval = null, limit = null) {
             method: 'GET',
             headers: {
                 'accept': 'application/json'
-            }
+            },
+            cache: 'no-cache' // 禁用缓存
         });
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`HTTP错误: ${response.status}`, errorText);
+            console.error(`[fetchKlineData] HTTP错误 ${symbol} ${interval}: ${response.status}`, errorText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -466,17 +468,19 @@ async function fetchKlineData(symbol, interval = null, limit = null) {
         } else if (result.code === 0 || result.code === 200) {
             data = result.data || [];
         } else {
+            console.error(`[fetchKlineData] API返回错误 ${symbol} ${interval}:`, result);
             throw new Error(result.message || result.msg || 'API返回错误');
         }
         
         if (!data || data.length === 0) {
-            console.warn('K线数据返回空数据');
+            console.warn(`[fetchKlineData] K线数据返回空 ${symbol} ${interval}`);
             return [];
         }
         
+        console.log(`[fetchKlineData] ✓ 获取成功 ${symbol} ${interval}: ${data.length}条`);
         return data;
     } catch (error) {
-        console.error('获取K线数据失败:', error);
+        console.error(`[fetchKlineData] 获取K线数据失败 ${symbol} ${interval}:`, error);
         updateStatus('error');
         return null;
     }
@@ -488,7 +492,8 @@ async function fetchDailyKline(symbol) {
         const params = new URLSearchParams({
             symbol: symbol,
             interval: '1d', // 日K线
-            limit: '2' // 只需要2根K线：今日和昨日
+            limit: '2', // 只需要2根K线：今日和昨日
+            _t: Date.now() // 添加时间戳，防止缓存
         });
         
         const url = `${API_CONFIG.baseUrl}?${params.toString()}`;
@@ -497,7 +502,8 @@ async function fetchDailyKline(symbol) {
             method: 'GET',
             headers: {
                 'accept': 'application/json'
-            }
+            },
+            cache: 'no-cache' // 禁用缓存
         });
         
         if (!response.ok) {
@@ -540,13 +546,14 @@ async function fetchDailyKline(symbol) {
 // AG（国内白银）通过后端TqSdk接口获取，Silver（伦敦白银）通过AllTick API获取
 async function fetchTradeTick(symbol) {
     try {
-        const url = `${API_CONFIG.tradeTickUrl}?symbol=${symbol}`;
+        const url = `${API_CONFIG.tradeTickUrl}?symbol=${symbol}&_t=${Date.now()}`;
         
         const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'accept': 'application/json'
-            }
+            },
+            cache: 'no-cache' // 禁用缓存
         });
         
         if (!response.ok) {
@@ -1174,6 +1181,10 @@ let lastPriceAdvice = {
     direction: null // 交易方向：'做多' 或 '做空'
 };
 
+// 全局变量：存储预测K线数据
+let predictedLondonKlines = [];
+let predictedDomesticKlines = [];
+
 // AudioContext实例（需要用户交互后才能创建）
 let audioContextInstance = null;
 
@@ -1426,6 +1437,8 @@ function convertAIResultToStrategy(aiResult) {
             lastPriceAdvice.takeProfit = takeProfit;
         }
     }
+    
+    // K线预测功能已移除
     
     const strategy = {
         action: advice.action || '观望',
@@ -2463,8 +2476,32 @@ function updateChart(chart, data, infoElementId) {
     // 排序数据（按时间戳升序）
     const sortedData = [...normalizeData].sort((a, b) => a.t - b.t);
     
+    // 检查是否有预测K线数据
+    let predictedKlines = [];
+    const isLondonChart = infoElementId.includes('london');
+    const isDomesticChart = infoElementId.includes('domestic');
+    const is1mChart = !infoElementId.includes('daily') && !infoElementId.includes('15m');
+    
+    if (is1mChart) {
+        if (isLondonChart && predictedLondonKlines.length > 0) {
+            predictedKlines = predictedLondonKlines;
+            console.log('[K线预测] 将显示伦敦预测K线:', predictedKlines.length);
+        } else if (isDomesticChart && predictedDomesticKlines.length > 0) {
+            predictedKlines = predictedDomesticKlines;
+            console.log('[K线预测] 将显示国内预测K线:', predictedKlines.length);
+        }
+    }
+    
     // 计算布林带
     const bollingerBands = calculateBollingerBands(sortedData, 20, 2);
+    
+    // 为预测K线添加null值（布林带不显示预测部分）
+    if (predictedKlines.length > 0) {
+        const nullValues = new Array(predictedKlines.length).fill(null);
+        bollingerBands.upper = [...bollingerBands.upper, ...nullValues];
+        bollingerBands.middle = [...bollingerBands.middle, ...nullValues];
+        bollingerBands.lower = [...bollingerBands.lower, ...nullValues];
+    }
     
     // 验证并修正布林带数据（确保上轨 > 下轨）
     if (sortedData.length > 0) {
@@ -2506,13 +2543,16 @@ function updateChart(chart, data, infoElementId) {
     // 更新交易策略（如果有完整数据）
     updateTradingStrategy();
     
-    // 准备K线数据
+    // 准备K线数据（真实K线）
     const klineData = sortedData.map(item => [
         item.o, // 开盘价
         item.c, // 收盘价
         item.l, // 最低价
         item.h  // 最高价
     ]);
+    
+    // 准备预测K线数据（只需要价格，用于显示虚线）
+    const predictedPrices = predictedKlines.map(item => item.c || item.o);
     
     // 准备成交量数据（用于柱状图）
     const volumeData = sortedData.map((item, index) => {
@@ -2525,6 +2565,12 @@ function updateChart(chart, data, infoElementId) {
             }
         };
     });
+    
+    // 为预测K线添加null值（成交量不显示预测部分）
+    if (predictedKlines.length > 0) {
+        const nullVolumeValues = new Array(predictedKlines.length).fill(null);
+        volumeData.push(...nullVolumeValues);
+    }
     
     // 计算价格范围，用于设置Y轴范围
     let minPrice, maxPrice, paddingTop, paddingBottom, yAxisMin, yAxisMax;
@@ -2580,6 +2626,17 @@ function updateChart(chart, data, infoElementId) {
             return `${month}-${day} ${hours}:${minutes}`;
         }
     });
+    
+    // 准备预测K线的时间数据
+    const predictedTimeData = predictedKlines.map(item => {
+        const date = new Date(item.t);
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`; // 预测K线只显示时:分
+    });
+    
+    // 合并时间数据（真实 + 预测）
+    const allTimeData = [...timeData, ...predictedTimeData];
     
     // K线图不再显示价格信息，改为使用WebSocket实时推送的最新成交价
     const infoElement = document.getElementById(infoElementId);
@@ -2718,15 +2775,16 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: entryPrice,
                 label: {
                     show: true,
-                    position: 'insideStartTop',
+                    position: 'start',
+                    distance: 10,
                     formatter: `开仓: ${formatPrice(entryPrice)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                    backgroundColor: '#fbbf24',
                     borderColor: '#fbbf24',
-                    borderWidth: 1.5,
-                    padding: [6, 12],
-                    borderRadius: 4,
-                    fontSize: 13,
+                    borderWidth: 1,
+                    padding: [4, 10],
+                    borderRadius: 3,
+                    fontSize: 12,
                     fontWeight: 600
                 },
                 lineStyle: {
@@ -2745,15 +2803,16 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: stopLoss,
                 label: {
                     show: true,
-                    position: 'insideStartBottom',
+                    position: 'start',
+                    distance: 10,
                     formatter: `止损: ${formatPrice(stopLoss)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                    backgroundColor: '#4ade80',
                     borderColor: '#4ade80',
-                    borderWidth: 1.5,
-                    padding: [6, 12],
-                    borderRadius: 4,
-                    fontSize: 13,
+                    borderWidth: 1,
+                    padding: [4, 10],
+                    borderRadius: 3,
+                    fontSize: 12,
                     fontWeight: 600
                 },
                 lineStyle: {
@@ -2772,15 +2831,16 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: takeProfit,
                 label: {
                     show: true,
-                    position: 'insideStartTop',
+                    position: 'start',
+                    distance: 10,
                     formatter: `止盈: ${formatPrice(takeProfit)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                    backgroundColor: '#ef4444',
                     borderColor: '#ef4444',
-                    borderWidth: 1.5,
-                    padding: [6, 12],
-                    borderRadius: 4,
-                    fontSize: 13,
+                    borderWidth: 1,
+                    padding: [4, 10],
+                    borderRadius: 3,
+                    fontSize: 12,
                     fontWeight: 600
                 },
                 lineStyle: {
@@ -2959,7 +3019,7 @@ function updateChart(chart, data, infoElementId) {
             // K线图X轴
             {
                 type: 'category',
-                data: timeData,
+                data: allTimeData,
                 gridIndex: 0,
                 boundaryGap: false,
                 show: true // 只在K线图显示X轴标签
@@ -2967,7 +3027,7 @@ function updateChart(chart, data, infoElementId) {
             // 成交量X轴（与K线图共享）
             {
                 type: 'category',
-                data: timeData,
+                data: allTimeData,
                 gridIndex: 1,
                 boundaryGap: false,
                 show: false, // 隐藏成交量图的X轴标签（避免重复）
@@ -3078,6 +3138,32 @@ function updateChart(chart, data, infoElementId) {
                     symbol: 'none'
                 } : undefined
             },
+            // 预测价格线（灰色虚线）
+            ...(predictedPrices.length > 0 ? [{
+                name: '预测价格',
+                type: 'line',
+                data: (() => {
+                    const result = new Array(sortedData.length).fill(null);
+                    predictedPrices.forEach((price) => {
+                        result.push(price);
+                    });
+                    return result;
+                })(),
+                xAxisIndex: 0,
+                yAxisIndex: 0,
+                lineStyle: {
+                    color: 'rgba(156, 163, 175, 0.8)',
+                    width: 2,
+                    type: 'dashed'
+                },
+                itemStyle: {
+                    color: 'rgba(156, 163, 175, 0.9)'
+                },
+                symbol: 'circle',
+                symbolSize: 4,
+                smooth: false,
+                z: 10
+            }] : []),
             // 布林带上轨
             {
                 name: '布林上轨',
@@ -3205,33 +3291,27 @@ function updateChart(chart, data, infoElementId) {
     
     // 如果有价格标记线，确保它们被正确应用
     if (priceMarkLines.length > 0 && !infoElementId.includes('daily') && !infoElementId.includes('15m')) {
-        console.log('[价格标记线] 应用标记线到图表，数量:', priceMarkLines.length);
-        console.log('[价格标记线] 标记线数据:', JSON.stringify(priceMarkLines.map(line => line.data[0])));
-        
-        // 更新K线series的markLine，使用正确的格式
-        // ECharts的markLine data格式应该是数组，每个元素是一条线 [[{coord}, {coord}], ...]
-        const markLineData = priceMarkLines.map(line => line.data[0]);
-        
-        chart.setOption({
-            series: [{
-                markLine: {
-                    data: markLineData,
-                    silent: false,
-                    symbol: 'none',
-                    label: {
-                        show: true,
-                        position: 'end'
-                    },
-                    lineStyle: {
-                        width: 2,
-                        type: 'dashed'
+        try {
+            console.log('[价格标记线] 应用标记线到图表，数量:', priceMarkLines.length);
+            
+            // priceMarkLines已经是正确的格式（包含yAxis, label, lineStyle）
+            // 直接应用即可
+            chart.setOption({
+                series: [{
+                    markLine: {
+                        data: priceMarkLines,
+                        silent: false,
+                        symbol: 'none'
                     }
-                }
-            }],
-            notMerge: false
-        });
-        
-        console.log('[价格标记线] 标记线已应用，数据:', markLineData);
+                }],
+                notMerge: false
+            });
+            
+            console.log('[价格标记线] 标记线已成功应用');
+        } catch (error) {
+            console.error('[价格标记线] 应用标记线失败:', error);
+            console.error('[价格标记线] 标记线配置:', priceMarkLines);
+        }
     }
     
     // 在setOption之后添加事件监听器（避免重复添加）
@@ -3536,22 +3616,43 @@ async function updateAllData() {
                 const lastClose = lastKline.c || lastKline.close || 0;
                 const currentClose = currentKline.c || currentKline.close || 0;
                 
+                // 转换时间戳为可读时间
+                const formatTime = (ts) => {
+                    const timestampMs = ts < 10000000000 ? ts * 1000 : ts;
+                    const date = new Date(timestampMs);
+                    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+                };
+                
                 if (currentTimestamp !== lastTimestamp || currentClose !== lastClose) {
                     console.log(`[数据更新] ✓ 国内市场数据已更新:`);
-                    console.log(`    时间戳: ${lastTimestamp} -> ${currentTimestamp}`);
+                    console.log(`    时间: ${formatTime(lastTimestamp)} -> ${formatTime(currentTimestamp)}`);
                     console.log(`    收盘价: ${lastClose} -> ${currentClose}`);
                     console.log(`    数据条数: ${lastDomesticKlineData.length} -> ${domesticKlineData.length}`);
+                    
+                    // 计算时间差
+                    const timeDiff = currentTimestamp - lastTimestamp;
+                    const timeDiffSeconds = Math.floor(timeDiff / 1000);
+                    if (timeDiffSeconds > 120) {
+                        console.warn(`[数据更新] ⚠️ 时间差过大: ${timeDiffSeconds}秒，数据可能延迟！`);
+                    }
                 } else {
-                    console.log(`[数据更新] - 国内市场数据未变化 (时间戳: ${currentTimestamp}, 收盘价: ${currentClose})`);
+                    console.log(`[数据更新] - 国内市场数据未变化 (时间: ${formatTime(currentTimestamp)}, 收盘价: ${currentClose})`);
+                    // 检查是否因为市场休市
+                    const now = Date.now();
+                    const dataAge = now - (currentTimestamp < 10000000000 ? currentTimestamp * 1000 : currentTimestamp);
+                    const dataAgeMinutes = Math.floor(dataAge / 60000);
+                    if (dataAgeMinutes > 5) {
+                        console.warn(`[数据更新] ⚠️ 国内数据已经 ${dataAgeMinutes} 分钟未更新，可能是市场休市`);
+                    }
                 }
             } else {
-                console.log(`[数据更新] 国内市场首次获取数据 (时间戳: ${domesticKlineData[domesticKlineData.length - 1]?.t || 'N/A'}, 收盘价: ${domesticKlineData[domesticKlineData.length - 1]?.c || 'N/A'})`);
+                console.log(`[数据更新] 国内市场首次获取数据`);
             }
         } else {
             console.log('[数据更新] ⚠ 国内市场数据为空或获取失败');
         }
         
-        // 检查伦敦市场数据是否有更新（不打印日志）
+        // 检查伦敦市场数据是否有更新
         if (londonKlineData && londonKlineData.length > 0) {
             if (lastLondonKlineData && lastLondonKlineData.length > 0) {
                 // 比较最新的K线数据
@@ -3563,8 +3664,33 @@ async function updateAllData() {
                 const lastClose = lastKline.c || lastKline.close || 0;
                 const currentClose = currentKline.c || currentKline.close || 0;
                 
-                // 不打印日志，静默更新
+                // 转换时间戳为可读时间
+                const formatTime = (ts) => {
+                    const timestampMs = ts < 10000000000 ? ts * 1000 : ts;
+                    const date = new Date(timestampMs);
+                    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+                };
+                
+                if (currentTimestamp !== lastTimestamp || currentClose !== lastClose) {
+                    console.log(`[数据更新] ✓ 伦敦市场数据已更新:`);
+                    console.log(`    时间: ${formatTime(lastTimestamp)} -> ${formatTime(currentTimestamp)}`);
+                    console.log(`    收盘价: ${lastClose} -> ${currentClose}`);
+                    console.log(`    数据条数: ${lastLondonKlineData.length} -> ${londonKlineData.length}`);
+                    
+                    // 计算时间差
+                    const timeDiff = currentTimestamp - lastTimestamp;
+                    const timeDiffSeconds = Math.floor(timeDiff / 1000);
+                    if (timeDiffSeconds > 120) {
+                        console.warn(`[数据更新] ⚠️ 伦敦数据时间差过大: ${timeDiffSeconds}秒，数据可能延迟！`);
+                    }
+                } else {
+                    console.log(`[数据更新] - 伦敦市场数据未变化 (时间: ${formatTime(currentTimestamp)}, 收盘价: ${currentClose})`);
+                }
+            } else {
+                console.log(`[数据更新] 伦敦市场首次获取数据`);
             }
+        } else {
+            console.warn('[数据更新] ⚠ 伦敦市场数据为空或获取失败');
         }
         
         // 保存当前数据供下次比较
@@ -3577,6 +3703,7 @@ async function updateAllData() {
         
         // 更新国内白银K线图
         if (domesticKlineData !== null && domesticKlineData.length > 0) {
+            console.log(`[图表更新] 准备更新国内图表，数据条数: ${domesticKlineData.length}`);
             if (!domesticChart) {
                 console.warn('[数据更新] 国内图表未初始化，尝试重新初始化');
                 const domesticChartElement = document.getElementById('domestic-chart');
@@ -3588,7 +3715,9 @@ async function updateAllData() {
                 }
             }
             if (domesticChart) {
+                console.log(`[图表更新] 调用updateChart更新国内图表`);
                 updateChart(domesticChart, domesticKlineData, 'domestic-info');
+                console.log(`[图表更新] 国内图表更新完成`);
             } else {
                 console.error('[数据更新] 国内图表初始化失败，无法更新图表');
             }
@@ -3605,8 +3734,21 @@ async function updateAllData() {
         
         // 更新伦敦白银K线图（1分钟K线）
         if (londonKlineData !== null && londonKlineData.length > 0) {
-            updateChart(londonChart, londonKlineData, 'london-info');
+            if (!londonChart) {
+                console.warn('[数据更新] 伦敦图表未初始化，尝试重新初始化');
+                const londonChartElement = document.getElementById('london-chart');
+                if (londonChartElement) {
+                    londonChart = echarts.init(londonChartElement, 'dark');
+                    console.log('[数据更新] 伦敦图表重新初始化成功');
+                }
+            }
+            if (londonChart) {
+                updateChart(londonChart, londonKlineData, 'london-info');
+            } else {
+                console.error('[数据更新] 伦敦图表初始化失败，无法更新图表');
+            }
         } else {
+            console.warn('[数据更新] ⚠️ 伦敦K线数据获取失败，londonKlineData:', londonKlineData);
             const londonInfo = document.getElementById('london-info');
             if (londonInfo) {
                 if (londonKlineData === null) {
@@ -3869,8 +4011,10 @@ async function updateAllData() {
             updateStatus('error');
         }
     } catch (error) {
-        console.error('更新数据失败:', error);
+        console.error('[updateAllData] 更新数据失败:', error);
+        console.error('[updateAllData] 错误堆栈:', error.stack);
         updateStatus('error');
+        // 不要停止定时器，继续尝试更新
     }
 }
 
@@ -3963,6 +4107,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 每500ms更新一次成交价（即1秒2次）
     updateTradeAndDepth(); // 立即执行一次
     tradeDepthTimer = setInterval(updateTradeAndDepth, 500);
+    
+    // 每5分钟自动执行一次K线预测（如果已经有AI分析结果）
+    setInterval(() => {
+        if (aiAnalysisResult && (currentLondonKlineData || currentDomesticKlineData)) {
+            console.log('[定时任务] 触发K线预测更新（每5分钟）');
+            predictKlinesInBackground();
+        }
+    }, 5 * 60 * 1000); // 5分钟 = 300,000毫秒
     
     // 监控交易时间变化，在交易时间开始时立即刷新数据
     let lastDomesticTradingState = isDomesticTradingTime();
@@ -4536,6 +4688,159 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
     }
 }
 
+// K线预测API调用（独立于主分析）
+async function callKlinePredictionAPI(marketType, klineData, londonPrediction = null) {
+    console.log(`[K线预测] 开始预测 ${marketType} 的后续5根K线`);
+    console.log(`[K线预测] 输入数据条数: ${klineData ? klineData.length : 0}`);
+    if (londonPrediction) {
+        console.log(`[K线预测] 包含伦敦市场预测参考`);
+    }
+    
+    if (!klineData || klineData.length < 20) {
+        console.warn('[K线预测] 数据不足，至少需要20根K线');
+        return null;
+    }
+    
+    try {
+        // 检测代理状态
+        if (API_CONFIG.llmApiUrl === null) {
+            console.log('[K线预测] 开始检测代理状态...');
+            const isProxy = await detectProxyAndSetupAPI();
+            console.log('[K线预测] 代理检测完成，isProxy:', isProxy);
+        }
+        
+        // 准备系统提示词（根据市场类型选择）
+        const systemPrompt = marketType === 'london' 
+            ? window.PROMPT_CONFIG.KLINE_PREDICTION_PROMPT_LONDON
+            : window.PROMPT_CONFIG.KLINE_PREDICTION_PROMPT_DOMESTIC;
+        
+        // 准备K线数据（只使用最近100根，减少token消耗）
+        const recentKlines = klineData.slice(-100);
+        const marketName = marketType === 'london' ? '伦敦现货白银（1分钟K线）' : '国内白银主力（1分钟K线）';
+        const symbol = marketType === 'london' ? 'Silver' : 'AG';
+        
+        const klinePrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
+            recentKlines,
+            marketName,
+            symbol
+        );
+        
+        // 构建messages数组
+        const messages = [
+            {
+                role: "user",
+                content: klinePrompt
+            }
+        ];
+        
+        // 如果是国内市场且有伦敦预测，添加伦敦预测信息
+        if (marketType === 'domestic' && londonPrediction) {
+            const londonPredictionText = `
+=== 伦敦现货白银预测价格（参考） ===
+
+预测的15个价格点（每分钟）：
+${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}分钟后: ${p.toFixed(3)}`).join(', ') : '无'}
+
+请参考伦敦市场的预测走势，预测国内白银主力的后续15个价格点。`;
+            
+            messages.push({
+                role: "user",
+                content: londonPredictionText
+            });
+        }
+        
+        // 添加最终指令
+        messages.push({
+            role: "user",
+            content: "请根据以上数据预测后续15个价格点（每分钟），按JSON格式输出价格数组。"
+        });
+        
+        // 构建请求体
+        const requestBody = {
+            prompt: systemPrompt,
+            messages: messages,
+            model: selectedModel
+        };
+        
+        console.log(`[K线预测] 准备调用API，市场: ${marketType}`);
+        
+        // 创建超时控制
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+        
+        try {
+            const response = await fetch(API_CONFIG.llmApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'accept': 'application/json'
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[K线预测错误] Status:', response.status, 'Error:', errorText);
+                return null;
+            }
+            
+            const apiResponse = await response.json();
+            console.log('[K线预测] API响应:', apiResponse);
+            
+            // 解析响应
+            let predictionResult = null;
+            if (apiResponse.response && Array.isArray(apiResponse.response) && apiResponse.response.length > 0) {
+                const messageText = apiResponse.response[0].message;
+                
+                if (typeof messageText === 'string') {
+                    let cleanedText = messageText.trim();
+                    
+                    // 移除markdown代码块标记
+                    cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                    
+                    try {
+                        predictionResult = JSON.parse(cleanedText);
+                        console.log('[K线预测] 解析成功:', predictionResult);
+                        
+                        // 验证预测结果
+                        if (predictionResult.prices && Array.isArray(predictionResult.prices)) {
+                            console.log(`[K线预测] 预测了 ${predictionResult.prices.length} 个价格点`);
+                            console.log(`[K线预测] 价格范围: ${Math.min(...predictionResult.prices).toFixed(3)} - ${Math.max(...predictionResult.prices).toFixed(3)}`);
+                            return predictionResult;
+                        } else {
+                            console.error('[K线预测] 响应格式错误，缺少prices字段');
+                            return null;
+                        }
+                    } catch (parseError) {
+                        console.error('[K线预测] JSON解析失败:', parseError);
+                        console.error('[K线预测] 原始文本:', cleanedText);
+                        return null;
+                    }
+                }
+            }
+            
+            console.error('[K线预测] 响应格式不符合预期');
+            return null;
+            
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                console.error('[K线预测] 请求超时');
+            } else {
+                console.error('[K线预测] 请求失败:', fetchError);
+            }
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('[K线预测] 发生错误:', error);
+        return null;
+    }
+}
+
 // 执行AI分析
 async function performAnalysis() {
     const analyzeBtn = document.getElementById('analyze-btn');
@@ -4635,6 +4940,10 @@ async function performAnalysis() {
         // 更新实时交易策略显示（会自动使用AI分析结果）
         updateTradingStrategy();
         
+        // AI分析完成后，自动触发K线预测（后台执行，不影响主流程）
+        console.log('[performAnalysis] 开始执行K线预测（后台任务）');
+        predictKlinesInBackground();
+        
     } catch (error) {
         console.error('[performAnalysis] 分析失败，错误详情:', error);
         console.error('[performAnalysis] 错误堆栈:', error.stack);
@@ -4656,6 +4965,114 @@ async function performAnalysis() {
         analyzeBtn.disabled = false;
         analyzeBtn.classList.remove('analyzing');
         analyzeBtn.textContent = 'AI走势分析';
+    }
+}
+
+// 后台执行K线预测（不阻塞主流程）
+async function predictKlinesInBackground() {
+    try {
+        console.log('[K线预测后台任务] 开始执行');
+        
+        // 先预测伦敦市场
+        const londonPrediction = currentLondonKlineData && currentLondonKlineData.length >= 20 
+            ? await callKlinePredictionAPI('london', currentLondonKlineData)
+            : null;
+        
+        console.log('[K线预测后台任务] 伦敦市场预测完成');
+        
+        // 然后预测国内市场（将伦敦预测结果传入）
+        const domesticPrediction = currentDomesticKlineData && currentDomesticKlineData.length >= 20
+            ? await callKlinePredictionAPI('domestic', currentDomesticKlineData, londonPrediction)
+            : null;
+        
+        console.log('[K线预测后台任务] 国内市场预测完成');
+        
+        // 保存预测结果到全局变量（转换为K线格式以兼容现有代码）
+        if (londonPrediction && londonPrediction.prices && Array.isArray(londonPrediction.prices)) {
+            // 转换价格数组为K线格式（只有收盘价）
+            const lastKline = currentLondonKlineData[currentLondonKlineData.length - 1];
+            const lastTimestamp = lastKline.t || lastKline.time || Date.now();
+            
+            predictedLondonKlines = londonPrediction.prices.map((price, index) => ({
+                t: lastTimestamp + (index + 1) * 60000, // 每分钟递增
+                o: price,
+                c: price,
+                h: price,
+                l: price,
+                v: 0
+            }));
+            console.log(`[K线预测后台任务] 伦敦预测完成，${predictedLondonKlines.length}个价格点`);
+            console.log(`[K线预测后台任务] 价格范围: ${Math.min(...londonPrediction.prices).toFixed(3)} - ${Math.max(...londonPrediction.prices).toFixed(3)}`);
+        }
+        
+        if (domesticPrediction && domesticPrediction.prices && Array.isArray(domesticPrediction.prices)) {
+            // 转换价格数组为K线格式（只有收盘价）
+            const lastKline = currentDomesticKlineData[currentDomesticKlineData.length - 1];
+            const lastTimestamp = lastKline.t || lastKline.time || Date.now();
+            
+            predictedDomesticKlines = domesticPrediction.prices.map((price, index) => ({
+                t: lastTimestamp + (index + 1) * 60000, // 每分钟递增
+                o: price,
+                c: price,
+                h: price,
+                l: price,
+                v: 0
+            }));
+            console.log(`[K线预测后台任务] 国内预测完成，${predictedDomesticKlines.length}个价格点`);
+            console.log(`[K线预测后台任务] 价格范围: ${Math.min(...domesticPrediction.prices)} - ${Math.max(...domesticPrediction.prices)}`);
+        }
+        
+        // 更新图表以显示预测K线（只更新1分钟图）
+        if (londonChart && londonPrediction) {
+            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线');
+            updateChart(londonChart, currentLondonKlineData, 'london-info');
+            
+            // 确保预测点完全可见：自动调整dataZoom
+            setTimeout(() => {
+                if (londonChart) {
+                    const totalPoints = (currentLondonKlineData?.length || 0) + 15;
+                    const visiblePoints = Math.min(totalPoints, 100); // 至少显示100个点
+                    const startPercent = Math.max(0, ((totalPoints - visiblePoints) / totalPoints) * 100);
+                    
+                    londonChart.setOption({
+                        dataZoom: [{
+                            type: 'slider',
+                            start: startPercent,
+                            end: 100
+                        }]
+                    });
+                    console.log('[K线预测后台任务] 伦敦图表已调整显示范围，确保预测点可见');
+                }
+            }, 100);
+        }
+        
+        if (domesticChart && domesticPrediction) {
+            console.log('[K线预测后台任务] 更新国内图表以显示预测K线');
+            updateChart(domesticChart, currentDomesticKlineData, 'domestic-info');
+            
+            // 确保预测点完全可见：自动调整dataZoom
+            setTimeout(() => {
+                if (domesticChart) {
+                    const totalPoints = (currentDomesticKlineData?.length || 0) + 15;
+                    const visiblePoints = Math.min(totalPoints, 100); // 至少显示100个点
+                    const startPercent = Math.max(0, ((totalPoints - visiblePoints) / totalPoints) * 100);
+                    
+                    domesticChart.setOption({
+                        dataZoom: [{
+                            type: 'slider',
+                            start: startPercent,
+                            end: 100
+                        }]
+                    });
+                    console.log('[K线预测后台任务] 国内图表已调整显示范围，确保预测点可见');
+                }
+            }, 100);
+        }
+        
+        console.log('[K线预测后台任务] 执行完成');
+        
+    } catch (error) {
+        console.error('[K线预测后台任务] 执行失败:', error);
     }
 }
 
