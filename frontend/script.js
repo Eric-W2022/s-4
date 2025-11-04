@@ -607,9 +607,9 @@ async function fetchDepthTick(symbol) {
     }
 }
 
-// 历史盘口数据（用于计算5秒内的情绪）
+// 历史盘口数据（用于计算10秒内的情绪）
 let depthHistoryData = [];
-const DEPTH_HISTORY_DURATION = 5000; // 5秒
+const DEPTH_HISTORY_DURATION = 10000; // 10秒
 
 // 计算智能情绪指标
 function calculateSmartEmotion(currentData, historyData) {
@@ -635,7 +635,7 @@ function calculateSmartEmotion(currentData, historyData) {
         };
     }
     
-    // 计算5秒内的变化趋势
+    // 计算10秒内的变化趋势
     let bidVolChange = 0;
     let askVolChange = 0;
     let bidPriceChange = 0;
@@ -770,7 +770,7 @@ function updateDomesticDepth(depthData) {
         askVol: totalAskVolume
     });
     
-    // 清理超过5秒的旧数据
+    // 清理超过10秒的旧数据
     depthHistoryData = depthHistoryData.filter(item => now - item.timestamp <= DEPTH_HISTORY_DURATION);
     
     // 计算智能情绪
@@ -833,7 +833,7 @@ function updateDomesticDepth(depthData) {
     html += '<div class="emotion-trend-indicator">';
     const trendClass = emotion.trendValue > 0 ? 'trend-bullish' : emotion.trendValue < 0 ? 'trend-bearish' : 'trend-neutral';
     html += `<span class="trend-badge ${trendClass}">${emotion.trend}</span>`;
-    html += '<span class="trend-time">5秒动态</span>';
+    html += '<span class="trend-time">10秒动态</span>';
     html += '</div>';
     
     html += '<div class="emotion-bar-container">';
@@ -5027,10 +5027,10 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
 
 // K线预测API调用（独立于主分析）
 async function callKlinePredictionAPI(marketType, klineData, londonPrediction = null) {
-    console.log(`[K线预测] 开始预测 ${marketType} 的后续30个价格点`);
+    console.log(`[K线预测] 开始预测 ${marketType} 的后续100个价格点`);
     console.log(`[K线预测] 输入数据条数: ${klineData ? klineData.length : 0}`);
     if (londonPrediction) {
-        console.log(`[K线预测] 包含伦敦市场预测参考（30个价格点）`);
+        console.log(`[K线预测] 包含伦敦市场预测参考（100个价格点）`);
     }
     
     if (!klineData || klineData.length < 20) {
@@ -5075,10 +5075,10 @@ async function callKlinePredictionAPI(marketType, klineData, londonPrediction = 
             const londonPredictionText = `
 === 伦敦现货白银预测价格（参考） ===
 
-预测的30个价格点（每分钟）：
+预测的100个价格点（每分钟）：
 ${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}min: ${p.toFixed(3)}`).join(', ') : '无'}
 
-请参考伦敦市场的预测走势，预测国内白银主力的后续30个价格点。`;
+请参考伦敦市场的预测走势，预测国内白银主力的后续100个价格点。`;
             
             messages.push({
                 role: "user",
@@ -5118,7 +5118,7 @@ ${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}min: 
         // 添加最终指令
         messages.push({
             role: "user",
-            content: "请根据以上数据预测后续30个价格点（每分钟），按JSON格式输出价格数组。"
+            content: "请根据以上数据预测后续100个价格点（每分钟），按JSON格式输出价格数组。"
         });
         
         // 构建请求体
@@ -5391,12 +5391,12 @@ async function predictKlinesInBackground() {
         // 更新图表以显示预测K线（只更新1分钟图）
         // 不自动调整dataZoom，避免图表跳动，让用户手动滑动查看
         if (londonChart && londonPrediction) {
-            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线（30个点）');
+            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线（100个点）');
             updateChart(londonChart, currentLondonKlineData, 'london-info');
         }
         
         if (domesticChart && domesticPrediction) {
-            console.log('[K线预测后台任务] 更新国内图表以显示预测K线（30个点）');
+            console.log('[K线预测后台任务] 更新国内图表以显示预测K线（100个点）');
             updateChart(domesticChart, currentDomesticKlineData, 'domestic-info');
         }
         
