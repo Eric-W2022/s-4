@@ -1230,6 +1230,10 @@ function playTradingAdviceSound(action) {
 let currentDescription = ''; // 当前描述，用户输入的当下情况
 let descriptionLoaded = false; // 标记是否已经从localStorage加载过
 
+// 当前选择的模型
+let selectedModel = 'deepseek-chat'; // 默认使用DeepSeek
+let modelLoaded = false; // 标记是否已经从localStorage加载过
+
 // 从localStorage加载保存的当前描述
 function loadCurrentDescription() {
     // 如果已经加载过，就不重复加载
@@ -1262,8 +1266,41 @@ function saveCurrentDescription() {
     }
 }
 
-// 页面加载时恢复当前描述
+// 从localStorage加载保存的模型选择
+function loadSelectedModel() {
+    // 如果已经加载过，就不重复加载
+    if (modelLoaded) {
+        return;
+    }
+    
+    try {
+        const saved = localStorage.getItem('selectedModel');
+        if (saved !== null) {
+            selectedModel = saved;
+            console.log('[加载模型] 从localStorage恢复模型:', selectedModel);
+        } else {
+            console.log('[加载模型] 使用默认模型:', selectedModel);
+        }
+    } catch (e) {
+        console.warn('加载保存的模型选择失败', e);
+    }
+    
+    modelLoaded = true;
+}
+
+// 保存模型选择到localStorage
+function saveSelectedModel() {
+    try {
+        localStorage.setItem('selectedModel', selectedModel);
+        console.log('[保存模型] 已保存到localStorage:', selectedModel);
+    } catch (e) {
+        console.warn('保存模型选择到本地存储失败', e);
+    }
+}
+
+// 页面加载时恢复当前描述和模型选择
 loadCurrentDescription();
+loadSelectedModel();
 
 // 分析状态标志，防止重复点击
 let isAnalyzing = false;
@@ -1373,7 +1410,9 @@ function convertAIResultToStrategy(aiResult) {
         stopLoss: stopLoss,
         takeProfit: takeProfit,
         lots: advice.lots !== null && advice.lots !== undefined ? advice.lots : lastPriceAdvice.lots,
-        direction: direction || lastPriceAdvice.direction // 方向信息
+        direction: direction || lastPriceAdvice.direction, // 方向信息
+        pricePrediction15min: advice.pricePrediction15min !== null && advice.pricePrediction15min !== undefined ? advice.pricePrediction15min : null, // 15分钟价格预测
+        londonPricePrediction15min: advice.londonPricePrediction15min !== null && advice.londonPricePrediction15min !== undefined ? advice.londonPricePrediction15min : null // 伦敦15分钟价格预测
     };
     
     return strategy;
@@ -1440,7 +1479,70 @@ function updateTradingStrategy() {
                 style="width: 100%; min-height: 80px; padding: 12px; background: rgba(19, 23, 43, 0.8); border: 1px solid #1e2548; border-radius: 6px; color: #e0e0e0; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; box-sizing: border-box;"
                 >${currentDescription}</textarea>
         </div>
+        <div class="strategy-section" style="margin-bottom: 20px;">
+            <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+                模型选择
+            </div>
+            <div id="model-selector" style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+                <div class="model-option ${selectedModel === 'doubao-seed-1-6-thinking-250715' ? 'active' : ''}" data-model="doubao-seed-1-6-thinking-250715" data-fullname="doubao-seed-1-6-thinking-250715">
+                    豆包
+                    <div class="tooltip">doubao-seed-1-6-thinking-250715</div>
+                </div>
+                <div class="model-option ${selectedModel === 'deepseek-chat' ? 'active' : ''}" data-model="deepseek-chat" data-fullname="deepseek-chat">
+                    DeepSeek
+                    <div class="tooltip">deepseek-chat</div>
+                </div>
+                <div class="model-option ${selectedModel === 'qwen3-max' ? 'active' : ''}" data-model="qwen3-max" data-fullname="qwen3-max">
+                    Qwen
+                    <div class="tooltip">qwen3-max</div>
+                </div>
+                <div class="model-option ${selectedModel === 'glm-4.6' ? 'active' : ''}" data-model="glm-4.6" data-fullname="glm-4.6">
+                    GLM
+                    <div class="tooltip">glm-4.6</div>
+                </div>
+                <div class="model-option ${selectedModel === 'MiniMax-M2' ? 'active' : ''}" data-model="MiniMax-M2" data-fullname="MiniMax-M2">
+                    MiniMax
+                    <div class="tooltip">MiniMax-M2</div>
+                </div>
+                <div class="model-option ${selectedModel === 'kimi-k2-0905-preview' ? 'active' : ''}" data-model="kimi-k2-0905-preview" data-fullname="kimi-k2-0905-preview">
+                    Kimi
+                    <div class="tooltip">kimi-k2-0905-preview</div>
+                </div>
+                <div class="model-gap"></div>
+                <div class="model-option ${selectedModel === 'gpt-5' ? 'active' : ''}" data-model="gpt-5" data-fullname="gpt-5">
+                    GPT
+                    <div class="tooltip">gpt-5</div>
+                </div>
+                <div class="model-option ${selectedModel === 'claude-sonnet-4-5' ? 'active' : ''}" data-model="claude-sonnet-4-5" data-fullname="claude-sonnet-4-5">
+                    Claude
+                    <div class="tooltip">claude-sonnet-4-5</div>
+                </div>
+                <div class="model-option ${selectedModel === 'google-ai-studio/gemini-2.5-pro' ? 'active' : ''}" data-model="google-ai-studio/gemini-2.5-pro" data-fullname="gemini-2.5-pro">
+                    Gemini
+                    <div class="tooltip">gemini-2.5-pro</div>
+                </div>
+                <div class="model-option ${selectedModel === 'grok/grok-4' ? 'active' : ''}" data-model="grok/grok-4" data-fullname="grok-4">
+                    Grok
+                    <div class="tooltip">grok-4</div>
+                </div>
+            </div>
+        </div>
     `;
+    
+    // 添加模型选择事件监听
+    const modelOptions = document.querySelectorAll('.model-option');
+    modelOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            // 移除所有active类
+            modelOptions.forEach(opt => opt.classList.remove('active'));
+            // 添加active类到当前选项
+            this.classList.add('active');
+            // 更新选中的模型
+            selectedModel = this.getAttribute('data-model');
+            saveSelectedModel(); // 保存到localStorage
+            console.log('[模型选择] 已选择模型:', selectedModel);
+        });
+    });
     
     // 添加输入框事件监听，保存当前描述
     const descriptionInput = document.getElementById('current-description-input');
@@ -1615,28 +1717,28 @@ function renderStrategyFromAI(displayStrategy) {
         // 如果没有方向信息，根据action和价格关系判断
         if (displayStrategy.action === '买多') {
             direction = '做多';
-            directionColor = '#4ade80';
+            directionColor = '#ef4444'; // 红色（带"多"字）
         } else if (displayStrategy.action === '卖空') {
             direction = '做空';
-            directionColor = '#ef4444';
+            directionColor = '#4ade80'; // 绿色（带"空"字）
         } else if (displayStrategy.action === '观望' && priceToShow.entryPrice && priceToShow.stopLoss) {
             // 观望时，根据价格关系判断建议方向
             // 做多：entryPrice > stopLoss（止损低于开仓价）
             // 做空：entryPrice < stopLoss（止损高于开仓价）
             if (priceToShow.entryPrice > priceToShow.stopLoss) {
                 direction = '做多';
-                directionColor = '#4ade80';
+                directionColor = '#ef4444'; // 红色（带"多"字）
             } else if (priceToShow.entryPrice < priceToShow.stopLoss) {
                 direction = '做空';
-                directionColor = '#ef4444';
+                directionColor = '#4ade80'; // 绿色（带"空"字）
             }
         }
     } else {
         // 如果有方向信息，设置对应的颜色
-        if (direction === '做多') {
-            directionColor = '#4ade80';
-        } else if (direction === '做空') {
-            directionColor = '#ef4444';
+        if (direction === '做多' || direction.includes('多')) {
+            directionColor = '#ef4444'; // 红色（带"多"字）
+        } else if (direction === '做空' || direction.includes('空')) {
+            directionColor = '#4ade80'; // 绿色（带"空"字）
         }
     }
     
@@ -1678,6 +1780,57 @@ function renderStrategyFromAI(displayStrategy) {
                     </div>
                     ` : '<div></div>'}
                 </div>
+                ${displayStrategy.pricePrediction15min !== null && displayStrategy.pricePrediction15min !== undefined ? `
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #1e2548;">
+                    <div style="color: #9ca3af; margin-bottom: 12px; font-size: 14px; font-weight: 600;">15分钟后价格预测</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <!-- 国内白银预测 -->
+                        <div style="text-align: center; padding: 12px; background: rgba(19, 23, 43, 0.4); border-radius: 6px;">
+                            <div style="color: #9ca3af; margin-bottom: 8px; font-size: 12px;">国内白银主力</div>
+                            ${(() => {
+                                const currentPrice = domesticLastTradePrice || displayStrategy.entryPrice || 0;
+                                const prediction = displayStrategy.pricePrediction15min;
+                                const diff = prediction - currentPrice;
+                                const diffPercent = currentPrice > 0 ? ((diff / currentPrice) * 100).toFixed(2) : '0.00';
+                                const isUp = diff >= 0;
+                                const predictionColor = isUp ? '#ef4444' : '#4ade80';
+                                return `
+                                <div style="color: ${predictionColor}; font-weight: 700; font-size: 22px; margin-bottom: 6px;">
+                                    ${Math.round(prediction)}
+                                </div>
+                                <div style="color: #9ca3af; font-size: 11px;">
+                                    当前: <span style="color: #ffffff;">${Math.round(currentPrice)}</span>
+                                    <span style="margin-left: 6px;">变化: <span style="color: ${predictionColor};">${isUp ? '+' : ''}${Math.round(diff)} (${isUp ? '+' : ''}${diffPercent}%)</span></span>
+                                </div>
+                                `;
+                            })()}
+                        </div>
+                        <!-- 伦敦白银预测 -->
+                        ${displayStrategy.londonPricePrediction15min !== null && displayStrategy.londonPricePrediction15min !== undefined ? `
+                        <div style="text-align: center; padding: 12px; background: rgba(19, 23, 43, 0.4); border-radius: 6px;">
+                            <div style="color: #9ca3af; margin-bottom: 8px; font-size: 12px;">伦敦现货白银</div>
+                            ${(() => {
+                                const currentPrice = londonLastTradePrice || 0;
+                                const prediction = displayStrategy.londonPricePrediction15min;
+                                const diff = prediction - currentPrice;
+                                const diffPercent = currentPrice > 0 ? ((diff / currentPrice) * 100).toFixed(2) : '0.00';
+                                const isUp = diff >= 0;
+                                const predictionColor = isUp ? '#ef4444' : '#4ade80';
+                                return `
+                                <div style="color: ${predictionColor}; font-weight: 700; font-size: 22px; margin-bottom: 6px;">
+                                    ${prediction.toFixed(3)}
+                                </div>
+                                <div style="color: #9ca3af; font-size: 11px;">
+                                    当前: <span style="color: #ffffff;">${currentPrice > 0 ? currentPrice.toFixed(3) : 'N/A'}</span>
+                                    ${currentPrice > 0 ? `<span style="margin-left: 6px;">变化: <span style="color: ${predictionColor};">${isUp ? '+' : ''}${diff.toFixed(3)} (${isUp ? '+' : ''}${diffPercent}%)</span></span>` : ''}
+                                </div>
+                                `;
+                            })()}
+                        </div>
+                        ` : '<div></div>'}
+                    </div>
+                </div>
+                ` : ''}
             </div>
         </div>`;
     }
@@ -1714,6 +1867,56 @@ function renderStrategyFromAI(displayStrategy) {
             >${currentDescription}</textarea>
     </div>`;
     
+    // 模型选择（显示在当前描述下面）
+    html += `<div class="strategy-section" style="margin-bottom: 20px;">
+        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
+            模型选择
+        </div>
+        <div id="model-selector" style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
+            <div class="model-option ${selectedModel === 'doubao-seed-1-6-thinking-250715' ? 'active' : ''}" data-model="doubao-seed-1-6-thinking-250715" data-fullname="doubao-seed-1-6-thinking-250715">
+                豆包
+                <div class="tooltip">doubao-seed-1-6-thinking-250715</div>
+            </div>
+            <div class="model-option ${selectedModel === 'deepseek-chat' ? 'active' : ''}" data-model="deepseek-chat" data-fullname="deepseek-chat">
+                DeepSeek
+                <div class="tooltip">deepseek-chat</div>
+            </div>
+            <div class="model-option ${selectedModel === 'qwen3-max' ? 'active' : ''}" data-model="qwen3-max" data-fullname="qwen3-max">
+                Qwen
+                <div class="tooltip">qwen3-max</div>
+            </div>
+            <div class="model-option ${selectedModel === 'glm-4.6' ? 'active' : ''}" data-model="glm-4.6" data-fullname="glm-4.6">
+                GLM
+                <div class="tooltip">glm-4.6</div>
+            </div>
+            <div class="model-option ${selectedModel === 'MiniMax-M2' ? 'active' : ''}" data-model="MiniMax-M2" data-fullname="MiniMax-M2">
+                MiniMax
+                <div class="tooltip">MiniMax-M2</div>
+            </div>
+            <div class="model-option ${selectedModel === 'kimi-k2-0905-preview' ? 'active' : ''}" data-model="kimi-k2-0905-preview" data-fullname="kimi-k2-0905-preview">
+                Kimi
+                <div class="tooltip">kimi-k2-0905-preview</div>
+            </div>
+            <div class="model-gap"></div>
+            <div class="model-option ${selectedModel === 'gpt-5' ? 'active' : ''}" data-model="gpt-5" data-fullname="gpt-5">
+                GPT
+                <div class="tooltip">gpt-5</div>
+            </div>
+            <div class="model-option ${selectedModel === 'claude-sonnet-4-5' ? 'active' : ''}" data-model="claude-sonnet-4-5" data-fullname="claude-sonnet-4-5">
+                Claude
+                <div class="tooltip">claude-sonnet-4-5</div>
+            </div>
+            <div class="model-option ${selectedModel === 'google-ai-studio/gemini-2.5-pro' ? 'active' : ''}" data-model="google-ai-studio/gemini-2.5-pro" data-fullname="gemini-2.5-pro">
+                Gemini
+                <div class="tooltip">gemini-2.5-pro</div>
+            </div>
+            <div class="model-option ${selectedModel === 'grok/grok-4' ? 'active' : ''}" data-model="grok/grok-4" data-fullname="grok-4">
+                Grok
+                <div class="tooltip">grok-4</div>
+            </div>
+        </div>
+    </div>`;
+    
     // 将HTML渲染到页面
     container.innerHTML = html;
     
@@ -1741,6 +1944,21 @@ function renderStrategyFromAI(displayStrategy) {
             saveCurrentDescription(); // 保存到localStorage
         });
     }
+    
+    // 添加模型选择事件监听
+    const modelOptions = document.querySelectorAll('.model-option');
+    modelOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            // 移除所有active类
+            modelOptions.forEach(opt => opt.classList.remove('active'));
+            // 添加active类到当前选项
+            this.classList.add('active');
+            // 更新选中的模型
+            selectedModel = this.getAttribute('data-model');
+            saveSelectedModel(); // 保存到localStorage
+            console.log('[模型选择] 已选择模型:', selectedModel);
+        });
+    });
 }
 
 // 更新布林带分析显示
@@ -2250,6 +2468,18 @@ function updateChart(chart, data, infoElementId) {
         item.h  // 最高价
     ]);
     
+    // 准备成交量数据（用于柱状图）
+    const volumeData = sortedData.map((item, index) => {
+        // 根据涨跌显示不同颜色：上涨红色，下跌绿色
+        const isUp = item.c >= item.o;
+        return {
+            value: item.v || 0,
+            itemStyle: {
+                color: isUp ? '#ef4444' : '#4ade80' // 上涨红色，下跌绿色
+            }
+        };
+    });
+    
     // 计算价格范围，用于设置Y轴范围
     let minPrice, maxPrice, paddingTop, paddingBottom, yAxisMin, yAxisMax;
     
@@ -2374,51 +2604,139 @@ function updateChart(chart, data, infoElementId) {
     // 暂时移除价格通道线（markLine和markArea）以排查问题
     // TODO: 待图表刷新正常后，再考虑是否恢复
     
-    // 准备开仓价标记线（只在1分钟K线图上显示，不在90日K线图上显示）
-    let entryPriceMarkLine = null;
-    if (!infoElementId.includes('daily') && lastPriceAdvice.entryPrice) {
-        const entryPrice = lastPriceAdvice.entryPrice;
-        entryPriceMarkLine = {
-            silent: false,
-            symbol: 'none', // 不显示端点符号
-            label: {
-                show: true,
-                position: 'end', // 标签显示在线的末端
-                formatter: function(params) {
-                    // 根据市场类型格式化价格
-                    if (isLondon) {
-                        return `开仓价: ${entryPrice.toFixed(3)}`;
-                    } else {
-                        return `开仓价: ${Math.round(entryPrice)}`;
-                    }
-                },
-                color: '#ffffff',
-                backgroundColor: 'rgba(19, 23, 43, 0.9)',
-                borderColor: '#fbbf24',
-                borderWidth: 1,
-                padding: [4, 8],
-                borderRadius: 4,
-                fontSize: 12,
-                fontWeight: 600
-            },
-            lineStyle: {
-                color: '#fbbf24', // 黄色，表示开仓价
-                width: 2,
-                type: 'dashed' // 虚线
-            },
-            data: [
-                [
-                    {
-                        coord: [0, entryPrice], // 起点：第一个时间点的索引
-                        symbol: 'none'
-                    },
-                    {
-                        coord: [timeData.length - 1, entryPrice], // 终点：最后一个时间点的索引
-                        symbol: 'none'
-                    }
-                ]
-            ]
+    // 准备价格标记线（开仓价、止损价、止盈价，只在1分钟K线图上显示，不在90日K线图上显示）
+    let priceMarkLines = [];
+    if (!infoElementId.includes('daily')) {
+        const formatPrice = (price) => {
+            if (isLondon) {
+                return price.toFixed(3);
+            } else {
+                return Math.round(price).toString();
+            }
         };
+        
+        // 开仓价标记线（黄色）
+        if (lastPriceAdvice.entryPrice) {
+            const entryPrice = lastPriceAdvice.entryPrice;
+            priceMarkLines.push({
+                silent: false,
+                symbol: 'none',
+                label: {
+                    show: true,
+                    position: 'end',
+                    formatter: function(params) {
+                        return `开仓价: ${formatPrice(entryPrice)}`;
+                    },
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    borderColor: '#fbbf24',
+                    borderWidth: 1,
+                    padding: [4, 8],
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600
+                },
+                lineStyle: {
+                    color: '#fbbf24', // 黄色，表示开仓价
+                    width: 2,
+                    type: 'dashed'
+                },
+                data: [
+                    [
+                        {
+                            coord: [0, entryPrice],
+                            symbol: 'none'
+                        },
+                        {
+                            coord: [timeData.length - 1, entryPrice],
+                            symbol: 'none'
+                        }
+                    ]
+                ]
+            });
+        }
+        
+        // 止损价标记线（红色）
+        if (lastPriceAdvice.stopLoss) {
+            const stopLoss = lastPriceAdvice.stopLoss;
+            priceMarkLines.push({
+                silent: false,
+                symbol: 'none',
+                label: {
+                    show: true,
+                    position: 'end',
+                    formatter: function(params) {
+                        return `止损价: ${formatPrice(stopLoss)}`;
+                    },
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    padding: [4, 8],
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600
+                },
+                lineStyle: {
+                    color: '#ef4444', // 红色，表示止损价
+                    width: 2,
+                    type: 'dashed'
+                },
+                data: [
+                    [
+                        {
+                            coord: [0, stopLoss],
+                            symbol: 'none'
+                        },
+                        {
+                            coord: [timeData.length - 1, stopLoss],
+                            symbol: 'none'
+                        }
+                    ]
+                ]
+            });
+        }
+        
+        // 止盈价标记线（绿色）
+        if (lastPriceAdvice.takeProfit) {
+            const takeProfit = lastPriceAdvice.takeProfit;
+            priceMarkLines.push({
+                silent: false,
+                symbol: 'none',
+                label: {
+                    show: true,
+                    position: 'end',
+                    formatter: function(params) {
+                        return `止盈价: ${formatPrice(takeProfit)}`;
+                    },
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    borderColor: '#4ade80',
+                    borderWidth: 1,
+                    padding: [4, 8],
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600
+                },
+                lineStyle: {
+                    color: '#4ade80', // 绿色，表示止盈价
+                    width: 2,
+                    type: 'dashed'
+                },
+                data: [
+                    [
+                        {
+                            coord: [0, takeProfit],
+                            symbol: 'none'
+                        },
+                        {
+                            coord: [timeData.length - 1, takeProfit],
+                            symbol: 'none'
+                        }
+                    ]
+                ]
+            });
+        }
     }
     
     const option = {
@@ -2469,6 +2787,37 @@ function updateChart(chart, data, infoElementId) {
                             result += '收盘: <span style="color:#ffffff;font-weight:600;">' + formatPrice(close) + '</span><br/>';
                             result += '最高: <span style="color:#ef4444;font-weight:600;">' + formatPrice(highest) + '</span><br/>';
                             result += '最低: <span style="color:#4ade80;font-weight:600;">' + formatPrice(lowest) + '</span><br/>';
+                            // 添加成交量信息（从sortedData中获取）
+                            const dataIndex = item.dataIndex;
+                            if (dataIndex !== undefined && sortedData && sortedData[dataIndex]) {
+                                const volume = sortedData[dataIndex].v || 0;
+                                let volumeText = '';
+                                if (volume >= 1000000) {
+                                    volumeText = (volume / 1000000).toFixed(2) + 'M';
+                                } else if (volume >= 1000) {
+                                    volumeText = (volume / 1000).toFixed(2) + 'K';
+                                } else {
+                                    volumeText = volume.toString();
+                                }
+                                result += '成交量: <span style="color:#ffffff;font-weight:600;">' + volumeText + '</span><br/>';
+                            }
+                        }
+                    } else if (item.seriesType === 'bar') {
+                        // 成交量柱状图
+                        const volumeValue = typeof item.value === 'object' ? (item.value.value || item.value) : item.value;
+                        if (volumeValue !== null && volumeValue !== undefined) {
+                            result += '<span style="display:inline-block;margin-right:5px;border-radius:2px;width:10px;height:10px;background-color:' + (item.color || '#9ca3af') + ';"></span>';
+                            result += '<span style="color:#9ca3af;">成交量</span>: ';
+                            // 格式化成交量显示
+                            let volumeText = '';
+                            if (volumeValue >= 1000000) {
+                                volumeText = (volumeValue / 1000000).toFixed(2) + 'M';
+                            } else if (volumeValue >= 1000) {
+                                volumeText = (volumeValue / 1000).toFixed(2) + 'K';
+                            } else {
+                                volumeText = volumeValue.toString();
+                            }
+                            result += '<span style="color:#ffffff;font-weight:600;">' + volumeText + '</span><br/>';
                         }
                     } else if (item.seriesType === 'line') {
                         // 其他线条（布林带等）
@@ -2489,22 +2838,43 @@ function updateChart(chart, data, infoElementId) {
             }
         },
         grid: [
+            // K线图grid（上方）
             {
-                left: '8%', // 增加左侧空间，确保价格标签完整显示
+                left: '8%',
                 right: '4%',
-                top: '6%', // 减少顶部间距，让图表更大
-                // 如果是1分钟K线，为dataZoom留出空间；如果是90日K线，保持原有高度
-                height: infoElementId.includes('daily') ? '88%' : '75%', // 1分钟K线：75%（为dataZoom留空间），90日K线：88%
-                bottom: infoElementId.includes('daily') ? '5%' : '15%', // 1分钟K线：底部留15%给dataZoom，90日K线：5%
+                top: '6%',
+                // 如果是1分钟K线，K线图占60%，成交量占20%，dataZoom占20%
+                // 如果是90日K线，K线图占75%，成交量占25%
+                height: infoElementId.includes('daily') ? '75%' : '60%',
+                bottom: infoElementId.includes('daily') ? '25%' : '35%', // 底部留空间给成交量和dataZoom
+                containLabel: true
+            },
+            // 成交量grid（下方）
+            {
+                left: '8%',
+                right: '4%',
+                top: infoElementId.includes('daily') ? '75%' : '60%', // 从K线图下方开始
+                height: infoElementId.includes('daily') ? '20%' : '20%', // 成交量区域高度
+                bottom: infoElementId.includes('daily') ? '5%' : '15%', // 底部留空间给dataZoom（仅1分钟K线）
                 containLabel: true
             }
         ],
         xAxis: [
+            // K线图X轴
             {
                 type: 'category',
                 data: timeData,
                 gridIndex: 0,
                 boundaryGap: false,
+                show: true // 只在K线图显示X轴标签
+            },
+            // 成交量X轴（与K线图共享）
+            {
+                type: 'category',
+                data: timeData,
+                gridIndex: 1,
+                boundaryGap: false,
+                show: false, // 隐藏成交量图的X轴标签（避免重复）
                 axisLine: {
                     show: false, // 隐藏X轴线，避免遮挡标签
                     lineStyle: {
@@ -2512,30 +2882,7 @@ function updateChart(chart, data, infoElementId) {
                     }
                 },
                 axisLabel: {
-                    color: '#9ca3af',
-                    show: infoElementId.includes('daily'), // 只显示90日K线图的X轴标签，分钟K线图不显示
-                    // 如果是90日K线图表，旋转标签并设置间隔
-                    rotate: infoElementId.includes('daily') ? 45 : 0,
-                    // 分钟K线图表：每50根显示一个时间标签，同时确保最后一根也显示
-                    interval: infoElementId.includes('daily') ? 'auto' : function(index, value) {
-                        // 最后一根K线始终显示
-                        if (index === timeData.length - 1) {
-                            return false; // 显示
-                        }
-                        // 每50根显示一个（返回false表示显示，返回true表示跳过）
-                        if (index % 50 === 0) {
-                            return false; // 显示
-                        }
-                        return true; // 跳过
-                    },
-                    formatter: function(value, index) {
-                        // 如果是90日K线图表，直接返回日期格式
-                        if (infoElementId.includes('daily')) {
-                            return value;
-                        }
-                        return value;
-                    },
-                    margin: 8 // 标签与轴线的距离
+                    show: false // 隐藏成交量图的X轴标签
                 },
                 axisTick: {
                     show: false
@@ -2543,9 +2890,10 @@ function updateChart(chart, data, infoElementId) {
             }
         ],
         yAxis: [
+            // K线图Y轴（价格）
             {
                 type: 'value',
-                scale: false, // 关闭自动缩放，使用固定比例
+                scale: false,
                 gridIndex: 0,
                 position: 'left',
                 axisLine: {
@@ -2582,7 +2930,26 @@ function updateChart(chart, data, infoElementId) {
                     // 国内白银：增加最大值，使用paddingTop确保K线和布林带都有足够的显示空间
                     return value.max + paddingTop;
                 },
-                splitNumber: isLondon ? 6 : 5 // 伦敦白银设置6个分割点，确保刻度清晰且不重复
+                splitNumber: isLondon ? 6 : 5
+            },
+            // 成交量Y轴
+            {
+                type: 'value',
+                gridIndex: 1,
+                position: 'left',
+                show: false, // 隐藏成交量Y轴
+                axisLine: {
+                    show: false,
+                    lineStyle: {
+                        color: '#1e2548'
+                    }
+                },
+                axisLabel: {
+                    show: false // 隐藏标签
+                },
+                splitLine: {
+                    show: false // 隐藏分割线
+                }
             }
         ],
         series: [
@@ -2608,8 +2975,8 @@ function updateChart(chart, data, infoElementId) {
                         borderWidth: 2
                     }
                 },
-                // 添加开仓价标记线
-                markLine: entryPriceMarkLine || undefined
+                // 添加价格标记线（开仓价、止损价、止盈价）
+                markLine: priceMarkLines.length > 0 ? priceMarkLines : undefined
             },
             // 布林带上轨
             {
@@ -2647,7 +3014,7 @@ function updateChart(chart, data, infoElementId) {
                 symbol: 'none',
                 smooth: false
             },
-            // 布林带下轨
+                // 布林带下轨
             {
                 name: '布林下轨',
                 type: 'line',
@@ -2664,6 +3031,23 @@ function updateChart(chart, data, infoElementId) {
                 },
                 symbol: 'none',
                 smooth: false
+            },
+            // 成交量柱状图
+            {
+                name: '成交量',
+                type: 'bar',
+                data: volumeData,
+                xAxisIndex: 1, // 使用成交量X轴
+                yAxisIndex: 1, // 使用成交量Y轴
+                barWidth: '60%',
+                itemStyle: {
+                    // 颜色已经在volumeData中设置，这里也可以设置
+                },
+                emphasis: {
+                    itemStyle: {
+                        opacity: 0.8
+                    }
+                }
             }
         ]
     };
@@ -3624,10 +4008,26 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.log('[callAnalysisAPI] 已将当前描述拼接到prompt前面');
         }
         
-        // 构建消息数组：第一个消息是伦敦1分钟K线数据，第二个消息是伦敦日K线数据，第三个消息是国内1分钟K线数据，第四个消息是国内日K线数据
+        // 构建消息数组：第一个消息是当前时间信息，然后是K线数据
         const messages = [];
         
-        // 第一个user消息：伦敦1分钟K线数据
+        // 第一个user消息：当前时间信息
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const currentTimeStr = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        
+        messages.push({
+            role: "user",
+            content: `=== 当前时间信息 ===\n当前时间：${currentTimeStr}\n\n请根据当前时间判断：\n1. 国内市场是否在交易时间内（通常为工作日9:00-15:00和21:00-次日2:30）\n2. 如果国内市场未开盘，在预测pricePrediction15min时需要考虑可能的开盘价格\n3. 伦敦市场为24小时交易，需要考虑当前时间段的交易活跃度`
+        });
+        console.log('[callAnalysisAPI] 已添加当前时间信息到messages，时间:', currentTimeStr);
+        
+        // 第二个user消息：伦敦1分钟K线数据
         if (londonData && londonData.length > 0) {
             const londonPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
                 londonData, 
@@ -3643,7 +4043,7 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.warn('[callAnalysisAPI] 伦敦1分钟K线数据为空，跳过');
         }
         
-        // 第二个user消息：伦敦日K线数据
+        // 第三个user消息：伦敦日K线数据
         if (londonDailyData && londonDailyData.length > 0) {
             const londonDailyPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
                 londonDailyData, 
@@ -3659,7 +4059,7 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.warn('[callAnalysisAPI] 伦敦日K线数据为空，跳过');
         }
         
-        // 第三个user消息：国内1分钟K线数据
+        // 第四个user消息：国内1分钟K线数据
         if (domesticData && domesticData.length > 0) {
             const domesticPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
                 domesticData, 
@@ -3675,7 +4075,7 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.warn('[callAnalysisAPI] 国内1分钟K线数据为空，跳过');
         }
         
-        // 第四个user消息：国内日K线数据
+        // 第五个user消息：国内日K线数据
         if (domesticDailyData && domesticDailyData.length > 0) {
             const domesticDailyPrompt = window.PROMPT_CONFIG.formatKlineDataForPrompt(
                 domesticDailyData, 
@@ -3712,7 +4112,7 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
         const requestBody = {
             prompt: systemPrompt,
             messages: messages,
-            model: 'deepseek-chat' // 使用DeepSeek Chat模型
+            model: selectedModel // 使用用户选择的模型
         };
         
         // 创建AbortController用于超时控制（1分钟=60000毫秒）
