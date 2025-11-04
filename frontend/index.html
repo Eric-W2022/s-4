@@ -14,7 +14,7 @@
     <div class="main-content">
         <!-- 左侧：伦敦现货白银K线图 -->
         <div class="left-panel">
-            <!-- 伦敦现货白银 - 方向指引参考 -->
+            <!-- 伦敦现货白银 - 方向指引参考（1分钟K线） -->
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <h2>
@@ -26,6 +26,18 @@
                     </div>
                 </div>
                 <div id="london-chart" class="chart" style="height: 600px;"></div>
+            </div>
+            
+            <!-- 伦敦现货白银 - 90日K线图 -->
+            <div class="chart-wrapper" style="margin-top: 20px;">
+                <div class="chart-header">
+                    <h2>
+                        伦敦现货白银（90日K线）
+                    </h2>
+                    <div class="chart-info" id="london-daily-info">
+                    </div>
+                </div>
+                <div id="london-daily-chart" class="chart" style="height: 400px;"></div>
             </div>
         </div>
 
@@ -43,6 +55,18 @@
                         </div>
                     </div>
                 <div id="domestic-chart" class="chart" style="height: 600px;"></div>
+            </div>
+            
+            <!-- 国内白银主力 - 90日K线图 -->
+            <div class="chart-wrapper" style="margin-top: 20px;">
+                <div class="chart-header">
+                    <h2>
+                        国内白银主力（90日K线）
+                    </h2>
+                    <div class="chart-info" id="domestic-daily-info">
+                    </div>
+                </div>
+                <div id="domestic-daily-chart" class="chart" style="height: 400px;"></div>
             </div>
         </div>
 

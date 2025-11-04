@@ -13,8 +13,9 @@ body {
 }
 
 .container {
-    max-width: 1600px;
+    max-width: 2000px;
     margin: 0 auto;
+    position: relative;
 }
 
 header {
@@ -69,12 +70,6 @@ header h1 {
 
 .control-btn:active {
     transform: scale(0.95);
-}
-
-.container {
-    max-width: 1600px;
-    margin: 0 auto;
-    position: relative;
 }
 
 /* 右上角浮空状态指示器 */
@@ -446,29 +441,82 @@ footer p {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #ffffff;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 14px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 140px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.analyze-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.analyze-btn:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .analyze-btn:hover {
     background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
 .analyze-btn:active {
     transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
 .analyze-btn:disabled {
-    background: #6b7280;
+    background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.7;
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.analyze-btn:disabled:hover {
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 分析中的加载动画 */
+.analyze-btn.analyzing::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-left: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* AI分析面板样式 */

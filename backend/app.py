@@ -27,13 +27,11 @@ from config import (
 
 # 导入路由模块
 from routes import data
-from routes import analysis
 
 app = FastAPI(title="白银K线监控", version="1.0.0")
 
 # 注册路由
 app.include_router(data.router)
-app.include_router(analysis.router)
 
 # 获取项目根目录和前端目录
 BASE_DIR = Path(__file__).parent.parent
