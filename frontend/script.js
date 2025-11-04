@@ -607,6 +607,120 @@ async function fetchDepthTick(symbol) {
     }
 }
 
+// 历史盘口数据（用于计算5秒内的情绪）
+let depthHistoryData = [];
+const DEPTH_HISTORY_DURATION = 5000; // 5秒
+
+// 计算智能情绪指标
+function calculateSmartEmotion(currentData, historyData) {
+    // 当前买卖量
+    let currentBidVol = 0;
+    let currentAskVol = 0;
+    
+    for (let i = 0; i < 5; i++) {
+        currentBidVol += currentData.bid_volume && currentData.bid_volume[i] ? parseInt(currentData.bid_volume[i]) : 0;
+        currentAskVol += currentData.ask_volume && currentData.ask_volume[i] ? parseInt(currentData.ask_volume[i]) : 0;
+    }
+    
+    // 如果历史数据不足，返回基础比例
+    if (historyData.length < 2) {
+        const total = currentBidVol + currentAskVol;
+        return {
+            bidPercent: total > 0 ? (currentBidVol / total * 100) : 50,
+            askPercent: total > 0 ? (currentAskVol / total * 100) : 50,
+            bidStrength: 50,
+            askStrength: 50,
+            trend: '平衡',
+            trendValue: 0
+        };
+    }
+    
+    // 计算5秒内的变化趋势
+    let bidVolChange = 0;
+    let askVolChange = 0;
+    let bidPriceChange = 0;
+    let askPriceChange = 0;
+    let spreadChange = 0;
+    
+    const oldestData = historyData[0];
+    const currentBidPrice = currentData.bid_price && currentData.bid_price[0] ? parseFloat(currentData.bid_price[0]) : 0;
+    const currentAskPrice = currentData.ask_price && currentData.ask_price[0] ? parseFloat(currentData.ask_price[0]) : 0;
+    const oldBidPrice = oldestData.data.bid_price && oldestData.data.bid_price[0] ? parseFloat(oldestData.data.bid_price[0]) : 0;
+    const oldAskPrice = oldestData.data.ask_price && oldestData.data.ask_price[0] ? parseFloat(oldestData.data.ask_price[0]) : 0;
+    
+    // 计算买卖量变化
+    bidVolChange = currentBidVol - oldestData.bidVol;
+    askVolChange = currentAskVol - oldestData.askVol;
+    
+    // 计算价格变化
+    if (oldBidPrice > 0) bidPriceChange = ((currentBidPrice - oldBidPrice) / oldBidPrice) * 100;
+    if (oldAskPrice > 0) askPriceChange = ((currentAskPrice - oldAskPrice) / oldAskPrice) * 100;
+    
+    // 计算买卖价差变化（价差缩小通常意味着市场活跃）
+    const currentSpread = currentAskPrice - currentBidPrice;
+    const oldSpread = oldAskPrice - oldBidPrice;
+    if (oldSpread > 0) spreadChange = ((currentSpread - oldSpread) / oldSpread) * 100;
+    
+    // 综合计算情绪强度（0-100）
+    // 买方情绪：买量增加、买价上升、价差缩小都是积极信号
+    let bidStrength = 50;
+    let askStrength = 50;
+    
+    // 1. 量的影响（40%权重）
+    const totalVolChange = Math.abs(bidVolChange) + Math.abs(askVolChange);
+    if (totalVolChange > 0) {
+        const bidVolWeight = (bidVolChange > 0 ? bidVolChange : 0) / Math.max(totalVolChange, 1);
+        const askVolWeight = (askVolChange > 0 ? askVolChange : 0) / Math.max(totalVolChange, 1);
+        bidStrength += bidVolWeight * 20 - askVolWeight * 10;
+        askStrength += askVolWeight * 20 - bidVolWeight * 10;
+    }
+    
+    // 2. 价格趋势的影响（40%权重）
+    bidStrength += bidPriceChange * 2;
+    askStrength -= askPriceChange * 2; // 卖价上涨对卖方情绪是负面的
+    
+    // 3. 价差变化的影响（20%权重）
+    if (currentSpread < oldSpread) {
+        // 价差缩小，市场活跃，对双方都是正面的
+        bidStrength += 5;
+        askStrength += 5;
+    }
+    
+    // 限制在0-100范围
+    bidStrength = Math.max(0, Math.min(100, bidStrength));
+    askStrength = Math.max(0, Math.min(100, askStrength));
+    
+    // 根据强度调整比例
+    const strengthTotal = bidStrength + askStrength;
+    const bidPercent = strengthTotal > 0 ? (bidStrength / strengthTotal * 100) : 50;
+    const askPercent = strengthTotal > 0 ? (askStrength / strengthTotal * 100) : 50;
+    
+    // 判断趋势
+    let trend = '平衡';
+    let trendValue = bidStrength - askStrength;
+    
+    if (trendValue > 15) {
+        trend = '买方强势';
+    } else if (trendValue > 5) {
+        trend = '买方偏强';
+    } else if (trendValue < -15) {
+        trend = '卖方强势';
+    } else if (trendValue < -5) {
+        trend = '卖方偏强';
+    }
+    
+    return {
+        bidPercent: bidPercent.toFixed(1),
+        askPercent: askPercent.toFixed(1),
+        bidStrength: bidStrength.toFixed(0),
+        askStrength: askStrength.toFixed(0),
+        trend: trend,
+        trendValue: trendValue.toFixed(1),
+        bidVolChange: bidVolChange,
+        askVolChange: askVolChange
+    };
+}
+
 // 更新国内白银盘口显示
 function updateDomesticDepth(depthData) {
     const container = document.getElementById('depth-content');
@@ -621,6 +735,7 @@ function updateDomesticDepth(depthData) {
         console.warn('[盘口显示] 盘口数据为空');
         container.innerHTML = '<div style="color: #9ca3af; text-align: center; padding: 10px;">暂无盘口数据</div>';
         currentDomesticDepthData = null; // 清空缓存
+        depthHistoryData = []; // 清空历史
         return;
     }
     
@@ -635,39 +750,126 @@ function updateDomesticDepth(depthData) {
         timeElement.textContent = timeStr;
     }
     
-    // 构建盘口表格 - 传统盘口显示：卖盘在上（从卖5到卖1），买盘在下（从买1到买5）
-    let html = '<table class="depth-table">';
-    html += '<thead><tr><th>档位</th><th>价格</th><th>数量</th></tr></thead>';
-    html += '<tbody>';
+    // 计算当前买卖双方总量
+    let totalBidVolume = 0;
+    let totalAskVolume = 0;
     
-    // 卖盘：从卖5到卖1（从上到下，价格递减）
+    for (let i = 0; i < 5; i++) {
+        const bidVol = depthData.bid_volume && depthData.bid_volume[i] ? parseInt(depthData.bid_volume[i]) : 0;
+        const askVol = depthData.ask_volume && depthData.ask_volume[i] ? parseInt(depthData.ask_volume[i]) : 0;
+        totalBidVolume += bidVol;
+        totalAskVolume += askVol;
+    }
+    
+    // 记录到历史数据
+    const now = Date.now();
+    depthHistoryData.push({
+        timestamp: now,
+        data: depthData,
+        bidVol: totalBidVolume,
+        askVol: totalAskVolume
+    });
+    
+    // 清理超过5秒的旧数据
+    depthHistoryData = depthHistoryData.filter(item => now - item.timestamp <= DEPTH_HISTORY_DURATION);
+    
+    // 计算智能情绪
+    const emotion = calculateSmartEmotion(depthData, depthHistoryData);
+    const bidPercent = emotion.bidPercent;
+    const askPercent = emotion.askPercent;
+    
+    // 构建新的左右对比布局
+    let html = '<div class="depth-container-new">';
+    
+    // 左右两列表格容器
+    html += '<div class="depth-columns">';
+    
+    // 左列：卖盘（绿色）
+    html += '<div class="depth-column depth-column-ask">';
+    html += '<div class="depth-column-header">卖盘</div>';
+    html += '<table class="depth-side-table">';
+    
+    // 卖盘从卖5到卖1
     for (let i = 4; i >= 0; i--) {
         const askPrice = depthData.ask_price && depthData.ask_price[i] ? parseFloat(depthData.ask_price[i]) : 0;
         const askVolume = depthData.ask_volume && depthData.ask_volume[i] ? parseInt(depthData.ask_volume[i]) : 0;
         
         html += '<tr>';
-        html += `<td style="color: #9ca3af;">卖${i + 1}</td>`;
-        html += `<td class="depth-ask">${askPrice > 0 ? Math.round(askPrice) : '-'}</td>`;
-        html += `<td class="depth-volume">${askVolume > 0 ? askVolume : '-'}</td>`;
+        html += `<td class="depth-label">卖${i + 1}</td>`;
+        html += `<td class="depth-price-ask">${askPrice > 0 ? Math.round(askPrice) : '-'}</td>`;
+        html += `<td class="depth-vol">${askVolume > 0 ? askVolume : '-'}</td>`;
         html += '</tr>';
     }
     
-    // 分隔线
-    html += '<tr style="height: 2px; background: linear-gradient(to right, transparent, #1e2548, transparent);"><td colspan="3"></td></tr>';
+    html += '</table>';
+    html += '</div>';
     
-    // 买盘：从买1到买5（从上到下，价格递减）
+    // 右列：买盘（红色）
+    html += '<div class="depth-column depth-column-bid">';
+    html += '<div class="depth-column-header">买盘</div>';
+    html += '<table class="depth-side-table">';
+    
+    // 买盘从买1到买5
     for (let i = 0; i < 5; i++) {
         const bidPrice = depthData.bid_price && depthData.bid_price[i] ? parseFloat(depthData.bid_price[i]) : 0;
         const bidVolume = depthData.bid_volume && depthData.bid_volume[i] ? parseInt(depthData.bid_volume[i]) : 0;
         
         html += '<tr>';
-        html += `<td style="color: #9ca3af;">买${i + 1}</td>`;
-        html += `<td class="depth-bid">${bidPrice > 0 ? Math.round(bidPrice) : '-'}</td>`;
-        html += `<td class="depth-volume">${bidVolume > 0 ? bidVolume : '-'}</td>`;
+        html += `<td class="depth-label">买${i + 1}</td>`;
+        html += `<td class="depth-price-bid">${bidPrice > 0 ? Math.round(bidPrice) : '-'}</td>`;
+        html += `<td class="depth-vol">${bidVolume > 0 ? bidVolume : '-'}</td>`;
         html += '</tr>';
     }
     
-    html += '</tbody></table>';
+    html += '</table>';
+    html += '</div>';
+    
+    html += '</div>'; // 结束 depth-columns
+    
+    // 情绪进度条
+    html += '<div class="depth-emotion-bar">';
+    
+    // 趋势指示器
+    html += '<div class="emotion-trend-indicator">';
+    const trendClass = emotion.trendValue > 0 ? 'trend-bullish' : emotion.trendValue < 0 ? 'trend-bearish' : 'trend-neutral';
+    html += `<span class="trend-badge ${trendClass}">${emotion.trend}</span>`;
+    html += '<span class="trend-time">5秒动态</span>';
+    html += '</div>';
+    
+    html += '<div class="emotion-bar-container">';
+    html += `<div class="emotion-bar-ask" style="width: ${askPercent}%"></div>`;
+    html += `<div class="emotion-bar-bid" style="width: ${bidPercent}%"></div>`;
+    html += '</div>';
+    html += '<div class="emotion-bar-labels">';
+    html += `<span class="emotion-label-ask">卖方 ${askPercent}% <small>(强度:${emotion.askStrength})</small></span>`;
+    html += `<span class="emotion-label-bid">买方 ${bidPercent}% <small>(强度:${emotion.bidStrength})</small></span>`;
+    html += '</div>';
+    html += '<div class="emotion-bar-totals">';
+    
+    // 显示卖方信息和变化
+    let askChangeHtml = '';
+    if (emotion.askVolChange !== undefined && depthHistoryData.length >= 2) {
+        const askChange = emotion.askVolChange;
+        const askChangeIcon = askChange > 0 ? '↑' : askChange < 0 ? '↓' : '─';
+        const askChangeClass = askChange > 0 ? 'vol-up' : askChange < 0 ? 'vol-down' : '';
+        askChangeHtml = ` <span class="vol-change ${askChangeClass}">${askChangeIcon}${Math.abs(askChange)}</span>`;
+    }
+    html += `<span class="emotion-total-ask">卖盘: ${totalAskVolume}${askChangeHtml}</span>`;
+    
+    // 显示买方信息和变化
+    let bidChangeHtml = '';
+    if (emotion.bidVolChange !== undefined && depthHistoryData.length >= 2) {
+        const bidChange = emotion.bidVolChange;
+        const bidChangeIcon = bidChange > 0 ? '↑' : bidChange < 0 ? '↓' : '─';
+        const bidChangeClass = bidChange > 0 ? 'vol-up' : bidChange < 0 ? 'vol-down' : '';
+        bidChangeHtml = ` <span class="vol-change ${bidChangeClass}">${bidChangeIcon}${Math.abs(bidChange)}</span>`;
+    }
+    html += `<span class="emotion-total-bid">买盘: ${totalBidVolume}${bidChangeHtml}</span>`;
+    
+    html += '</div>';
+    html += '</div>';
+    
+    html += '</div>'; // 结束 depth-container-new
     
     container.innerHTML = html;
 }

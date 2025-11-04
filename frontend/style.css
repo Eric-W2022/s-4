@@ -267,6 +267,218 @@ header h1 {
     font-size: 13px;
 }
 
+/* 新的盘口布局 */
+.depth-container-new {
+    width: 100%;
+}
+
+.depth-columns {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.depth-column {
+    flex: 1;
+    background: rgba(30, 37, 72, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #1e2548;
+}
+
+.depth-column-ask {
+    border-left: 3px solid #4ade80;
+}
+
+.depth-column-bid {
+    border-left: 3px solid #ef4444;
+}
+
+.depth-column-header {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1e2548;
+}
+
+.depth-side-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.depth-side-table td {
+    padding: 4px 6px;
+    font-size: 13px;
+}
+
+.depth-label {
+    color: #9ca3af;
+    font-size: 11px;
+    width: 30%;
+}
+
+.depth-price-ask {
+    color: #4ade80;
+    font-weight: 600;
+    font-size: 14px;
+    text-align: right;
+    width: 40%;
+}
+
+.depth-price-bid {
+    color: #ef4444;
+    font-weight: 600;
+    font-size: 14px;
+    text-align: right;
+    width: 40%;
+}
+
+.depth-vol {
+    color: #9ca3af;
+    font-size: 12px;
+    text-align: right;
+    width: 30%;
+}
+
+/* 情绪进度条 */
+.depth-emotion-bar {
+    background: rgba(30, 37, 72, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #1e2548;
+}
+
+/* 趋势指示器 */
+.emotion-trend-indicator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.trend-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trend-bullish {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.trend-bearish {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.trend-neutral {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
+    border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.trend-time {
+    font-size: 10px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.emotion-bar-container {
+    display: flex;
+    height: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0f1221;
+    margin-bottom: 8px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.emotion-bar-ask {
+    background: linear-gradient(to right, #4ade80, #22c55e);
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.emotion-bar-bid {
+    background: linear-gradient(to left, #ef4444, #dc2626);
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.emotion-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.emotion-bar-labels small {
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.emotion-label-ask {
+    color: #4ade80;
+}
+
+.emotion-label-bid {
+    color: #ef4444;
+}
+
+.emotion-bar-totals {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.emotion-total-ask {
+    color: #9ca3af;
+}
+
+.emotion-total-bid {
+    color: #9ca3af;
+}
+
+/* 成交量变化指示器 */
+.vol-change {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+.vol-change.vol-up {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+}
+
+.vol-change.vol-down {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
 /* 交易策略面板 */
 .trading-strategy-panel {
     background: #13172b;
@@ -364,14 +576,6 @@ header h1 {
 
 .depth-row:last-child {
     border-bottom: none;
-}
-
-.depth-bid {
-    color: #4ade80;
-}
-
-.depth-ask {
-    color: #ef4444;
 }
 
 .depth-price {
