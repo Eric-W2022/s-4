@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>白银K线监控</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
@@ -96,6 +97,18 @@
 
         <!-- 右侧：交易策略区域 -->
         <div class="right-panel">
+            <!-- 盘口深度卡片 -->
+            <div class="depth-panel">
+                <div class="depth-header">
+                    <h3>国内白银盘口</h3>
+                    <span id="depth-update-time" class="depth-update-time">--</span>
+                </div>
+                <div id="depth-content" class="depth-content">
+                    <div class="loading">加载盘口数据...</div>
+                </div>
+            </div>
+            
+            <!-- 实时交易策略 -->
             <div class="trading-strategy-panel">
                 <div class="strategy-header">
                     <h2>实时交易策略</h2>

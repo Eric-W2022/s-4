@@ -577,6 +577,101 @@ async function fetchTradeTick(symbol) {
     }
 }
 
+// 获取盘口深度数据
+async function fetchDepthTick(symbol) {
+    try {
+        const url = `${API_CONFIG.depthTickUrl}?symbol=${symbol}&_t=${Date.now()}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'accept': 'application/json'
+            },
+            cache: 'no-cache'
+        });
+        
+        if (!response.ok) {
+            return null;
+        }
+        
+        const result = await response.json();
+        
+        if (result.ret === 200 && result.data && result.data.depth_list && result.data.depth_list.length > 0) {
+            return result.data.depth_list[0];
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('[盘口数据] 获取失败:', error);
+        return null;
+    }
+}
+
+// 更新国内白银盘口显示
+function updateDomesticDepth(depthData) {
+    const container = document.getElementById('depth-content');
+    const timeElement = document.getElementById('depth-update-time');
+    
+    if (!container) {
+        console.warn('[盘口显示] 盘口容器未找到');
+        return;
+    }
+    
+    if (!depthData) {
+        console.warn('[盘口显示] 盘口数据为空');
+        container.innerHTML = '<div style="color: #9ca3af; text-align: center; padding: 10px;">暂无盘口数据</div>';
+        currentDomesticDepthData = null; // 清空缓存
+        return;
+    }
+    
+    // 保存盘口数据供AI分析使用
+    currentDomesticDepthData = depthData;
+    console.log('[盘口显示] 更新盘口数据 - 买1:', depthData.bid_price ? depthData.bid_price[0] : 'N/A', '卖1:', depthData.ask_price ? depthData.ask_price[0] : 'N/A');
+    
+    // 更新时间
+    if (timeElement) {
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        timeElement.textContent = timeStr;
+    }
+    
+    // 构建盘口表格 - 传统盘口显示：卖盘在上（从卖5到卖1），买盘在下（从买1到买5）
+    let html = '<table class="depth-table">';
+    html += '<thead><tr><th>档位</th><th>价格</th><th>数量</th></tr></thead>';
+    html += '<tbody>';
+    
+    // 卖盘：从卖5到卖1（从上到下，价格递减）
+    for (let i = 4; i >= 0; i--) {
+        const askPrice = depthData.ask_price && depthData.ask_price[i] ? parseFloat(depthData.ask_price[i]) : 0;
+        const askVolume = depthData.ask_volume && depthData.ask_volume[i] ? parseInt(depthData.ask_volume[i]) : 0;
+        
+        html += '<tr>';
+        html += `<td style="color: #9ca3af;">卖${i + 1}</td>`;
+        html += `<td class="depth-ask">${askPrice > 0 ? Math.round(askPrice) : '-'}</td>`;
+        html += `<td class="depth-volume">${askVolume > 0 ? askVolume : '-'}</td>`;
+        html += '</tr>';
+    }
+    
+    // 分隔线
+    html += '<tr style="height: 2px; background: linear-gradient(to right, transparent, #1e2548, transparent);"><td colspan="3"></td></tr>';
+    
+    // 买盘：从买1到买5（从上到下，价格递减）
+    for (let i = 0; i < 5; i++) {
+        const bidPrice = depthData.bid_price && depthData.bid_price[i] ? parseFloat(depthData.bid_price[i]) : 0;
+        const bidVolume = depthData.bid_volume && depthData.bid_volume[i] ? parseInt(depthData.bid_volume[i]) : 0;
+        
+        html += '<tr>';
+        html += `<td style="color: #9ca3af;">买${i + 1}</td>`;
+        html += `<td class="depth-bid">${bidPrice > 0 ? Math.round(bidPrice) : '-'}</td>`;
+        html += `<td class="depth-volume">${bidVolume > 0 ? bidVolume : '-'}</td>`;
+        html += '</tr>';
+    }
+    
+    html += '</tbody></table>';
+    
+    container.innerHTML = html;
+}
+
 // 保存上一次的价格和涨跌信息，用于计算涨跌
 // 国内白银
 let domesticLastTradePrice = null;
@@ -613,6 +708,9 @@ let currentPosition = {
 // 存储当前K线数据（用于AI分析）
 let currentDomesticKlineData = null;
 let currentLondonKlineData = null;
+
+// 存储当前盘口数据（用于AI分析）
+let currentDomesticDepthData = null;
 
 // 策略防抖管理（避免频繁变化）
 let strategyDebounce = {
@@ -2704,8 +2802,8 @@ function updateChart(chart, data, infoElementId) {
         });
     }
     
-    // 如果是1分钟K线图，添加价格建议标记（开仓价、止损价、止盈价）
-    if (!infoElementId.includes('daily') && !infoElementId.includes('15m') && lastPriceAdvice.entryPrice) {
+    // 如果是国内白银1分钟K线图，添加价格建议标记（开仓价、止损价、止盈价）
+    if (!infoElementId.includes('daily') && !infoElementId.includes('15m') && infoElementId.includes('domestic') && lastPriceAdvice.entryPrice) {
         const formatPrice = (price) => {
             if (isLondon) {
                 return price.toFixed(3);
@@ -2714,7 +2812,7 @@ function updateChart(chart, data, infoElementId) {
             }
         };
         
-        // 在图表左上角显示价格建议
+        // 在图表左上角显示价格建议（仅国内白银）
         let priceText = '';
         if (lastPriceAdvice.entryPrice) {
             priceText += `开仓: ${formatPrice(lastPriceAdvice.entryPrice)}\n`;
@@ -2752,11 +2850,11 @@ function updateChart(chart, data, infoElementId) {
     // 暂时移除价格通道线（markLine和markArea）以排查问题
     // TODO: 待图表刷新正常后，再考虑是否恢复
     
-    // 准备价格标记线（开仓价、止损价、止盈价，只在1分钟K线图上显示，不在15分钟和90日K线图上显示）
+    // 准备价格标记线（开仓价、止损价、止盈价，只在国内白银1分钟K线图上显示）
     let priceMarkLines = [];
-    // 只在1分钟K线图上显示（domestic-info 或 london-info），不包括15分钟和90日K线图
-    if (!infoElementId.includes('daily') && !infoElementId.includes('15m')) {
-        console.log('[价格标记线] 准备标记线，infoElementId:', infoElementId);
+    // 只在国内白银的1分钟K线图上显示，不在伦敦图表、15分钟和90日K线图上显示
+    if (!infoElementId.includes('daily') && !infoElementId.includes('15m') && infoElementId.includes('domestic')) {
+        console.log('[价格标记线] 准备标记线（仅国内白银），infoElementId:', infoElementId);
         console.log('[价格标记线] lastPriceAdvice:', lastPriceAdvice);
         
         const formatPrice = (price) => {
@@ -3138,30 +3236,33 @@ function updateChart(chart, data, infoElementId) {
                     symbol: 'none'
                 } : undefined
             },
-            // 预测价格线（灰色虚线）
+            // 预测价格点（灰色小圆点，不显示连接线）
             ...(predictedPrices.length > 0 ? [{
                 name: '预测价格',
-                type: 'line',
+                type: 'scatter',
                 data: (() => {
-                    const result = new Array(sortedData.length).fill(null);
-                    predictedPrices.forEach((price) => {
-                        result.push(price);
+                    const result = [];
+                    predictedPrices.forEach((price, index) => {
+                        result.push([sortedData.length + index, price]); // [x轴索引, 价格]
                     });
                     return result;
                 })(),
                 xAxisIndex: 0,
                 yAxisIndex: 0,
-                lineStyle: {
-                    color: 'rgba(156, 163, 175, 0.8)',
-                    width: 2,
-                    type: 'dashed'
-                },
-                itemStyle: {
-                    color: 'rgba(156, 163, 175, 0.9)'
-                },
                 symbol: 'circle',
-                symbolSize: 4,
-                smooth: false,
+                symbolSize: 3,
+                itemStyle: {
+                    color: 'rgba(156, 163, 175, 0.8)',
+                    borderColor: 'rgba(156, 163, 175, 0.9)',
+                    borderWidth: 0.5
+                },
+                emphasis: {
+                    symbolSize: 5,
+                    itemStyle: {
+                        color: 'rgba(156, 163, 175, 1)',
+                        borderWidth: 1
+                    }
+                },
                 z: 10
             }] : []),
             // 布林带上轨
@@ -3289,10 +3390,10 @@ function updateChart(chart, data, infoElementId) {
     
     console.log(`[图表更新] 完成更新: ${infoElementId}`);
     
-    // 如果有价格标记线，确保它们被正确应用
-    if (priceMarkLines.length > 0 && !infoElementId.includes('daily') && !infoElementId.includes('15m')) {
+    // 如果有价格标记线，确保它们被正确应用（仅国内白银）
+    if (priceMarkLines.length > 0 && !infoElementId.includes('daily') && !infoElementId.includes('15m') && infoElementId.includes('domestic')) {
         try {
-            console.log('[价格标记线] 应用标记线到图表，数量:', priceMarkLines.length);
+            console.log('[价格标记线] 应用标记线到图表（仅国内白银），数量:', priceMarkLines.length);
             
             // priceMarkLines已经是正确的格式（包含yAxis, label, lineStyle）
             // 直接应用即可
@@ -4044,14 +4145,15 @@ window.addEventListener('resize', () => {
 let updateTimer = null;
 let tradeDepthTimer = null;
 
-// 更新成交价（每500ms一次，即1秒2次）
+// 更新成交价和盘口（每500ms一次，即1秒2次）
 // AG（国内白银）通过后端TqSdk接口HTTP轮询获取，Silver（伦敦白银）通过AllTick WebSocket实时推送
 async function updateTradeAndDepth() {
     try {
-        // 同时获取国内和伦敦的成交价
-        const [domesticTradeTick, londonTradeTick] = await Promise.all([
+        // 同时获取国内和伦敦的成交价、国内盘口数据
+        const [domesticTradeTick, londonTradeTick, domesticDepth] = await Promise.all([
             fetchTradeTick(API_CONFIG.domesticSymbol), // AG通过TqSdk获取
-            fetchTradeTick(API_CONFIG.londonSymbol)    // Silver通过AllTick API获取（作为WebSocket的补充）
+            fetchTradeTick(API_CONFIG.londonSymbol),   // Silver通过AllTick API获取（作为WebSocket的补充）
+            fetchDepthTick(API_CONFIG.domesticSymbol)  // AG盘口数据
         ]);
         
         // 更新最新成交价（如果HTTP轮询返回了数据）
@@ -4061,6 +4163,12 @@ async function updateTradeAndDepth() {
         if (londonTradeTick) {
             updateLondonTradeTick(londonTradeTick);
         }
+        
+        // 更新国内盘口数据
+        if (domesticDepth) {
+            updateDomesticDepth(domesticDepth);
+        }
+        
         // Silver主要通过WebSocket实时推送，HTTP轮询作为补充
     } catch (error) {
         // 静默失败，WebSocket推送是主要数据源（对于Silver）
@@ -4534,22 +4642,49 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
                 '国内白银（日K线）', 
                 'AG'
             );
-            // 如果是最后一个消息，添加分析要求
-            let analysisInstruction = domesticDailyPrompt + "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线和日K线），注意它们之间的关联性、短期和长期趋势，并按照JSON格式输出分析结果。";
-            
             messages.push({
                 role: "user",
-                content: analysisInstruction
+                content: domesticDailyPrompt
             });
             console.log('[callAnalysisAPI] 已添加国内日K线数据到messages，数据条数:', domesticDailyData.length);
         } else {
             console.warn('[callAnalysisAPI] 国内日K线数据为空，跳过');
-            // 如果最后一个消息不是日K线数据，添加分析要求
+        }
+        
+        // 第八个user消息：国内白银实时盘口数据
+        if (currentDomesticDepthData) {
+            let depthPrompt = "=== 国内白银实时盘口数据 ===\n\n";
+            depthPrompt += "**卖盘（卖5到卖1）**：\n";
+            for (let i = 4; i >= 0; i--) {
+                const askPrice = currentDomesticDepthData.ask_price && currentDomesticDepthData.ask_price[i] ? parseFloat(currentDomesticDepthData.ask_price[i]) : 0;
+                const askVolume = currentDomesticDepthData.ask_volume && currentDomesticDepthData.ask_volume[i] ? parseInt(currentDomesticDepthData.ask_volume[i]) : 0;
+                depthPrompt += `  卖${i + 1}: 价格 ${askPrice.toFixed(0)}, 数量 ${askVolume}\n`;
+            }
+            depthPrompt += "\n**买盘（买1到买5）**：\n";
+            for (let i = 0; i < 5; i++) {
+                const bidPrice = currentDomesticDepthData.bid_price && currentDomesticDepthData.bid_price[i] ? parseFloat(currentDomesticDepthData.bid_price[i]) : 0;
+                const bidVolume = currentDomesticDepthData.bid_volume && currentDomesticDepthData.bid_volume[i] ? parseInt(currentDomesticDepthData.bid_volume[i]) : 0;
+                depthPrompt += `  买${i + 1}: 价格 ${bidPrice.toFixed(0)}, 数量 ${bidVolume}\n`;
+            }
+            depthPrompt += "\n**盘口分析要点**：\n";
+            depthPrompt += "- 买卖价差：反映市场流动性和交易活跃度\n";
+            depthPrompt += "- 买卖盘量比：反映多空力量对比\n";
+            depthPrompt += "- 大单情况：关注买卖盘中的大额挂单\n";
+            
+            // 添加分析要求
+            depthPrompt += "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线、15分钟K线和日K线）以及国内白银的实时盘口数据，注意它们之间的关联性、短期和长期趋势，以及盘口显示的即时市场情绪，并按照JSON格式输出分析结果。";
+            
+            messages.push({
+                role: "user",
+                content: depthPrompt
+            });
+            console.log('[callAnalysisAPI] 已添加国内白银实时盘口数据到messages');
+        } else {
+            console.warn('[callAnalysisAPI] 国内白银实时盘口数据为空，跳过');
+            // 如果没有盘口数据，在最后一个消息添加分析要求
             if (messages.length > 0) {
-                let analysisInstruction = "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线和日K线），注意它们之间的关联性、短期和长期趋势，并按照JSON格式输出分析结果。";
-                
+                let analysisInstruction = "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线、15分钟K线和日K线），注意它们之间的关联性、短期和长期趋势，并按照JSON格式输出分析结果。";
                 messages[messages.length - 1].content += analysisInstruction;
-                
                 console.log('[callAnalysisAPI] 已添加分析要求到最后一个消息');
             }
         }
@@ -4738,15 +4873,44 @@ async function callKlinePredictionAPI(marketType, klineData, londonPrediction = 
             const londonPredictionText = `
 === 伦敦现货白银预测价格（参考） ===
 
-预测的15个价格点（每分钟）：
-${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}分钟后: ${p.toFixed(3)}`).join(', ') : '无'}
+预测的30个价格点（每分钟）：
+${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}min: ${p.toFixed(3)}`).join(', ') : '无'}
 
-请参考伦敦市场的预测走势，预测国内白银主力的后续15个价格点。`;
+请参考伦敦市场的预测走势，预测国内白银主力的后续30个价格点。`;
             
             messages.push({
                 role: "user",
                 content: londonPredictionText
             });
+        }
+        
+        // 如果是国内市场且有盘口数据，添加实时盘口信息
+        if (marketType === 'domestic' && currentDomesticDepthData) {
+            let depthPrompt = "=== 国内白银实时盘口数据 ===\n\n";
+            depthPrompt += "**卖盘（卖5到卖1）**：\n";
+            for (let i = 4; i >= 0; i--) {
+                const askPrice = currentDomesticDepthData.ask_price && currentDomesticDepthData.ask_price[i] ? parseFloat(currentDomesticDepthData.ask_price[i]) : 0;
+                const askVolume = currentDomesticDepthData.ask_volume && currentDomesticDepthData.ask_volume[i] ? parseInt(currentDomesticDepthData.ask_volume[i]) : 0;
+                depthPrompt += `  卖${i + 1}: 价格 ${askPrice.toFixed(0)}, 数量 ${askVolume}\n`;
+            }
+            depthPrompt += "\n**买盘（买1到买5）**：\n";
+            for (let i = 0; i < 5; i++) {
+                const bidPrice = currentDomesticDepthData.bid_price && currentDomesticDepthData.bid_price[i] ? parseFloat(currentDomesticDepthData.bid_price[i]) : 0;
+                const bidVolume = currentDomesticDepthData.bid_volume && currentDomesticDepthData.bid_volume[i] ? parseInt(currentDomesticDepthData.bid_volume[i]) : 0;
+                depthPrompt += `  买${i + 1}: 价格 ${bidPrice.toFixed(0)}, 数量 ${bidVolume}\n`;
+            }
+            depthPrompt += "\n**盘口分析要点**：\n";
+            depthPrompt += "- 当前买卖价差反映市场流动性\n";
+            depthPrompt += "- 买卖盘量比反映多空力量对比\n";
+            depthPrompt += "- 大单情况可能预示价格趋势\n";
+            depthPrompt += "\n请结合盘口数据分析当前市场情绪，预测价格走势。";
+            
+            messages.push({
+                role: "user",
+                content: depthPrompt
+            });
+            
+            console.log('[K线预测] 已添加国内白银实时盘口数据');
         }
         
         // 添加最终指令

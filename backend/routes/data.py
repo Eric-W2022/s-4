@@ -12,7 +12,7 @@ import uuid
 import urllib.parse
 
 # 导入共享配置和工具函数
-from config import (
+from backend.config import (
     TQSDK_KLINE_CACHE,
     TQSDK_QUOTE_CACHE,
     TQSDK_SUBSCRIPTION_RUNNING,
@@ -303,11 +303,11 @@ async def get_trade_tick(
 @router.get("/depth-tick")
 async def get_depth_tick(
     request: Request,
-    symbol: str = Query(..., description="产品代码，如Silver等")
+    symbol: str = Query(..., description="产品代码，如Silver、AG等")
 ):
     """
     获取最新盘口深度接口
-    后端直接请求AllTick API，前端无需传递token
+    国内白银(AG)使用TqSdk，其他产品使用AllTick API
     """
     client_ip = request.client.host if request.client else "unknown"
     request_time = datetime.now().isoformat()
@@ -315,6 +315,72 @@ async def get_depth_tick(
     
     logger.info(f"[Depth-Tick请求] IP: {client_ip} | Symbol: {symbol} | Trace: {trace_id}")
     
+    # 如果是国内白银(AG)，使用TqSdk获取盘口数据
+    if symbol.upper() == 'AG':
+        try:
+            # 优先从订阅缓存获取（实时更新）
+            quote = TQSDK_QUOTE_CACHE.get('AG')
+            
+            # 如果缓存为空，尝试直接获取
+            if quote is None:
+                from backend.config import get_tqsdk_api
+                api = get_tqsdk_api()
+                contract = "KQ.m@SHFE.ag"
+                quote = api.get_quote(contract)
+                logger.info(f"[TqSdk盘口] 从直接API获取（缓存未就绪）")
+            else:
+                logger.debug(f"[TqSdk盘口] 从订阅缓存获取（实时数据）")
+            
+            # 构造返回数据（模拟AllTick格式）
+            result = {
+                "ret": 200,
+                "msg": "ok",
+                "trace": trace_id,
+                "data": {
+                    "depth_list": [{
+                        "code": symbol,
+                        # 买一到买五
+                        "bid_price": [
+                            str(quote.bid_price1) if hasattr(quote, 'bid_price1') and quote.bid_price1 else "0",
+                            str(quote.bid_price2) if hasattr(quote, 'bid_price2') and quote.bid_price2 else "0",
+                            str(quote.bid_price3) if hasattr(quote, 'bid_price3') and quote.bid_price3 else "0",
+                            str(quote.bid_price4) if hasattr(quote, 'bid_price4') and quote.bid_price4 else "0",
+                            str(quote.bid_price5) if hasattr(quote, 'bid_price5') and quote.bid_price5 else "0"
+                        ],
+                        "bid_volume": [
+                            str(int(quote.bid_volume1)) if hasattr(quote, 'bid_volume1') and quote.bid_volume1 else "0",
+                            str(int(quote.bid_volume2)) if hasattr(quote, 'bid_volume2') and quote.bid_volume2 else "0",
+                            str(int(quote.bid_volume3)) if hasattr(quote, 'bid_volume3') and quote.bid_volume3 else "0",
+                            str(int(quote.bid_volume4)) if hasattr(quote, 'bid_volume4') and quote.bid_volume4 else "0",
+                            str(int(quote.bid_volume5)) if hasattr(quote, 'bid_volume5') and quote.bid_volume5 else "0"
+                        ],
+                        # 卖一到卖五
+                        "ask_price": [
+                            str(quote.ask_price1) if hasattr(quote, 'ask_price1') and quote.ask_price1 else "0",
+                            str(quote.ask_price2) if hasattr(quote, 'ask_price2') and quote.ask_price2 else "0",
+                            str(quote.ask_price3) if hasattr(quote, 'ask_price3') and quote.ask_price3 else "0",
+                            str(quote.ask_price4) if hasattr(quote, 'ask_price4') and quote.ask_price4 else "0",
+                            str(quote.ask_price5) if hasattr(quote, 'ask_price5') and quote.ask_price5 else "0"
+                        ],
+                        "ask_volume": [
+                            str(int(quote.ask_volume1)) if hasattr(quote, 'ask_volume1') and quote.ask_volume1 else "0",
+                            str(int(quote.ask_volume2)) if hasattr(quote, 'ask_volume2') and quote.ask_volume2 else "0",
+                            str(int(quote.ask_volume3)) if hasattr(quote, 'ask_volume3') and quote.ask_volume3 else "0",
+                            str(int(quote.ask_volume4)) if hasattr(quote, 'ask_volume4') and quote.ask_volume4 else "0",
+                            str(int(quote.ask_volume5)) if hasattr(quote, 'ask_volume5') and quote.ask_volume5 else "0"
+                        ]
+                    }]
+                }
+            }
+            
+            logger.info(f"[TqSdk盘口成功] Symbol: {symbol}")
+            return JSONResponse(content=result, status_code=200)
+            
+        except Exception as e:
+            logger.error(f"[TqSdk盘口错误] Symbol: {symbol} | Error: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"TqSdk获取盘口数据失败: {str(e)}")
+    
+    # 其他产品使用AllTick API
     try:
         query_data = {
             "trace": trace_id,

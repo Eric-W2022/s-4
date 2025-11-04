@@ -15,7 +15,7 @@ import asyncio
 import time
 
 # 导入共享配置和工具函数
-from config import (
+from backend.config import (
     TQSDK_AVAILABLE,
     TQ_API,
     TQSDK_KLINE_CACHE,
@@ -27,7 +27,7 @@ from config import (
 )
 
 # 导入路由模块
-from routes import data
+from backend.routes import data
 
 
 @asynccontextmanager
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     yield  # 应用运行中
     
     # 关闭时执行
-    import config
+    from backend import config
     config.TQSDK_SUBSCRIPTION_RUNNING = False
     logger.info("TqSdk订阅任务已停止")
 
@@ -89,7 +89,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def start_tqsdk_subscription():
     """启动TqSdk订阅任务（在后台线程中运行）"""
-    from config import TQSDK_SUBSCRIPTION_RUNNING as TQSDK_SUBSCRIPTION_RUNNING_GLOBAL, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
+    from backend.config import TQSDK_SUBSCRIPTION_RUNNING as TQSDK_SUBSCRIPTION_RUNNING_GLOBAL, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
     
     if not TQSDK_AVAILABLE:
         logger.warning("TqSdk未安装，无法启动订阅任务")
@@ -101,8 +101,8 @@ def start_tqsdk_subscription():
     
     def subscription_loop():
         """订阅循环"""
-        import config
-        from config import TQ_USERNAME, TQ_PASSWORD
+        from backend import config
+        from backend.config import TQ_USERNAME, TQ_PASSWORD
         
         # 使用导入的模块变量
         config.TQSDK_SUBSCRIPTION_RUNNING = True
