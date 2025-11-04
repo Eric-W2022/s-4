@@ -1782,28 +1782,28 @@ function renderStrategyFromAI(displayStrategy) {
                     <div style="color: ${directionColor}; font-weight: 700; font-size: 18px;">${direction}</div>
                 </div>
                 ` : ''}
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 16px; font-size: 13px;">
                     ${priceToShow.entryPrice ? `
-                    <div style="text-align: center;">
-                        <div style="color: #9ca3af; margin-bottom: 4px;">建议开仓价</div>
+                    <div style="text-align: center; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">建议开仓价</div>
                         <div style="color: #ffffff; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.entryPrice)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.stopLoss ? `
-                    <div style="text-align: center;">
-                        <div style="color: #9ca3af; margin-bottom: 4px;">止损价</div>
+                    <div style="text-align: center; padding: 8px; background: rgba(74, 222, 128, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">止损价</div>
                         <div style="color: #4ade80; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.stopLoss)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.takeProfit ? `
-                    <div style="text-align: center;">
-                        <div style="color: #9ca3af; margin-bottom: 4px;">止盈价</div>
+                    <div style="text-align: center; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">止盈价</div>
                         <div style="color: #ef4444; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.takeProfit)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.lots ? `
-                    <div style="text-align: center;">
-                        <div style="color: #9ca3af; margin-bottom: 4px;">建议手数</div>
+                    <div style="text-align: center; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">建议手数</div>
                         <div style="color: #fbbf24; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.lots)}手</div>
                     </div>
                     ` : '<div></div>'}
@@ -2718,15 +2718,15 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: entryPrice,
                 label: {
                     show: true,
-                    position: 'end',
-                    formatter: `开仓价: ${formatPrice(entryPrice)}`,
+                    position: 'insideStartTop',
+                    formatter: `开仓: ${formatPrice(entryPrice)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
                     borderColor: '#fbbf24',
-                    borderWidth: 1,
-                    padding: [4, 8],
+                    borderWidth: 1.5,
+                    padding: [6, 12],
                     borderRadius: 4,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600
                 },
                 lineStyle: {
@@ -2745,15 +2745,15 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: stopLoss,
                 label: {
                     show: true,
-                    position: 'end',
-                    formatter: `止损价: ${formatPrice(stopLoss)}`,
+                    position: 'insideStartBottom',
+                    formatter: `止损: ${formatPrice(stopLoss)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
                     borderColor: '#4ade80',
-                    borderWidth: 1,
-                    padding: [4, 8],
+                    borderWidth: 1.5,
+                    padding: [6, 12],
                     borderRadius: 4,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600
                 },
                 lineStyle: {
@@ -2772,15 +2772,15 @@ function updateChart(chart, data, infoElementId) {
                 yAxis: takeProfit,
                 label: {
                     show: true,
-                    position: 'end',
-                    formatter: `止盈价: ${formatPrice(takeProfit)}`,
+                    position: 'insideStartTop',
+                    formatter: `止盈: ${formatPrice(takeProfit)}`,
                     color: '#ffffff',
-                    backgroundColor: 'rgba(19, 23, 43, 0.9)',
+                    backgroundColor: 'rgba(19, 23, 43, 0.95)',
                     borderColor: '#ef4444',
-                    borderWidth: 1,
-                    padding: [4, 8],
+                    borderWidth: 1.5,
+                    padding: [6, 12],
                     borderRadius: 4,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600
                 },
                 lineStyle: {
