@@ -6,6 +6,14 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import math
+import ssl
+import certifi
+import os
+
+# 解决SSL证书验证问题
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # 尝试导入TqSdk
 try:
