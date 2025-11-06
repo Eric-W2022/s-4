@@ -695,6 +695,76 @@ header h1 {
     background: rgba(239, 68, 68, 0.1);
 }
 
+/* 扩展市场数据区域 */
+.depth-extended-data {
+    margin-top: 16px;
+    background: rgba(30, 37, 72, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #1e2548;
+}
+
+.extended-data-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1e2548;
+    text-align: center;
+}
+
+.extended-data-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.extended-data-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.extended-data-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px;
+    background: rgba(15, 18, 33, 0.5);
+    border-radius: 6px;
+    border: 1px solid rgba(30, 37, 72, 0.5);
+}
+
+.extended-label {
+    font-size: 10px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.extended-value {
+    font-size: 13px;
+    color: #e0e0e0;
+    font-weight: 600;
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.extended-value.high-price {
+    color: #ef4444;
+}
+
+.extended-value.low-price {
+    color: #4ade80;
+}
+
+.extended-value.price-up {
+    color: #ef4444;
+}
+
+.extended-value.price-down {
+    color: #4ade80;
+}
+
 /* 交易策略面板 */
 .trading-strategy-panel {
     background: #13172b;

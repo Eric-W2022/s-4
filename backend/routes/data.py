@@ -331,7 +331,37 @@ async def get_depth_tick(
             else:
                 logger.debug(f"[TqSdk盘口] 从订阅缓存获取（实时数据）")
             
-            # 构造返回数据（模拟AllTick格式）
+            # 辅助函数：安全获取字段值
+            def get_field(field_name, default="0", as_int=False):
+                if hasattr(quote, field_name):
+                    value = getattr(quote, field_name)
+                    if value is not None and value != "":
+                        try:
+                            if as_int:
+                                return str(int(value))
+                            else:
+                                return str(value)
+                        except:
+                            pass
+                return default
+            
+            # 计算涨跌和涨跌幅
+            def calculate_change():
+                try:
+                    last_price = float(get_field('last_price', '0'))
+                    pre_settlement = float(get_field('pre_settlement', '0'))
+                    
+                    if last_price > 0 and pre_settlement > 0:
+                        change = last_price - pre_settlement
+                        change_percent = (change / pre_settlement) * 100
+                        return str(round(change, 2)), str(round(change_percent, 2))
+                    return "0", "0"
+                except:
+                    return "0", "0"
+            
+            change_value, change_percent_value = calculate_change()
+            
+            # 构造返回数据（模拟AllTick格式，并扩展更多字段）
             result = {
                 "ret": 200,
                 "msg": "ok",
@@ -341,34 +371,57 @@ async def get_depth_tick(
                         "code": symbol,
                         # 买一到买五
                         "bid_price": [
-                            str(quote.bid_price1) if hasattr(quote, 'bid_price1') and quote.bid_price1 else "0",
-                            str(quote.bid_price2) if hasattr(quote, 'bid_price2') and quote.bid_price2 else "0",
-                            str(quote.bid_price3) if hasattr(quote, 'bid_price3') and quote.bid_price3 else "0",
-                            str(quote.bid_price4) if hasattr(quote, 'bid_price4') and quote.bid_price4 else "0",
-                            str(quote.bid_price5) if hasattr(quote, 'bid_price5') and quote.bid_price5 else "0"
+                            get_field('bid_price1'),
+                            get_field('bid_price2'),
+                            get_field('bid_price3'),
+                            get_field('bid_price4'),
+                            get_field('bid_price5')
                         ],
                         "bid_volume": [
-                            str(int(quote.bid_volume1)) if hasattr(quote, 'bid_volume1') and quote.bid_volume1 else "0",
-                            str(int(quote.bid_volume2)) if hasattr(quote, 'bid_volume2') and quote.bid_volume2 else "0",
-                            str(int(quote.bid_volume3)) if hasattr(quote, 'bid_volume3') and quote.bid_volume3 else "0",
-                            str(int(quote.bid_volume4)) if hasattr(quote, 'bid_volume4') and quote.bid_volume4 else "0",
-                            str(int(quote.bid_volume5)) if hasattr(quote, 'bid_volume5') and quote.bid_volume5 else "0"
+                            get_field('bid_volume1', as_int=True),
+                            get_field('bid_volume2', as_int=True),
+                            get_field('bid_volume3', as_int=True),
+                            get_field('bid_volume4', as_int=True),
+                            get_field('bid_volume5', as_int=True)
                         ],
                         # 卖一到卖五
                         "ask_price": [
-                            str(quote.ask_price1) if hasattr(quote, 'ask_price1') and quote.ask_price1 else "0",
-                            str(quote.ask_price2) if hasattr(quote, 'ask_price2') and quote.ask_price2 else "0",
-                            str(quote.ask_price3) if hasattr(quote, 'ask_price3') and quote.ask_price3 else "0",
-                            str(quote.ask_price4) if hasattr(quote, 'ask_price4') and quote.ask_price4 else "0",
-                            str(quote.ask_price5) if hasattr(quote, 'ask_price5') and quote.ask_price5 else "0"
+                            get_field('ask_price1'),
+                            get_field('ask_price2'),
+                            get_field('ask_price3'),
+                            get_field('ask_price4'),
+                            get_field('ask_price5')
                         ],
                         "ask_volume": [
-                            str(int(quote.ask_volume1)) if hasattr(quote, 'ask_volume1') and quote.ask_volume1 else "0",
-                            str(int(quote.ask_volume2)) if hasattr(quote, 'ask_volume2') and quote.ask_volume2 else "0",
-                            str(int(quote.ask_volume3)) if hasattr(quote, 'ask_volume3') and quote.ask_volume3 else "0",
-                            str(int(quote.ask_volume4)) if hasattr(quote, 'ask_volume4') and quote.ask_volume4 else "0",
-                            str(int(quote.ask_volume5)) if hasattr(quote, 'ask_volume5') and quote.ask_volume5 else "0"
-                        ]
+                            get_field('ask_volume1', as_int=True),
+                            get_field('ask_volume2', as_int=True),
+                            get_field('ask_volume3', as_int=True),
+                            get_field('ask_volume4', as_int=True),
+                            get_field('ask_volume5', as_int=True)
+                        ],
+                        # 扩展字段：更多市场数据
+                        "last_price": get_field('last_price'),  # 最新价
+                        "volume": get_field('volume', as_int=True),  # 成交量
+                        "amount": get_field('amount'),  # 成交额
+                        "open_interest": get_field('open_interest', as_int=True),  # 持仓量
+                        "highest": get_field('highest'),  # 最高价
+                        "lowest": get_field('lowest'),  # 最低价
+                        "open": get_field('open'),  # 开盘价
+                        "close": get_field('close'),  # 收盘价
+                        "average": get_field('average'),  # 均价
+                        "settlement": get_field('settlement'),  # 结算价
+                        "pre_settlement": get_field('pre_settlement'),  # 昨结算
+                        "pre_close": get_field('pre_close'),  # 昨收盘
+                        "pre_open_interest": get_field('pre_open_interest', as_int=True),  # 昨持仓
+                        "upper_limit": get_field('upper_limit'),  # 涨停价
+                        "lower_limit": get_field('lower_limit'),  # 跌停价
+                        "change": change_value,  # 涨跌（计算值）
+                        "change_percent": change_percent_value,  # 涨跌幅（计算值）
+                        # 合约信息
+                        "instrument_name": get_field('instrument_name'),  # 合约名称
+                        "price_tick": get_field('price_tick'),  # 价格变动单位
+                        "volume_multiple": get_field('volume_multiple', as_int=True),  # 合约乘数
+                        "datetime": get_field('datetime')  # 行情时间
                     }]
                 }
             }

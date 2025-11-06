@@ -921,6 +921,164 @@ function updateDomesticDepth(depthData) {
     html += '</div>';
     html += '</div>';
     
+    // 添加扩展市场数据区域
+    html += '<div class="depth-extended-data">';
+    html += '<div class="extended-data-title">实时市场数据</div>';
+    html += '<div class="extended-data-grid">';
+    
+    // 第一行：价格信息
+    html += '<div class="extended-data-row">';
+    const lastPrice = depthData.last_price ? parseFloat(depthData.last_price) : 0;
+    const open = depthData.open ? parseFloat(depthData.open) : 0;
+    const highest = depthData.highest ? parseFloat(depthData.highest) : 0;
+    const lowest = depthData.lowest ? parseFloat(depthData.lowest) : 0;
+    const average = depthData.average ? parseFloat(depthData.average) : 0;
+    
+    html += `<div class="extended-data-item">
+        <span class="extended-label">最新价</span>
+        <span class="extended-value">${lastPrice > 0 ? Math.round(lastPrice) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">开盘</span>
+        <span class="extended-value">${open > 0 ? Math.round(open) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">最高</span>
+        <span class="extended-value high-price">${highest > 0 ? Math.round(highest) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">最低</span>
+        <span class="extended-value low-price">${lowest > 0 ? Math.round(lowest) : '-'}</span>
+    </div>`;
+    html += '</div>';
+    
+    // 第二行：涨跌和均价
+    html += '<div class="extended-data-row">';
+    const change = depthData.change ? parseFloat(depthData.change) : 0;
+    const changePercent = depthData.change_percent ? parseFloat(depthData.change_percent) : 0;
+    const changeClass = change >= 0 ? 'price-up' : 'price-down';
+    const changeIcon = change >= 0 ? '↑' : '↓';
+    
+    html += `<div class="extended-data-item">
+        <span class="extended-label">涨跌</span>
+        <span class="extended-value ${changeClass}">${change !== 0 ? (change > 0 ? '+' : '') + change.toFixed(0) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">涨跌幅</span>
+        <span class="extended-value ${changeClass}">${changePercent !== 0 ? (changePercent > 0 ? '+' : '') + changePercent.toFixed(2) + '%' : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">均价</span>
+        <span class="extended-value">${average > 0 ? Math.round(average) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">昨结算</span>
+        <span class="extended-value">${depthData.pre_settlement ? Math.round(parseFloat(depthData.pre_settlement)) : '-'}</span>
+    </div>`;
+    html += '</div>';
+    
+    // 第三行：成交量和持仓量
+    html += '<div class="extended-data-row">';
+    const volume = depthData.volume ? parseInt(depthData.volume) : 0;
+    const amount = depthData.amount ? parseFloat(depthData.amount) : 0;
+    const openInterest = depthData.open_interest ? parseInt(depthData.open_interest) : 0;
+    const preOpenInterest = depthData.pre_open_interest ? parseInt(depthData.pre_open_interest) : 0;
+    
+    // 格式化成交额（万元）
+    let amountStr = '-';
+    if (amount > 0) {
+        const amountWan = amount / 10000;
+        if (amountWan >= 10000) {
+            amountStr = (amountWan / 10000).toFixed(2) + '亿';
+        } else {
+            amountStr = amountWan.toFixed(2) + '万';
+        }
+    }
+    
+    // 计算持仓量变化
+    let openInterestChange = '';
+    if (openInterest > 0 && preOpenInterest > 0) {
+        const change = openInterest - preOpenInterest;
+        const changePercent = ((change / preOpenInterest) * 100).toFixed(2);
+        if (change !== 0) {
+            const changeClass = change > 0 ? 'price-up' : 'price-down';
+            const changeSign = change > 0 ? '+' : '';
+            openInterestChange = ` <span class="${changeClass}" style="font-size: 10px;">(${changeSign}${change.toLocaleString()}, ${changeSign}${changePercent}%)</span>`;
+        }
+    }
+    
+    html += `<div class="extended-data-item">
+        <span class="extended-label">成交量</span>
+        <span class="extended-value">${volume > 0 ? volume.toLocaleString() : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">成交额</span>
+        <span class="extended-value">${amountStr}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">持仓量</span>
+        <span class="extended-value">${openInterest > 0 ? openInterest.toLocaleString() : '-'}${openInterestChange}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">昨持仓</span>
+        <span class="extended-value">${preOpenInterest > 0 ? preOpenInterest.toLocaleString() : '-'}</span>
+    </div>`;
+    html += '</div>';
+    
+    // 第四行：收盘价、结算价、涨跌停
+    html += '<div class="extended-data-row">';
+    const close = depthData.close ? parseFloat(depthData.close) : 0;
+    const preClose = depthData.pre_close ? parseFloat(depthData.pre_close) : 0;
+    const settlement = depthData.settlement ? parseFloat(depthData.settlement) : 0;
+    const upperLimit = depthData.upper_limit ? parseFloat(depthData.upper_limit) : 0;
+    const lowerLimit = depthData.lower_limit ? parseFloat(depthData.lower_limit) : 0;
+    
+    html += `<div class="extended-data-item">
+        <span class="extended-label">收盘价</span>
+        <span class="extended-value">${close > 0 ? Math.round(close) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">昨收盘</span>
+        <span class="extended-value">${preClose > 0 ? Math.round(preClose) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">结算价</span>
+        <span class="extended-value">${settlement > 0 ? Math.round(settlement) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">涨停/跌停</span>
+        <span class="extended-value" style="font-size: 11px;">${upperLimit > 0 ? Math.round(upperLimit) : '-'}/${lowerLimit > 0 ? Math.round(lowerLimit) : '-'}</span>
+    </div>`;
+    html += '</div>';
+    
+    // 第五行：合约信息
+    html += '<div class="extended-data-row">';
+    const instrumentName = depthData.instrument_name || '-';
+    const priceTick = depthData.price_tick ? parseFloat(depthData.price_tick) : 0;
+    const volumeMultiple = depthData.volume_multiple ? parseInt(depthData.volume_multiple) : 0;
+    const datetime = depthData.datetime || '-';
+    
+    html += `<div class="extended-data-item">
+        <span class="extended-label">合约名称</span>
+        <span class="extended-value" style="font-size: 11px;">${instrumentName}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">最小变动</span>
+        <span class="extended-value">${priceTick > 0 ? priceTick : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">合约乘数</span>
+        <span class="extended-value">${volumeMultiple > 0 ? volumeMultiple + 'kg/手' : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">行情时间</span>
+        <span class="extended-value" style="font-size: 10px;">${datetime !== '-' ? datetime.substring(11, 19) : '-'}</span>
+    </div>`;
+    html += '</div>';
+    
+    html += '</div>'; // 结束 extended-data-grid
+    html += '</div>'; // 结束 depth-extended-data
+    
     html += '</div>'; // 结束 depth-container-new
     
     container.innerHTML = html;
@@ -3491,19 +3649,18 @@ function updateChart(chart, data, infoElementId) {
                 left: '8%',
                 right: '4%',
                 top: '6%',
-                // 如果是1分钟K线，K线图占60%，成交量占20%，dataZoom占20%
-                // 如果是90日K线，K线图占75%，成交量占25%
-                height: infoElementId.includes('daily') ? '75%' : '60%',
-                bottom: infoElementId.includes('daily') ? '25%' : '35%', // 底部留空间给成交量和dataZoom
+                // K线图占75%，成交量占25%（不再需要为滑动条预留空间）
+                height: '75%',
+                bottom: '25%',
                 containLabel: true
             },
             // 成交量grid（下方）
             {
                 left: '8%',
                 right: '4%',
-                top: infoElementId.includes('daily') ? '75%' : '60%', // 从K线图下方开始
-                height: infoElementId.includes('daily') ? '20%' : '20%', // 成交量区域高度
-                bottom: infoElementId.includes('daily') ? '5%' : '15%', // 底部留空间给dataZoom（仅1分钟K线）
+                top: '75%', // 从K线图下方开始
+                height: '20%', // 成交量区域高度
+                bottom: '5%',
                 containLabel: true
             }
         ],
@@ -3732,74 +3889,23 @@ function updateChart(chart, data, infoElementId) {
         ]
     };
     
-    // 如果是1分钟K线图表（不是90日K线），添加dataZoom组件
+    // 1分钟K线图表不使用dataZoom，显示所有数据点
+    // 如果需要查看历史数据，可以使用鼠标滚轮缩放或者框选缩放
     if (!infoElementId.includes('daily')) {
-        // 获取保存的滑动条状态
-        const dataZoomId = infoElementId.includes('london') ? 'london' : 'domestic';
-        const savedState = dataZoomState[dataZoomId];
-        
-        // 计算需要显示的数据范围
-        // 确保最新的数据总是在可视区域内
-        const totalDataCount = allTimeData.length; // 使用X轴总数据量（包含真实+预测）
-        const defaultVisibleCount = 100; // 默认显示最近100根K线（包含预测）
-        
-        // 如果数据总数少于默认可视数量，显示全部
-        let startPercent = 0;
-        let endPercent = 100;
-        
-        if (totalDataCount > defaultVisibleCount) {
-            // 计算百分比，确保显示最新的数据
-            startPercent = ((totalDataCount - defaultVisibleCount) / totalDataCount) * 100;
-            endPercent = 100; // 始终显示到最后
-        }
-        
-        // 如果用户没有手动调整过滑动条，使用计算的百分比（自动跟随最新数据）
-        // 如果用户手动调整过且end接近100（比如>95），也自动跟随最新数据
-        const useAutoScroll = savedState.end === 100 || savedState.end > 95;
-        
+        // 添加inside类型的dataZoom，允许鼠标滚轮缩放和拖拽平移
         option.dataZoom = [
             {
-                type: 'slider',
+                type: 'inside',
                 xAxisIndex: [0, 1], // 同时控制K线图和成交量图的X轴
-                start: useAutoScroll ? startPercent : savedState.start,
-                end: useAutoScroll ? endPercent : savedState.end,
-                height: 30, // dataZoom高度
-                bottom: 15, // 距离底部15px（往上移动，更靠近图表）
-                handleStyle: {
-                    color: '#667eea' // 滑块颜色
-                },
-                dataBackground: {
-                    areaStyle: {
-                        color: 'rgba(102, 126, 234, 0.2)' // 背景区域颜色
-                    },
-                    lineStyle: {
-                        color: '#667eea' // 边框颜色
-                    }
-                },
-                selectedDataBackground: {
-                    areaStyle: {
-                        color: 'rgba(102, 126, 234, 0.4)' // 选中区域背景颜色
-                    },
-                    lineStyle: {
-                        color: '#667eea',
-                        width: 2 // 选中区域边框宽度
-                    }
-                },
-                borderColor: 'transparent', // 隐藏边框，避免白色横线
-                fillerColor: 'rgba(102, 126, 234, 0.2)',
-                handleIcon: 'path://M30.9,53.2C16.8,53.2,5.3,41.7,5.3,27.6S16.8,2,30.9,2C45,2,56.4,13.5,56.4,27.6S45,53.2,30.9,53.2z M30.9,3.5C17.6,3.5,6.8,14.4,6.8,27.6c0,13.3,10.8,24.1,24.1,24.1C44.2,51.7,55,40.9,55,27.6C54.9,14.4,44.1,3.5,30.9,3.5z M36.9,35.8c0,0.6-0.4,1-1,1H26c-0.6,0-1-0.4-1-1s0.4-1,1-1h9.9C36.5,34.8,36.9,35.2,36.9,35.8z',
-                handleSize: '80%',
-                showDetail: false, // 不显示详细数值，避免遮挡
-                moveOnMouseMove: true, // 鼠标在滑动条上移动时可以拖动
-                zoomOnMouseWheel: false // 禁用鼠标滚轮缩放，避免意外操作
+                start: 0, // 显示所有数据
+                end: 100,
+                zoomOnMouseWheel: true, // 允许鼠标滚轮缩放
+                moveOnMouseMove: false, // 按住鼠标移动时平移
+                moveOnMouseWheel: false // 不使用滚轮平移
             }
         ];
         
-        console.log(`[DataZoom] ${dataZoomId} - 总数据: ${totalDataCount}, 可视范围: ${useAutoScroll ? startPercent.toFixed(1) : savedState.start}% - ${useAutoScroll ? endPercent : savedState.end}%, 自动滚动: ${useAutoScroll}`);
-        
-        // 为1分钟K线图表设置dataZoom同步
-        // 伦敦图表使用id: 'london-datazoom'，国内图表使用id: 'domestic-datazoom'
-        option.dataZoom[0].id = dataZoomId + '-datazoom';
+        console.log(`[DataZoom] 1分钟K线 - 显示所有数据点，总数据: ${allTimeData.length}`);
     }
     
     chart.setOption(option);
@@ -3831,51 +3937,7 @@ function updateChart(chart, data, infoElementId) {
         }
     }
     
-    // 在setOption之后添加事件监听器（避免重复添加）
-    if (!infoElementId.includes('daily')) {
-        // 移除之前的事件监听器（如果有）
-        chart.off('datazoom');
-        
-        // 添加dataZoom事件监听，实现同步和状态保存
-        chart.on('datazoom', function(params) {
-            // 同步到另一个1分钟K线图表
-            const dataZoomId = infoElementId.includes('london') ? 'london' : 'domestic';
-            
-            // 保存当前滑动条状态
-            dataZoomState[dataZoomId].start = params.start;
-            dataZoomState[dataZoomId].end = params.end;
-            
-            // 同步到另一个图表
-            if (dataZoomId === 'london' && domesticChart) {
-                // 保存国内图表的状态
-                dataZoomState.domestic.start = params.start;
-                dataZoomState.domestic.end = params.end;
-                // 伦敦图表变化，同步到国内图表（使用setOption避免触发事件）
-                domesticChart.setOption({
-                    dataZoom: [{
-                        start: params.start,
-                        end: params.end
-                    }],
-                    silent: true // 静默更新，不触发事件
-                });
-            } else if (dataZoomId === 'domestic' && londonChart) {
-                // 保存伦敦图表的状态
-                dataZoomState.london.start = params.start;
-                dataZoomState.london.end = params.end;
-                // 国内图表变化，同步到伦敦图表（使用setOption避免触发事件）
-                londonChart.setOption({
-                    dataZoom: [{
-                        start: params.start,
-                        end: params.end
-                    }],
-                    silent: true // 静默更新，不触发事件
-                });
-            }
-            
-            // 保存缩放状态到 localStorage
-            saveDataZoomState(dataZoomState);
-        });
-    }
+    // 不再需要dataZoom事件监听器，因为1分钟K线图显示所有数据
 }
 
 // 更新X轴标签间隔（根据滑动条缩放状态）
@@ -5161,7 +5223,7 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             console.warn('[callAnalysisAPI] 国内日K线数据为空，跳过');
         }
         
-        // 第八个user消息：国内白银实时盘口数据
+        // 第八个user消息：国内白银实时盘口数据和扩展市场数据
         if (currentDomesticDepthData) {
             let depthPrompt = "=== 国内白银实时盘口数据 ===\n\n";
             depthPrompt += "**卖盘（卖5到卖1）**：\n";
@@ -5176,19 +5238,77 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
                 const bidVolume = currentDomesticDepthData.bid_volume && currentDomesticDepthData.bid_volume[i] ? parseInt(currentDomesticDepthData.bid_volume[i]) : 0;
                 depthPrompt += `  买${i + 1}: 价格 ${bidPrice.toFixed(0)}, 数量 ${bidVolume}\n`;
             }
+            
+            // 添加扩展市场数据
+            depthPrompt += "\n**实时市场数据**：\n";
+            
+            // 价格信息
+            const lastPrice = parseFloat(currentDomesticDepthData.last_price || 0);
+            const open = parseFloat(currentDomesticDepthData.open || 0);
+            const highest = parseFloat(currentDomesticDepthData.highest || 0);
+            const lowest = parseFloat(currentDomesticDepthData.lowest || 0);
+            const average = parseFloat(currentDomesticDepthData.average || 0);
+            depthPrompt += `- 最新价: ${lastPrice.toFixed(0)}  开盘: ${open.toFixed(0)}  最高: ${highest.toFixed(0)}  最低: ${lowest.toFixed(0)}  均价: ${average.toFixed(0)}\n`;
+            
+            // 涨跌信息
+            const change = parseFloat(currentDomesticDepthData.change || 0);
+            const changePercent = parseFloat(currentDomesticDepthData.change_percent || 0);
+            const preSettlement = parseFloat(currentDomesticDepthData.pre_settlement || 0);
+            const changeSign = change >= 0 ? '+' : '';
+            depthPrompt += `- 涨跌: ${changeSign}${change.toFixed(0)} (${changeSign}${changePercent.toFixed(2)}%)  昨结算: ${preSettlement.toFixed(0)}\n`;
+            
+            // 成交和持仓信息
+            const volume = parseInt(currentDomesticDepthData.volume || 0);
+            const amount = parseFloat(currentDomesticDepthData.amount || 0);
+            const openInterest = parseInt(currentDomesticDepthData.open_interest || 0);
+            const preOpenInterest = parseInt(currentDomesticDepthData.pre_open_interest || 0);
+            
+            // 格式化成交额
+            let amountStr = '';
+            if (amount > 0) {
+                const amountWan = amount / 10000;
+                if (amountWan >= 10000) {
+                    amountStr = `${(amountWan / 10000).toFixed(2)}亿元`;
+                } else {
+                    amountStr = `${amountWan.toFixed(2)}万元`;
+                }
+            }
+            
+            // 计算持仓量变化
+            let oiChangeStr = '';
+            if (openInterest > 0 && preOpenInterest > 0) {
+                const oiChange = openInterest - preOpenInterest;
+                const oiChangePercent = ((oiChange / preOpenInterest) * 100).toFixed(2);
+                const oiChangeSign = oiChange >= 0 ? '+' : '';
+                oiChangeStr = ` (${oiChangeSign}${oiChange}, ${oiChangeSign}${oiChangePercent}%)`;
+            }
+            
+            depthPrompt += `- 成交量: ${volume.toLocaleString()}手  成交额: ${amountStr}\n`;
+            depthPrompt += `- 持仓量: ${openInterest.toLocaleString()}手${oiChangeStr}  昨持仓: ${preOpenInterest.toLocaleString()}手\n`;
+            
+            // 合约信息
+            const instrumentName = currentDomesticDepthData.instrument_name || '';
+            const volumeMultiple = parseInt(currentDomesticDepthData.volume_multiple || 0);
+            const upperLimit = parseFloat(currentDomesticDepthData.upper_limit || 0);
+            const lowerLimit = parseFloat(currentDomesticDepthData.lower_limit || 0);
+            depthPrompt += `- 合约: ${instrumentName}  乘数: ${volumeMultiple}kg/手\n`;
+            depthPrompt += `- 涨停: ${upperLimit.toFixed(0)}  跌停: ${lowerLimit.toFixed(0)}\n`;
+            
             depthPrompt += "\n**盘口分析要点**：\n";
             depthPrompt += "- 买卖价差：反映市场流动性和交易活跃度\n";
             depthPrompt += "- 买卖盘量比：反映多空力量对比\n";
-            depthPrompt += "- 大单情况：关注买卖盘中的大额挂单\n";
+            depthPrompt += "- 持仓量变化：增仓说明市场参与度提升，减仓说明资金流出\n";
+            depthPrompt += "- 成交量和成交额：反映市场活跃程度\n";
+            depthPrompt += "- 涨跌幅和相对位置：当前价格在日内高低点的位置\n";
             
             // 添加分析要求
-            depthPrompt += "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线、15分钟K线和日K线）以及国内白银的实时盘口数据，注意它们之间的关联性、短期和长期趋势，以及盘口显示的即时市场情绪，并按照JSON格式输出分析结果。";
+            depthPrompt += "\n\n请综合分析以上两个市场的K线数据（包括1分钟K线、15分钟K线和日K线）以及国内白银的实时盘口数据和市场数据，注意它们之间的关联性、短期和长期趋势，以及当前的市场情绪、资金流向、持仓变化等，并按照JSON格式输出分析结果。";
             
             messages.push({
                 role: "user",
                 content: depthPrompt
             });
-            console.log('[callAnalysisAPI] 已添加国内白银实时盘口数据到messages');
+            console.log('[callAnalysisAPI] 已添加国内白银实时盘口数据和扩展市场数据到messages');
         } else {
             console.warn('[callAnalysisAPI] 国内白银实时盘口数据为空，跳过');
             // 如果没有盘口数据，在最后一个消息添加分析要求

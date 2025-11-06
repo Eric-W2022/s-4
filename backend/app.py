@@ -214,6 +214,76 @@ async def health_check():
     return {"status": "ok", "service": "白银K线监控"}
 
 
+@app.get("/api/debug/quote-fields")
+async def debug_quote_fields():
+    """调试接口：返回quote对象的所有字段"""
+    from backend.config import TQSDK_QUOTE_CACHE
+    
+    quote = TQSDK_QUOTE_CACHE.get('AG')
+    
+    if quote is None:
+        return {
+            "error": "Quote数据尚未就绪",
+            "available": False
+        }
+    
+    # 获取所有字段
+    all_attrs = dir(quote)
+    
+    # 分类字段
+    result = {
+        "available": True,
+        "quote_type": str(type(quote)),
+        "all_fields": {},
+        "price_fields": {},
+        "volume_fields": {},
+        "amount_fields": {},
+        "position_fields": {},
+        "time_fields": {},
+        "other_important_fields": {}
+    }
+    
+    # 获取所有非私有字段
+    for attr in all_attrs:
+        if not attr.startswith('_'):
+            try:
+                value = getattr(quote, attr)
+                if not callable(value):
+                    result["all_fields"][attr] = str(value)
+                    
+                    # 分类显示
+                    if 'price' in attr.lower():
+                        result["price_fields"][attr] = str(value)
+                    elif 'volume' in attr.lower():
+                        result["volume_fields"][attr] = str(value)
+                    elif 'amount' in attr.lower():
+                        result["amount_fields"][attr] = str(value)
+                    elif any(x in attr.lower() for x in ['open_interest', 'position']):
+                        result["position_fields"][attr] = str(value)
+                    elif any(x in attr.lower() for x in ['time', 'date']):
+                        result["time_fields"][attr] = str(value)
+            except Exception as e:
+                result["all_fields"][attr] = f"Error: {str(e)}"
+    
+    # 重点字段
+    key_fields = ['last_price', 'volume', 'amount', 'open_interest', 
+                  'bid_price1', 'bid_volume1', 'ask_price1', 'ask_volume1',
+                  'highest', 'lowest', 'open', 'close', 'pre_close',
+                  'settlement', 'pre_settlement', 'upper_limit', 'lower_limit',
+                  'average', 'change', 'change_percent']
+    
+    for field in key_fields:
+        if hasattr(quote, field):
+            try:
+                value = getattr(quote, field)
+                if not callable(value):
+                    result["other_important_fields"][field] = str(value)
+            except:
+                pass
+    
+    return result
+
+
 # 挂载前端静态文件（CSS、JS等）
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
