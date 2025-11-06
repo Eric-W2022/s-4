@@ -946,14 +946,14 @@ function updateDomesticDepth(depthData) {
     const volumeMultiple = depthData.volume_multiple ? parseInt(depthData.volume_multiple) : 0;
     const datetime = depthData.datetime || '-';
     
-    // 格式化成交额
+    // 格式化成交额（显示数值，不带单位）
     let amountStr = '-';
     if (amount > 0) {
         const amountWan = amount / 10000;
         if (amountWan >= 10000) {
-            amountStr = (amountWan / 10000).toFixed(2) + '亿';
+            amountStr = (amountWan / 10000).toFixed(2);
         } else {
-            amountStr = amountWan.toFixed(2) + '万';
+            amountStr = amountWan.toFixed(2);
         }
     }
     
@@ -5300,14 +5300,14 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
             const openInterest = parseInt(currentDomesticDepthData.open_interest || 0);
             const preOpenInterest = parseInt(currentDomesticDepthData.pre_open_interest || 0);
             
-            // 格式化成交额
+            // 格式化成交额（显示数值，不带单位）
             let amountStr = '';
             if (amount > 0) {
                 const amountWan = amount / 10000;
                 if (amountWan >= 10000) {
-                    amountStr = `${(amountWan / 10000).toFixed(2)}亿元`;
+                    amountStr = `${(amountWan / 10000).toFixed(2)}`;
                 } else {
-                    amountStr = `${amountWan.toFixed(2)}万元`;
+                    amountStr = `${amountWan.toFixed(2)}`;
                 }
             }
             
