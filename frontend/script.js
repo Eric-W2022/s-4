@@ -885,12 +885,12 @@ function updateDomesticDepth(depthData) {
     html += '</div>';
     
     html += '<div class="emotion-bar-container">';
-    html += `<div class="emotion-bar-ask" style="width: ${askPercent}%"></div>`;
-    html += `<div class="emotion-bar-bid" style="width: ${bidPercent}%"></div>`;
-    html += '</div>';
-    html += '<div class="emotion-bar-labels">';
-    html += `<span class="emotion-label-ask">卖方 ${askPercent}% <small>(强度:${emotion.askStrength})</small></span>`;
-    html += `<span class="emotion-label-bid">买方 ${bidPercent}% <small>(强度:${emotion.bidStrength})</small></span>`;
+    html += `<div class="emotion-bar-ask" style="width: ${askPercent}%">
+        <span class="emotion-bar-text">${Math.round(parseFloat(askPercent))}%</span>
+    </div>`;
+    html += `<div class="emotion-bar-bid" style="width: ${bidPercent}%">
+        <span class="emotion-bar-text">${Math.round(parseFloat(bidPercent))}%</span>
+    </div>`;
     html += '</div>';
     html += '<div class="emotion-bar-totals">';
     
