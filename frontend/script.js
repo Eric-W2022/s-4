@@ -1693,9 +1693,13 @@ let lastPriceAdvice = {
     direction: null // 交易方向：'做多' 或 '做空'
 };
 
-// 全局变量：存储预测K线数据
+// 全局变量：存储预测K线数据（1分钟）
 let predictedLondonKlines = [];
 let predictedDomesticKlines = [];
+
+// 全局变量：存储预测K线数据（15分钟）
+let predictedLondon15mKlines = [];
+let predictedDomestic15mKlines = [];
 
 // 缓存上一次的预测结果（用于传给AI参考）
 let previousLondonPrediction = null;
@@ -3124,21 +3128,36 @@ function updateChart(chart, data, infoElementId) {
     const isLondonChart = infoElementId.includes('london');
     const isDomesticChart = infoElementId.includes('domestic');
     const is1mChart = !infoElementId.includes('daily') && !infoElementId.includes('15m');
+    const is15mChart = infoElementId.includes('15m');
+    
+    // 获取最新真实K线的时间戳
+    const lastRealTimestamp = sortedData.length > 0 ? sortedData[sortedData.length - 1].t : 0;
     
     if (is1mChart) {
-        // 获取最新真实K线的时间戳
-        const lastRealTimestamp = sortedData.length > 0 ? sortedData[sortedData.length - 1].t : 0;
-        
+        // 1分钟K线预测
         if (isLondonChart && predictedLondonKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据（预测时间 <= 最新真实K线时间）
             predictedLondonKlines = predictedLondonKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedLondonKlines;
-            console.log('[K线预测] 清理后，伦敦预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，伦敦1分钟预测K线剩余:', predictedKlines.length);
         } else if (isDomesticChart && predictedDomesticKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据
             predictedDomesticKlines = predictedDomesticKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedDomesticKlines;
-            console.log('[K线预测] 清理后，国内预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，国内1分钟预测K线剩余:', predictedKlines.length);
+        }
+    } else if (is15mChart) {
+        // 15分钟K线预测
+        if (isLondonChart && predictedLondon15mKlines.length > 0) {
+            // 清理已经被真实K线覆盖的预测数据
+            predictedLondon15mKlines = predictedLondon15mKlines.filter(pred => pred.t > lastRealTimestamp);
+            predictedKlines = predictedLondon15mKlines;
+            console.log('[K线预测] 清理后，伦敦15分钟预测K线剩余:', predictedKlines.length);
+        } else if (isDomesticChart && predictedDomestic15mKlines.length > 0) {
+            // 清理已经被真实K线覆盖的预测数据
+            predictedDomestic15mKlines = predictedDomestic15mKlines.filter(pred => pred.t > lastRealTimestamp);
+            predictedKlines = predictedDomestic15mKlines;
+            console.log('[K线预测] 清理后，国内15分钟预测K线剩余:', predictedKlines.length);
         }
     }
     
@@ -3201,7 +3220,15 @@ function updateChart(chart, data, infoElementId) {
         item.h  // 最高价
     ]);
     
-    // 准备预测K线数据（只需要价格，用于显示虚线）
+    // 准备预测K线数据（完整的OHLC数据，显示为蜡烛图）
+    const predictedKlineData = predictedKlines.map(item => [
+        item.o, // 开盘价
+        item.c, // 收盘价
+        item.l, // 最低价
+        item.h  // 最高价
+    ]);
+    
+    // 准备预测K线数据（只需要价格，用于显示虚线 - 用于1分钟K线）
     const predictedPrices = predictedKlines.map(item => item.c || item.o);
     
     // 准备成交量数据（用于柱状图）
@@ -3801,8 +3828,33 @@ function updateChart(chart, data, infoElementId) {
                     symbol: 'none'
                 } : undefined
             },
-            // 预测价格线（实线连接显示）
-            ...(predictedPrices.length > 0 ? [{
+            // 预测K线蜡烛图（15分钟K线图使用）
+            ...(is15mChart && predictedKlineData.length > 0 ? [{
+                name: '预测K线',
+                type: 'candlestick',
+                data: predictedKlineData,
+                xAxisIndex: 0,
+                yAxisIndex: 0,
+                itemStyle: {
+                    color: 'rgba(239, 68, 68, 0.5)', // 上涨颜色（半透明红色）
+                    color0: 'rgba(74, 222, 128, 0.5)', // 下跌颜色（半透明绿色）
+                    borderColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor0: 'rgba(74, 222, 128, 0.7)',
+                    borderWidth: 1
+                },
+                emphasis: {
+                    itemStyle: {
+                        color: 'rgba(239, 68, 68, 0.7)',
+                        color0: 'rgba(74, 222, 128, 0.7)',
+                        borderColor: 'rgba(239, 68, 68, 0.9)',
+                        borderColor0: 'rgba(74, 222, 128, 0.9)',
+                        borderWidth: 2
+                    }
+                },
+                z: 5
+            }] : []),
+            // 预测价格线（1分钟K线图使用，实线连接显示）
+            ...(is1mChart && predictedPrices.length > 0 ? [{
                 name: '预测价格',
                 type: 'line',
                 data: (() => {
@@ -5926,6 +5978,63 @@ async function performAnalysis() {
     }
 }
 
+/**
+ * 从1分钟预测价格生成15分钟K线预测
+ * @param {Array<number>} prices - 1分钟预测价格数组（至少15个）
+ * @param {Array<Object>} baseKlineData - 基础K线数据（用于获取最后一根K线的时间戳）
+ * @param {number} count - 需要生成的15分钟K线数量（默认5根）
+ * @returns {Array<Object>} 15分钟K线预测数据
+ */
+function generate15mKlinesFromPrediction(prices, baseKlineData, count = 5) {
+    const result = [];
+    
+    if (!prices || prices.length < 15 || !baseKlineData || baseKlineData.length === 0) {
+        console.warn('[15分钟K线预测] 数据不足，无法生成预测');
+        return result;
+    }
+    
+    // 获取最后一根真实K线的时间戳
+    const lastKline = baseKlineData[baseKlineData.length - 1];
+    const lastTimestamp = lastKline.t || lastKline.time || Date.now();
+    
+    // 生成指定数量的15分钟K线
+    for (let i = 0; i < count; i++) {
+        const startIndex = i * 15; // 每根15分钟K线使用15个1分钟价格
+        const endIndex = startIndex + 15;
+        
+        // 如果价格数据不足，停止生成
+        if (endIndex > prices.length) {
+            console.warn(`[15分钟K线预测] 第${i + 1}根K线数据不足，实际只生成了${i}根K线`);
+            break;
+        }
+        
+        // 提取这15分钟的价格
+        const minutePrices = prices.slice(startIndex, endIndex);
+        
+        // 计算OHLC
+        const open = minutePrices[0]; // 开盘价：第一个价格
+        const close = minutePrices[14]; // 收盘价：最后一个价格
+        const high = Math.max(...minutePrices); // 最高价
+        const low = Math.min(...minutePrices); // 最低价
+        
+        // 计算时间戳（每根K线间隔15分钟）
+        const timestamp = lastTimestamp + (i + 1) * 15 * 60 * 1000;
+        
+        result.push({
+            t: timestamp,
+            o: open,
+            c: close,
+            h: high,
+            l: low,
+            v: 0 // 预测K线没有成交量
+        });
+    }
+    
+    console.log(`[15分钟K线预测] 成功生成${result.length}根K线，时间范围: ${new Date(result[0]?.t).toLocaleString()} - ${new Date(result[result.length - 1]?.t).toLocaleString()}`);
+    
+    return result;
+}
+
 // 后台执行K线预测（不阻塞主流程）
 async function predictKlinesInBackground() {
     try {
@@ -5993,16 +6102,68 @@ async function predictKlinesInBackground() {
             console.log(`[K线预测后台任务] 价格范围: ${Math.min(...domesticPrediction.prices)} - ${Math.max(...domesticPrediction.prices)}`);
         }
         
-        // 更新图表以显示预测K线（只更新1分钟图）
+        // 生成15分钟K线预测（基于1分钟K线预测数据）
+        console.log('[K线预测后台任务] ========== 开始生成15分钟K线预测 ==========');
+        if (londonPrediction && londonPrediction.prices && londonPrediction.prices.length >= 15) {
+            console.log(`[K线预测后台任务] 伦敦市场有${londonPrediction.prices.length}个1分钟预测价格，可生成15分钟K线`);
+            predictedLondon15mKlines = generate15mKlinesFromPrediction(
+                londonPrediction.prices,
+                currentLondonKlineData,
+                5 // 预测5根15分钟K线
+            );
+            console.log(`[K线预测后台任务] ✅ 伦敦15分钟K线预测完成，生成${predictedLondon15mKlines.length}根K线`);
+            if (predictedLondon15mKlines.length > 0) {
+                console.log(`[K线预测后台任务] 伦敦15分钟预测详情: 第1根[O:${predictedLondon15mKlines[0].o.toFixed(3)}, C:${predictedLondon15mKlines[0].c.toFixed(3)}, H:${predictedLondon15mKlines[0].h.toFixed(3)}, L:${predictedLondon15mKlines[0].l.toFixed(3)}]`);
+            }
+        } else {
+            console.warn(`[K线预测后台任务] ⚠️ 伦敦市场预测价格不足，无法生成15分钟K线（需要至少15个价格点）`);
+        }
+        
+        if (domesticPrediction && domesticPrediction.prices && domesticPrediction.prices.length >= 15) {
+            console.log(`[K线预测后台任务] 国内市场有${domesticPrediction.prices.length}个1分钟预测价格，可生成15分钟K线`);
+            predictedDomestic15mKlines = generate15mKlinesFromPrediction(
+                domesticPrediction.prices,
+                currentDomesticKlineData,
+                5 // 预测5根15分钟K线
+            );
+            console.log(`[K线预测后台任务] ✅ 国内15分钟K线预测完成，生成${predictedDomestic15mKlines.length}根K线`);
+            if (predictedDomestic15mKlines.length > 0) {
+                console.log(`[K线预测后台任务] 国内15分钟预测详情: 第1根[O:${Math.round(predictedDomestic15mKlines[0].o)}, C:${Math.round(predictedDomestic15mKlines[0].c)}, H:${Math.round(predictedDomestic15mKlines[0].h)}, L:${Math.round(predictedDomestic15mKlines[0].l)}]`);
+            }
+        } else {
+            console.warn(`[K线预测后台任务] ⚠️ 国内市场预测价格不足，无法生成15分钟K线（需要至少15个价格点）`);
+        }
+        console.log('[K线预测后台任务] ========== 15分钟K线预测完成 ==========');
+        
+        // 更新图表以显示预测K线（1分钟图和15分钟图）
         // 不自动调整dataZoom，避免图表跳动，让用户手动滑动查看
         if (londonChart && londonPrediction) {
-            console.log('[K线预测后台任务] 更新伦敦图表以显示预测K线（50个点）');
+            console.log('[K线预测后台任务] 更新伦敦1分钟图表以显示预测K线（50个点）');
             updateChart(londonChart, currentLondonKlineData, 'london-info');
         }
         
         if (domesticChart && domesticPrediction) {
-            console.log('[K线预测后台任务] 更新国内图表以显示预测K线（50个点）');
+            console.log('[K线预测后台任务] 更新国内1分钟图表以显示预测K线（50个点）');
             updateChart(domesticChart, currentDomesticKlineData, 'domestic-info');
+        }
+        
+        // 更新15分钟K线图表
+        if (london15mChart && predictedLondon15mKlines.length > 0) {
+            console.log('[K线预测后台任务] 更新伦敦15分钟图表以显示预测K线（5根）');
+            // 需要获取当前的15分钟K线数据
+            const london15mData = await fetchKlineData(API_CONFIG.londonSymbol, 'm15', 90);
+            if (london15mData && london15mData.length > 0) {
+                updateChart(london15mChart, london15mData, 'london-15m-info');
+            }
+        }
+        
+        if (domestic15mChart && predictedDomestic15mKlines.length > 0) {
+            console.log('[K线预测后台任务] 更新国内15分钟图表以显示预测K线（5根）');
+            // 需要获取当前的15分钟K线数据
+            const domestic15mData = await fetchKlineData(API_CONFIG.domesticSymbol, 'm15', 90);
+            if (domestic15mData && domestic15mData.length > 0) {
+                updateChart(domestic15mChart, domestic15mData, 'domestic-15m-info');
+            }
         }
         
         console.log('[K线预测后台任务] 执行完成');
@@ -6069,18 +6230,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初始化时获取一次K线数据并自动触发AI分析
     setTimeout(async () => {
         try {
-            const [domesticData, londonData] = await Promise.all([
+            // 获取1分钟和15分钟K线数据
+            const [domesticData, londonData, domestic15mData, london15mData] = await Promise.all([
                 fetchKlineData(API_CONFIG.domesticSymbol),
-                fetchKlineData(API_CONFIG.londonSymbol)
+                fetchKlineData(API_CONFIG.londonSymbol),
+                fetchKlineData(API_CONFIG.domesticSymbol, 'm15', 90),
+                fetchKlineData(API_CONFIG.londonSymbol, 'm15', 90)
             ]);
+            
             currentDomesticKlineData = domesticData;
             currentLondonKlineData = londonData;
-            console.log('K线数据已缓存，可用于分析');
+            console.log('1分钟K线数据已缓存，可用于分析');
+            console.log('15分钟K线数据已获取，准备预测');
             
             // 自动触发AI分析（只有在没有手动触发过的情况下）
             if ((domesticData && domesticData.length > 0) || (londonData && londonData.length > 0)) {
                 if (!isAnalyzing) {
-                    console.log('[自动触发] 页面加载完成，自动触发AI分析');
+                    console.log('[自动触发] 页面加载完成，自动触发AI分析和K线预测');
                     performAnalysis();
                 } else {
                     console.log('[自动触发] 已有分析在进行中，跳过自动触发');
