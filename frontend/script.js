@@ -3464,19 +3464,16 @@ function updateChart(chart, data, infoElementId, skipTradingStrategyUpdate = fal
     }
     
     // 准备K线数据（真实K线）
-    let klineData = sortedData.map(item => [
-        item.o, // 开盘价
-        item.c, // 收盘价
-        item.l, // 最低价
-        item.h  // 最高价
-    ]);
+    let klineData = sortedData.map(item => {
+        return [
+            parseFloat(item.o) || 0, // 开盘价
+            parseFloat(item.c) || 0, // 收盘价
+            parseFloat(item.l) || 0, // 最低价
+            parseFloat(item.h) || 0  // 最高价
+        ];
+    });
     
-    // 为预测K线位置添加null值，使K线数据长度与时间轴一致
-    if (finalPredictedKlines.length > 0) {
-        for (let i = 0; i < finalPredictedKlines.length; i++) {
-            klineData.push(null); // 填充null，ECharts不会显示这些位置的K线
-        }
-    }
+    console.log(`[K线数据准备] 真实K线: ${klineData.length}个，预测K线: ${finalPredictedKlineData.length}个`);
     
     // 使用最终验证后的数据
     const predictedKlineData = finalPredictedKlineData;
@@ -4014,70 +4011,54 @@ function updateChart(chart, data, infoElementId, skipTradingStrategyUpdate = fal
                     symbol: 'none'
                 } : undefined
             },
-            // 预测K线蜡烛图（15分钟K线图使用）
+            // 预测价格线（15分钟K线图使用，显示预测价格）
             ...(is15mChart && predictedKlineData.length > 0 ? [{
-                name: '预测K线',
-                type: 'candlestick',
+                name: '预测价格',
+                type: 'line',
                 data: (() => {
-                    // 验证并准备数据
-                    const validData = predictedKlineData.filter(item => {
-                        // 最后验证：确保每个OHLC数据都是有效的
-                        if (!Array.isArray(item) || item.length !== 4) {
-                            console.warn('[预测K线] 跳过非法数据格式:', item);
-                            return false;
-                        }
-                        const isValid = item.every(v => v !== null && v !== undefined && !isNaN(v) && v > 0);
-                        if (!isValid) {
-                            console.warn('[预测K线] 跳过包含无效值的数据:', item);
-                        }
-                        return isValid;
+                    // 验证并准备数据，提取收盘价作为预测值
+                    const validPrices = predictedKlineData
+                        .filter(item => {
+                            if (!Array.isArray(item) || item.length !== 4) {
+                                return false;
+                            }
+                            return item.every(v => v !== null && v !== undefined && !isNaN(v) && v > 0);
+                        })
+                        .map(ohlc => ohlc[1]); // 取收盘价
+                    
+                    // 构建坐标数据：[x索引, 价格]
+                    const result = validPrices.map((price, index) => {
+                        return [sortedData.length + index, price];
                     });
                     
-                    // 构建完整长度的数组：前面填null，后面是预测K线
-                    // 确保数组总长度 = sortedData.length + validData.length
-                    const result = [];
-                    
-                    // 前面填充sortedData.length个null（占位真实K线位置）
-                    for (let i = 0; i < sortedData.length; i++) {
-                        result.push(null);
-                    }
-                    
-                    // 后面添加预测K线数据
-                    validData.forEach(item => {
-                        result.push(item);
-                    });
-                    
-                    console.log(`[预测K线series] 构建数据: ${sortedData.length}个null + ${validData.length}个预测K线 = ${result.length}个（期望长度=${sortedData.length + validData.length}）`);
-                    
-                    // 再次检查长度
-                    if (result.length !== sortedData.length + validData.length) {
-                        console.error('[预测K线series] 数据长度错误!', {
-                            actualLength: result.length,
-                            expectedLength: sortedData.length + validData.length
-                        });
-                    }
-                    
+                    console.log(`[预测价格线15m] 预测价格数量: ${validPrices.length}，起始X索引: ${sortedData.length}`);
                     return result;
                 })(),
                 xAxisIndex: 0,
                 yAxisIndex: 0,
+                smooth: false,
+                showSymbol: true,
+                symbol: 'circle',
+                symbolSize: 6,
+                lineStyle: {
+                    color: 'rgba(156, 163, 175, 0.9)',
+                    width: 2,
+                    type: 'solid'
+                },
                 itemStyle: {
-                    color: 'rgba(239, 68, 68, 0.5)', // 上涨颜色（半透明红色）
-                    color0: 'rgba(74, 222, 128, 0.5)', // 下跌颜色（半透明绿色）
-                    borderColor: 'rgba(239, 68, 68, 0.7)',
-                    borderColor0: 'rgba(74, 222, 128, 0.7)',
+                    color: 'rgba(156, 163, 175, 0.9)',
+                    borderColor: '#ffffff',
                     borderWidth: 1
                 },
                 emphasis: {
+                    lineStyle: {
+                        width: 3
+                    },
                     itemStyle: {
-                        color: 'rgba(239, 68, 68, 0.7)',
-                        color0: 'rgba(74, 222, 128, 0.7)',
-                        borderColor: 'rgba(239, 68, 68, 0.9)',
-                        borderColor0: 'rgba(74, 222, 128, 0.9)',
-                        borderWidth: 2
+                        symbolSize: 8
                     }
                 },
-                z: 5
+                z: 10
             }] : []),
             // 预测价格线（1分钟K线图使用，实线连接显示）
             ...(is1mChart && predictedPrices.length > 0 ? [{
@@ -4317,12 +4298,15 @@ function updateChart(chart, data, infoElementId, skipTradingStrategyUpdate = fal
         console.log(`[DataZoom] 1分钟K线 - 总数据: ${allTimeData.length}, 缩放状态: ${currentStart}% - ${currentEnd}%`);
     }
     
-    // 最终数据验证：确保所有数组长度一致
+    // 最终数据验证：布林带应该与X轴长度一致
     const expectedLength = allTimeData.length;
+    
+    console.log(`[数据长度检查] X轴:${allTimeData.length}, 主K线:${klineData.length}, 布林上:${bollingerBands.upper.length}, 布林中:${bollingerBands.middle.length}, 布林下:${bollingerBands.lower.length}`);
+    
     if (bollingerBands.upper.length !== expectedLength || 
         bollingerBands.middle.length !== expectedLength || 
         bollingerBands.lower.length !== expectedLength) {
-        console.error('[图表更新] 数据长度不一致!', {
+        console.warn('[图表更新] 布林带长度与X轴不一致，正在调整...', {
             expectedLength,
             upperLength: bollingerBands.upper.length,
             middleLength: bollingerBands.middle.length,
@@ -4332,6 +4316,11 @@ function updateChart(chart, data, infoElementId, skipTradingStrategyUpdate = fal
         while (bollingerBands.upper.length < expectedLength) bollingerBands.upper.push(null);
         while (bollingerBands.middle.length < expectedLength) bollingerBands.middle.push(null);
         while (bollingerBands.lower.length < expectedLength) bollingerBands.lower.push(null);
+        
+        // 如果太长，截断
+        if (bollingerBands.upper.length > expectedLength) bollingerBands.upper = bollingerBands.upper.slice(0, expectedLength);
+        if (bollingerBands.middle.length > expectedLength) bollingerBands.middle = bollingerBands.middle.slice(0, expectedLength);
+        if (bollingerBands.lower.length > expectedLength) bollingerBands.lower = bollingerBands.lower.slice(0, expectedLength);
     }
     
     // 清理布林带数据中的无效值，转换为标准格式
