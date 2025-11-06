@@ -926,14 +926,55 @@ function updateDomesticDepth(depthData) {
     html += '<div class="extended-data-title">实时市场数据</div>';
     html += '<div class="extended-data-grid">';
     
-    // 第一行：价格信息
-    html += '<div class="extended-data-row">';
+    // 准备所有数据
     const lastPrice = depthData.last_price ? parseFloat(depthData.last_price) : 0;
     const open = depthData.open ? parseFloat(depthData.open) : 0;
     const highest = depthData.highest ? parseFloat(depthData.highest) : 0;
     const lowest = depthData.lowest ? parseFloat(depthData.lowest) : 0;
     const average = depthData.average ? parseFloat(depthData.average) : 0;
+    const change = depthData.change ? parseFloat(depthData.change) : 0;
+    const changePercent = depthData.change_percent ? parseFloat(depthData.change_percent) : 0;
+    const changeClass = change >= 0 ? 'price-up' : 'price-down';
+    const preSettlement = depthData.pre_settlement ? parseFloat(depthData.pre_settlement) : 0;
+    const preClose = depthData.pre_close ? parseFloat(depthData.pre_close) : 0;
+    const close = depthData.close ? parseFloat(depthData.close) : 0;
+    const settlement = depthData.settlement ? parseFloat(depthData.settlement) : 0;
+    const volume = depthData.volume ? parseInt(depthData.volume) : 0;
+    const amount = depthData.amount ? parseFloat(depthData.amount) : 0;
+    const openInterest = depthData.open_interest ? parseInt(depthData.open_interest) : 0;
+    const preOpenInterest = depthData.pre_open_interest ? parseInt(depthData.pre_open_interest) : 0;
+    const upperLimit = depthData.upper_limit ? parseFloat(depthData.upper_limit) : 0;
+    const lowerLimit = depthData.lower_limit ? parseFloat(depthData.lower_limit) : 0;
+    const instrumentName = depthData.instrument_name || '-';
+    const priceTick = depthData.price_tick ? parseFloat(depthData.price_tick) : 0;
+    const volumeMultiple = depthData.volume_multiple ? parseInt(depthData.volume_multiple) : 0;
+    const datetime = depthData.datetime || '-';
     
+    // 格式化成交额
+    let amountStr = '-';
+    if (amount > 0) {
+        const amountWan = amount / 10000;
+        if (amountWan >= 10000) {
+            amountStr = (amountWan / 10000).toFixed(2) + '亿';
+        } else {
+            amountStr = amountWan.toFixed(2) + '万';
+        }
+    }
+    
+    // 计算持仓量变化
+    let openInterestChange = '';
+    if (openInterest > 0 && preOpenInterest > 0) {
+        const oiChange = openInterest - preOpenInterest;
+        const oiChangePercent = ((oiChange / preOpenInterest) * 100).toFixed(2);
+        if (oiChange !== 0) {
+            const oiChangeClass = oiChange > 0 ? 'price-up' : 'price-down';
+            const oiChangeSign = oiChange > 0 ? '+' : '';
+            openInterestChange = ` <span class="${oiChangeClass}" style="font-size: 9px;">(${oiChangeSign}${oiChange.toLocaleString()})</span>`;
+        }
+    }
+    
+    // 第一行：价格信息（5列）
+    html += '<div class="extended-data-row">';
     html += `<div class="extended-data-item">
         <span class="extended-label">最新价</span>
         <span class="extended-value">${lastPrice > 0 ? Math.round(lastPrice) : '-'}</span>
@@ -950,15 +991,14 @@ function updateDomesticDepth(depthData) {
         <span class="extended-label">最低</span>
         <span class="extended-value low-price">${lowest > 0 ? Math.round(lowest) : '-'}</span>
     </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">均价</span>
+        <span class="extended-value">${average > 0 ? Math.round(average) : '-'}</span>
+    </div>`;
     html += '</div>';
     
-    // 第二行：涨跌和均价
+    // 第二行：涨跌和历史价格（5列）
     html += '<div class="extended-data-row">';
-    const change = depthData.change ? parseFloat(depthData.change) : 0;
-    const changePercent = depthData.change_percent ? parseFloat(depthData.change_percent) : 0;
-    const changeClass = change >= 0 ? 'price-up' : 'price-down';
-    const changeIcon = change >= 0 ? '↑' : '↓';
-    
     html += `<div class="extended-data-item">
         <span class="extended-label">涨跌</span>
         <span class="extended-value ${changeClass}">${change !== 0 ? (change > 0 ? '+' : '') + change.toFixed(0) : '-'}</span>
@@ -968,45 +1008,21 @@ function updateDomesticDepth(depthData) {
         <span class="extended-value ${changeClass}">${changePercent !== 0 ? (changePercent > 0 ? '+' : '') + changePercent.toFixed(2) + '%' : '-'}</span>
     </div>`;
     html += `<div class="extended-data-item">
-        <span class="extended-label">均价</span>
-        <span class="extended-value">${average > 0 ? Math.round(average) : '-'}</span>
+        <span class="extended-label">昨结算</span>
+        <span class="extended-value">${preSettlement > 0 ? Math.round(preSettlement) : '-'}</span>
     </div>`;
     html += `<div class="extended-data-item">
-        <span class="extended-label">昨结算</span>
-        <span class="extended-value">${depthData.pre_settlement ? Math.round(parseFloat(depthData.pre_settlement)) : '-'}</span>
+        <span class="extended-label">昨收盘</span>
+        <span class="extended-value">${preClose > 0 ? Math.round(preClose) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">收盘价</span>
+        <span class="extended-value">${close > 0 ? Math.round(close) : '-'}</span>
     </div>`;
     html += '</div>';
     
-    // 第三行：成交量和持仓量
+    // 第三行：成交和持仓（5列）
     html += '<div class="extended-data-row">';
-    const volume = depthData.volume ? parseInt(depthData.volume) : 0;
-    const amount = depthData.amount ? parseFloat(depthData.amount) : 0;
-    const openInterest = depthData.open_interest ? parseInt(depthData.open_interest) : 0;
-    const preOpenInterest = depthData.pre_open_interest ? parseInt(depthData.pre_open_interest) : 0;
-    
-    // 格式化成交额（万元）
-    let amountStr = '-';
-    if (amount > 0) {
-        const amountWan = amount / 10000;
-        if (amountWan >= 10000) {
-            amountStr = (amountWan / 10000).toFixed(2) + '亿';
-        } else {
-            amountStr = amountWan.toFixed(2) + '万';
-        }
-    }
-    
-    // 计算持仓量变化
-    let openInterestChange = '';
-    if (openInterest > 0 && preOpenInterest > 0) {
-        const change = openInterest - preOpenInterest;
-        const changePercent = ((change / preOpenInterest) * 100).toFixed(2);
-        if (change !== 0) {
-            const changeClass = change > 0 ? 'price-up' : 'price-down';
-            const changeSign = change > 0 ? '+' : '';
-            openInterestChange = ` <span class="${changeClass}" style="font-size: 10px;">(${changeSign}${change.toLocaleString()}, ${changeSign}${changePercent}%)</span>`;
-        }
-    }
-    
     html += `<div class="extended-data-item">
         <span class="extended-label">成交量</span>
         <span class="extended-value">${volume > 0 ? volume.toLocaleString() : '-'}</span>
@@ -1023,44 +1039,25 @@ function updateDomesticDepth(depthData) {
         <span class="extended-label">昨持仓</span>
         <span class="extended-value">${preOpenInterest > 0 ? preOpenInterest.toLocaleString() : '-'}</span>
     </div>`;
-    html += '</div>';
-    
-    // 第四行：收盘价、结算价、涨跌停
-    html += '<div class="extended-data-row">';
-    const close = depthData.close ? parseFloat(depthData.close) : 0;
-    const preClose = depthData.pre_close ? parseFloat(depthData.pre_close) : 0;
-    const settlement = depthData.settlement ? parseFloat(depthData.settlement) : 0;
-    const upperLimit = depthData.upper_limit ? parseFloat(depthData.upper_limit) : 0;
-    const lowerLimit = depthData.lower_limit ? parseFloat(depthData.lower_limit) : 0;
-    
-    html += `<div class="extended-data-item">
-        <span class="extended-label">收盘价</span>
-        <span class="extended-value">${close > 0 ? Math.round(close) : '-'}</span>
-    </div>`;
-    html += `<div class="extended-data-item">
-        <span class="extended-label">昨收盘</span>
-        <span class="extended-value">${preClose > 0 ? Math.round(preClose) : '-'}</span>
-    </div>`;
     html += `<div class="extended-data-item">
         <span class="extended-label">结算价</span>
         <span class="extended-value">${settlement > 0 ? Math.round(settlement) : '-'}</span>
     </div>`;
-    html += `<div class="extended-data-item">
-        <span class="extended-label">涨停/跌停</span>
-        <span class="extended-value" style="font-size: 11px;">${upperLimit > 0 ? Math.round(upperLimit) : '-'}/${lowerLimit > 0 ? Math.round(lowerLimit) : '-'}</span>
-    </div>`;
     html += '</div>';
     
-    // 第五行：合约信息
+    // 第四行：涨跌停和合约信息（5列）
     html += '<div class="extended-data-row">';
-    const instrumentName = depthData.instrument_name || '-';
-    const priceTick = depthData.price_tick ? parseFloat(depthData.price_tick) : 0;
-    const volumeMultiple = depthData.volume_multiple ? parseInt(depthData.volume_multiple) : 0;
-    const datetime = depthData.datetime || '-';
-    
     html += `<div class="extended-data-item">
-        <span class="extended-label">合约名称</span>
-        <span class="extended-value" style="font-size: 11px;">${instrumentName}</span>
+        <span class="extended-label">涨停价</span>
+        <span class="extended-value">${upperLimit > 0 ? Math.round(upperLimit) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">跌停价</span>
+        <span class="extended-value">${lowerLimit > 0 ? Math.round(lowerLimit) : '-'}</span>
+    </div>`;
+    html += `<div class="extended-data-item">
+        <span class="extended-label">合约</span>
+        <span class="extended-value" style="font-size: 10px;">${instrumentName}</span>
     </div>`;
     html += `<div class="extended-data-item">
         <span class="extended-label">最小变动</span>
@@ -1068,11 +1065,15 @@ function updateDomesticDepth(depthData) {
     </div>`;
     html += `<div class="extended-data-item">
         <span class="extended-label">合约乘数</span>
-        <span class="extended-value">${volumeMultiple > 0 ? volumeMultiple + 'kg/手' : '-'}</span>
+        <span class="extended-value" style="font-size: 10px;">${volumeMultiple > 0 ? volumeMultiple + 'kg/手' : '-'}</span>
     </div>`;
-    html += `<div class="extended-data-item">
+    html += '</div>';
+    
+    // 第五行：行情时间（跨5列居中）
+    html += '<div class="extended-data-row">';
+    html += `<div class="extended-data-item" style="grid-column: span 5; text-align: center;">
         <span class="extended-label">行情时间</span>
-        <span class="extended-value" style="font-size: 10px;">${datetime !== '-' ? datetime.substring(11, 19) : '-'}</span>
+        <span class="extended-value" style="font-size: 10px;">${datetime !== '-' ? datetime.substring(0, 19).replace('T', ' ') : '-'}</span>
     </div>`;
     html += '</div>';
     
