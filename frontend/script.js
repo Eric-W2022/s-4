@@ -961,17 +961,18 @@ function updateDomesticDepth(depthData) {
         }
     }
     
-    // 计算持仓量变化
+    // 计算持仓量变化（数据仍然计算，用于传给AI，但不在界面上显示）
     let openInterestChange = '';
-    if (openInterest > 0 && preOpenInterest > 0) {
-        const oiChange = openInterest - preOpenInterest;
-        const oiChangePercent = ((oiChange / preOpenInterest) * 100).toFixed(2);
-        if (oiChange !== 0) {
-            const oiChangeClass = oiChange > 0 ? 'price-up' : 'price-down';
-            const oiChangeSign = oiChange > 0 ? '+' : '';
-            openInterestChange = ` <span class="${oiChangeClass}" style="font-size: 9px;">(${oiChangeSign}${oiChange.toLocaleString()})</span>`;
-        }
-    }
+    // 保留计算逻辑供AI使用，但不显示在界面上
+    // if (openInterest > 0 && preOpenInterest > 0) {
+    //     const oiChange = openInterest - preOpenInterest;
+    //     const oiChangePercent = ((oiChange / preOpenInterest) * 100).toFixed(2);
+    //     if (oiChange !== 0) {
+    //         const oiChangeClass = oiChange > 0 ? 'price-up' : 'price-down';
+    //         const oiChangeSign = oiChange > 0 ? '+' : '';
+    //         openInterestChange = ` <span class="${oiChangeClass}" style="font-size: 9px;">(${oiChangeSign}${oiChange.toLocaleString()})</span>`;
+    //     }
+    // }
     
     // 第一行：价格信息（5列）
     html += '<div class="extended-data-row">';
@@ -2236,11 +2237,68 @@ function renderStrategyFromAI(displayStrategy) {
     const floatingPnL = calculateFloatingPnL(domesticLastTradePrice);
     const hasPosition = currentPosition.direction && currentPosition.lots > 0;
     
-    // 操作建议（显示在上面）
+    // 价格建议（用于判断方向）
+    const priceToShow = {
+        entryPrice: displayStrategy.entryPrice !== null && displayStrategy.entryPrice !== undefined ? displayStrategy.entryPrice : lastPriceAdvice.entryPrice,
+        stopLoss: displayStrategy.stopLoss !== null && displayStrategy.stopLoss !== undefined ? displayStrategy.stopLoss : lastPriceAdvice.stopLoss,
+        takeProfit: displayStrategy.takeProfit !== null && displayStrategy.takeProfit !== undefined ? displayStrategy.takeProfit : lastPriceAdvice.takeProfit,
+        lots: displayStrategy.lots !== null && displayStrategy.lots !== undefined ? displayStrategy.lots : lastPriceAdvice.lots
+    };
+    
+    // 确定方向：优先使用strategy中的direction，如果没有则根据action和价格关系判断
+    let direction = displayStrategy.direction;
+    let directionColor = '#9ca3af';
+    if (!direction) {
+        // 如果没有方向信息，根据action和价格关系判断
+        if (displayStrategy.action === '买多') {
+            direction = '买多';
+            directionColor = '#ef4444'; // 红色（带"多"字）
+        } else if (displayStrategy.action === '卖空') {
+            direction = '卖空';
+            directionColor = '#4ade80'; // 绿色（带"空"字）
+        } else if (displayStrategy.action === '观望' && priceToShow.entryPrice && priceToShow.stopLoss) {
+            // 观望时，根据价格关系判断建议方向
+            if (priceToShow.entryPrice > priceToShow.stopLoss) {
+                direction = '买多';
+                directionColor = '#ef4444';
+            } else if (priceToShow.entryPrice < priceToShow.stopLoss) {
+                direction = '卖空';
+                directionColor = '#4ade80';
+            }
+        }
+    } else {
+        // 如果有方向信息，设置对应的颜色
+        // 统一将"做多"/"多"转换为"买多"，"做空"/"空"转换为"卖空"
+        if (direction === '做多' || direction.includes('多')) {
+            direction = '买多';
+            directionColor = '#ef4444'; // 红色（带"多"字）
+        } else if (direction === '做空' || direction.includes('空')) {
+            direction = '卖空';
+            directionColor = '#4ade80'; // 绿色（带"空"字）
+        }
+    }
+    
+    // 如果交易方向和操作建议一致，不显示交易方向
+    const showDirection = direction && direction !== displayStrategy.action;
+    
+    // 操作建议和交易方向合并显示在一行
     html += `<div class="strategy-main-action" style="text-align: center; margin-bottom: 20px; padding: 15px; background: rgba(19, 23, 43, 0.8); border-radius: 8px; border: 2px solid ${displayStrategy.actionColor};">
-        <div style="font-size: 13px; color: #9ca3af; margin-bottom: 6px;">操作建议</div>
-        <div style="font-size: 28px; font-weight: 700; color: ${displayStrategy.actionColor}; margin-bottom: 6px;">
-            ${displayStrategy.action}
+        <div style="font-size: 13px; color: #9ca3af; margin-bottom: 8px;">${showDirection ? '操作建议与方向' : '操作建议'}</div>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 8px;">
+            <div>
+                ${showDirection ? `<div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">操作建议</div>` : ''}
+                <div style="font-size: 26px; font-weight: 700; color: ${displayStrategy.actionColor};">
+                    ${displayStrategy.action}
+                </div>
+            </div>
+            ${showDirection ? `
+            <div style="border-left: 2px solid #1e2548; padding-left: 16px;">
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">交易方向</div>
+                <div style="font-size: 26px; font-weight: 700; color: ${directionColor};">
+                    ${direction}
+                </div>
+            </div>
+            ` : ''}
         </div>
         <div style="font-size: 13px; color: #9ca3af; margin-bottom: 0;">
             信心度: <span style="color: ${displayStrategy.confidence >= 70 ? '#ef4444' : displayStrategy.confidence >= 50 ? '#fbbf24' : '#9ca3af'}; font-weight: 600;">${displayStrategy.confidence}%</span>
@@ -2259,58 +2317,13 @@ function renderStrategyFromAI(displayStrategy) {
         ` : ''}
     </div>`;
     
-    // 价格建议（显示在操作建议下面，如果有价格信息，优先使用新价格，否则使用保存的价格）
-    const priceToShow = {
-        entryPrice: displayStrategy.entryPrice !== null && displayStrategy.entryPrice !== undefined ? displayStrategy.entryPrice : lastPriceAdvice.entryPrice,
-        stopLoss: displayStrategy.stopLoss !== null && displayStrategy.stopLoss !== undefined ? displayStrategy.stopLoss : lastPriceAdvice.stopLoss,
-        takeProfit: displayStrategy.takeProfit !== null && displayStrategy.takeProfit !== undefined ? displayStrategy.takeProfit : lastPriceAdvice.takeProfit,
-        lots: displayStrategy.lots !== null && displayStrategy.lots !== undefined ? displayStrategy.lots : lastPriceAdvice.lots
-    };
-    
-    // 确定方向：优先使用strategy中的direction，如果没有则根据action和价格关系判断
-    let direction = displayStrategy.direction;
-    let directionColor = '#9ca3af';
-    if (!direction) {
-        // 如果没有方向信息，根据action和价格关系判断
-        if (displayStrategy.action === '买多') {
-            direction = '做多';
-            directionColor = '#ef4444'; // 红色（带"多"字）
-        } else if (displayStrategy.action === '卖空') {
-            direction = '做空';
-            directionColor = '#4ade80'; // 绿色（带"空"字）
-        } else if (displayStrategy.action === '观望' && priceToShow.entryPrice && priceToShow.stopLoss) {
-            // 观望时，根据价格关系判断建议方向
-            // 做多：entryPrice > stopLoss（止损低于开仓价）
-            // 做空：entryPrice < stopLoss（止损高于开仓价）
-            if (priceToShow.entryPrice > priceToShow.stopLoss) {
-                direction = '做多';
-                directionColor = '#ef4444'; // 红色（带"多"字）
-            } else if (priceToShow.entryPrice < priceToShow.stopLoss) {
-                direction = '做空';
-                directionColor = '#4ade80'; // 绿色（带"空"字）
-            }
-        }
-    } else {
-        // 如果有方向信息，设置对应的颜色
-        if (direction === '做多' || direction.includes('多')) {
-            directionColor = '#ef4444'; // 红色（带"多"字）
-        } else if (direction === '做空' || direction.includes('空')) {
-            directionColor = '#4ade80'; // 绿色（带"空"字）
-        }
-    }
-    
+    // 价格建议（显示在操作建议下面）
     if (priceToShow.entryPrice || priceToShow.stopLoss || priceToShow.takeProfit || priceToShow.lots) {
         html += `<div class="strategy-section" style="margin-bottom: 20px;">
             <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
                 价格建议
             </div>
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                ${direction ? `
-                <div style="text-align: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1e2548;">
-                    <div style="color: #9ca3af; margin-bottom: 4px; font-size: 13px;">交易方向</div>
-                    <div style="color: ${directionColor}; font-weight: 700; font-size: 18px;">${direction}</div>
-                </div>
-                ` : ''}
                 <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 16px; font-size: 13px;">
                     ${priceToShow.entryPrice ? `
                     <div style="text-align: center; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
@@ -3650,18 +3663,18 @@ function updateChart(chart, data, infoElementId) {
                 left: '8%',
                 right: '4%',
                 top: '6%',
-                // K线图占75%，成交量占25%（不再需要为滑动条预留空间）
-                height: '75%',
-                bottom: '25%',
+                // K线图占70%，成交量占20%，滑动条占10%
+                height: '70%',
+                bottom: '30%',
                 containLabel: true
             },
             // 成交量grid（下方）
             {
                 left: '8%',
                 right: '4%',
-                top: '75%', // 从K线图下方开始
-                height: '20%', // 成交量区域高度
-                bottom: '5%',
+                top: '70%', // 从K线图下方开始
+                height: '18%', // 成交量区域高度
+                bottom: '12%', // 为滑动条留出空间
                 containLabel: true
             }
         ],
@@ -3893,20 +3906,81 @@ function updateChart(chart, data, infoElementId) {
     // 1分钟K线图表不使用dataZoom，显示所有数据点
     // 如果需要查看历史数据，可以使用鼠标滚轮缩放或者框选缩放
     if (!infoElementId.includes('daily')) {
-        // 添加inside类型的dataZoom，允许鼠标滚轮缩放和拖拽平移
+        // 获取当前图表的dataZoom状态，如果存在的话
+        let currentStart = 0;
+        let currentEnd = 100;
+        
+        try {
+            const currentOption = chart.getOption();
+            if (currentOption && currentOption.dataZoom && currentOption.dataZoom.length > 0) {
+                // 保留当前的缩放状态
+                currentStart = currentOption.dataZoom[0].start || 0;
+                currentEnd = currentOption.dataZoom[0].end || 100;
+                console.log(`[DataZoom] 保持当前缩放状态: start=${currentStart}, end=${currentEnd}`);
+            }
+        } catch (e) {
+            console.warn('[DataZoom] 获取当前缩放状态失败，使用默认值:', e);
+        }
+        
+        // 添加dataZoom组件：inside（鼠标滚轮）+ slider（滑动条）
         option.dataZoom = [
             {
                 type: 'inside',
                 xAxisIndex: [0, 1], // 同时控制K线图和成交量图的X轴
-                start: 0, // 显示所有数据
-                end: 100,
+                start: currentStart, // 保持当前缩放状态
+                end: currentEnd,
                 zoomOnMouseWheel: true, // 允许鼠标滚轮缩放
                 moveOnMouseMove: false, // 按住鼠标移动时平移
                 moveOnMouseWheel: false // 不使用滚轮平移
+            },
+            {
+                type: 'slider',
+                xAxisIndex: [0, 1], // 同时控制K线图和成交量图的X轴
+                start: currentStart, // 保持当前缩放状态
+                end: currentEnd,
+                bottom: '2%', // 滑动条位置
+                height: 20, // 滑动条高度
+                handleSize: '100%', // 手柄大小
+                handleStyle: {
+                    color: '#667eea',
+                    borderColor: '#667eea'
+                },
+                textStyle: {
+                    color: '#9ca3af',
+                    fontSize: 11
+                },
+                borderColor: '#1e2548',
+                fillerColor: 'rgba(102, 126, 234, 0.15)',
+                backgroundColor: '#13172b',
+                dataBackground: {
+                    lineStyle: {
+                        color: '#667eea',
+                        width: 1
+                    },
+                    areaStyle: {
+                        color: 'rgba(102, 126, 234, 0.2)'
+                    }
+                },
+                selectedDataBackground: {
+                    lineStyle: {
+                        color: '#667eea',
+                        width: 1.5
+                    },
+                    areaStyle: {
+                        color: 'rgba(102, 126, 234, 0.3)'
+                    }
+                },
+                moveHandleSize: 5,
+                emphasis: {
+                    handleStyle: {
+                        borderColor: '#764ba2',
+                        color: '#764ba2'
+                    }
+                }
             }
         ];
         
-        console.log(`[DataZoom] 1分钟K线 - 显示所有数据点，总数据: ${allTimeData.length}`);
+        console.log(`[DataZoom] 1分钟K线 - 总数据: ${allTimeData.length}, 缩放状态: ${currentStart}% - ${currentEnd}%`);
     }
     
     chart.setOption(option);
