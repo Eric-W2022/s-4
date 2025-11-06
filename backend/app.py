@@ -3,7 +3,7 @@ FastAPI 后端服务
 提供前端页面和AllTick API数据接口
 同时支持TqSdk获取国内期货数据
 """
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 import asyncio
 import time
+import json
 
 # 导入共享配置和工具函数
 from .config.settings import (
@@ -55,6 +56,95 @@ app = FastAPI(title="白银K线监控", version="1.0.0", lifespan=lifespan)
 
 # 注册路由
 app.include_router(data.router)
+
+# WebSocket连接管理
+active_connections = []
+
+@app.websocket("/ws/domestic")
+async def websocket_endpoint(websocket: WebSocket):
+    """国内白银WebSocket端点，实时推送TqSdk数据"""
+    await websocket.accept()
+    active_connections.append(websocket)
+    logger.info(f"WebSocket客户端已连接，当前连接数: {len(active_connections)}")
+    
+    try:
+        # 发送初始数据
+        if TQSDK_KLINE_CACHE.get('AG') and TQSDK_KLINE_CACHE['AG'].get('1m'):
+            kline_data = TQSDK_KLINE_CACHE['AG']['1m'][-200:]  # 发送最近200根K线
+            await websocket.send_json({
+                "type": "kline",
+                "interval": "1m",
+                "data": kline_data
+            })
+        
+        # 发送实时行情
+        if TQSDK_QUOTE_CACHE.get('AG'):
+            quote = TQSDK_QUOTE_CACHE['AG']
+            quote_dict = {}
+            for attr in ['last_price', 'volume', 'amount', 'open_interest', 
+                        'bid_price1', 'bid_volume1', 'ask_price1', 'ask_volume1']:
+                if hasattr(quote, attr):
+                    value = getattr(quote, attr)
+                    if value is not None:
+                        quote_dict[attr] = float(value) if isinstance(value, (int, float)) else value
+            
+            await websocket.send_json({
+                "type": "quote",
+                "data": quote_dict
+            })
+        
+        # 保持连接并监听客户端消息
+        last_kline_data = None
+        last_quote_data = None
+        
+        while True:
+            try:
+                # 检查是否有新数据
+                current_kline = TQSDK_KLINE_CACHE.get('AG', {}).get('1m')
+                current_quote = TQSDK_QUOTE_CACHE.get('AG')
+                
+                # 如果K线数据有更新，推送
+                if current_kline and current_kline != last_kline_data:
+                    kline_data = current_kline[-200:]
+                    await websocket.send_json({
+                        "type": "kline_update",
+                        "interval": "1m",
+                        "data": kline_data[-1]  # 只发送最新的一根K线
+                    })
+                    last_kline_data = current_kline
+                
+                # 如果行情有更新，推送
+                if current_quote and current_quote != last_quote_data:
+                    quote_dict = {}
+                    for attr in ['last_price', 'volume', 'amount', 'open_interest']:
+                        if hasattr(current_quote, attr):
+                            value = getattr(current_quote, attr)
+                            if value is not None:
+                                quote_dict[attr] = float(value) if isinstance(value, (int, float)) else value
+                    
+                    await websocket.send_json({
+                        "type": "quote_update",
+                        "data": quote_dict
+                    })
+                    last_quote_data = current_quote
+                
+                # 等待一小段时间再检查
+                await asyncio.sleep(0.5)
+                
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.error(f"WebSocket推送错误: {e}")
+                await asyncio.sleep(1)
+    
+    except WebSocketDisconnect:
+        logger.info("WebSocket客户端主动断开")
+    except Exception as e:
+        logger.error(f"WebSocket错误: {e}")
+    finally:
+        if websocket in active_connections:
+            active_connections.remove(websocket)
+        logger.info(f"WebSocket客户端已断开，当前连接数: {len(active_connections)}")
 
 # 获取项目根目录和前端目录
 BASE_DIR = Path(__file__).parent.parent
