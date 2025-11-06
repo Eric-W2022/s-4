@@ -15,7 +15,7 @@ import asyncio
 import time
 
 # 导入共享配置和工具函数
-from backend.config import (
+from .config.settings import (
     TQSDK_AVAILABLE,
     TQ_API,
     TQSDK_KLINE_CACHE,
@@ -27,7 +27,7 @@ from backend.config import (
 )
 
 # 导入路由模块
-from backend.routes import data
+from .routes import data
 
 
 @asynccontextmanager
@@ -46,8 +46,8 @@ async def lifespan(app: FastAPI):
     yield  # 应用运行中
     
     # 关闭时执行
-    from backend import config
-    config.TQSDK_SUBSCRIPTION_RUNNING = False
+    from .config import settings
+    settings.TQSDK_SUBSCRIPTION_RUNNING = False
     logger.info("TqSdk订阅任务已停止")
 
 
@@ -89,7 +89,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def start_tqsdk_subscription():
     """启动TqSdk订阅任务（在后台线程中运行）"""
-    from backend.config import TQSDK_SUBSCRIPTION_RUNNING as TQSDK_SUBSCRIPTION_RUNNING_GLOBAL, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
+    from .config.settings import TQSDK_SUBSCRIPTION_RUNNING as TQSDK_SUBSCRIPTION_RUNNING_GLOBAL, TQSDK_KLINE_CACHE, TQSDK_QUOTE_CACHE
     
     if not TQSDK_AVAILABLE:
         logger.warning("TqSdk未安装，无法启动订阅任务")
@@ -101,11 +101,11 @@ def start_tqsdk_subscription():
     
     def subscription_loop():
         """订阅循环"""
-        from backend import config
-        from backend.config import TQ_USERNAME, TQ_PASSWORD
+        from backend.config import settings
+        from backend.config.settings import TQ_USERNAME, TQ_PASSWORD
         
         # 使用导入的模块变量
-        config.TQSDK_SUBSCRIPTION_RUNNING = True
+        settings.TQSDK_SUBSCRIPTION_RUNNING = True
         logger.info("TqSdk订阅任务启动")
         
         try:
@@ -142,7 +142,7 @@ def start_tqsdk_subscription():
             
             # 主循环：等待数据更新
             update_count = 0
-            while config.TQSDK_SUBSCRIPTION_RUNNING:
+            while settings.TQSDK_SUBSCRIPTION_RUNNING:
                 try:
                     # 等待数据更新（最多等待1秒）
                     deadline = time.time() + 1
@@ -152,7 +152,7 @@ def start_tqsdk_subscription():
                     for interval, kline_df in klines.items():
                         if kline_df is not None and not kline_df.empty:
                             standard_data = convert_tqsdk_kline_to_standard_format(kline_df)
-                            config.TQSDK_KLINE_CACHE['AG'][interval] = standard_data
+                            settings.TQSDK_KLINE_CACHE['AG'][interval] = standard_data
                             if update_count % 60 == 0:  # 每60次更新记录一次日志
                                 logger.info(f"K线数据已更新: {interval}, 数据条数: {len(standard_data)}")
                     
@@ -160,8 +160,8 @@ def start_tqsdk_subscription():
                     if quote is not None:
                         # 检查quote是否真的有更新（通过检查last_price是否变化）
                         old_price = None
-                        if 'AG' in config.TQSDK_QUOTE_CACHE:
-                            old_quote = config.TQSDK_QUOTE_CACHE['AG']
+                        if 'AG' in settings.TQSDK_QUOTE_CACHE:
+                            old_quote = settings.TQSDK_QUOTE_CACHE['AG']
                             if hasattr(old_quote, 'last_price'):
                                 old_price = old_quote.last_price
                             elif isinstance(old_quote, dict):
@@ -175,7 +175,7 @@ def start_tqsdk_subscription():
                             new_price = quote.get('last_price')
                         
                         # 始终更新缓存（quote对象本身会更新，我们需要保持引用）
-                        config.TQSDK_QUOTE_CACHE['AG'] = quote
+                        settings.TQSDK_QUOTE_CACHE['AG'] = quote
                         
                         # 记录价格变化（每10次更新记录一次）
                         if update_count % 10 == 0:
@@ -195,10 +195,10 @@ def start_tqsdk_subscription():
             
         except Exception as e:
             logger.error(f"TqSdk订阅任务失败: {e}", exc_info=True)
-            config.TQSDK_SUBSCRIPTION_RUNNING = False
+            settings.TQSDK_SUBSCRIPTION_RUNNING = False
         finally:
             logger.info("TqSdk订阅任务已停止")
-            config.TQSDK_SUBSCRIPTION_RUNNING = False
+            settings.TQSDK_SUBSCRIPTION_RUNNING = False
     
     # 在后台线程中启动订阅任务
     import threading
@@ -217,7 +217,7 @@ async def health_check():
 @app.get("/api/debug/quote-fields")
 async def debug_quote_fields():
     """调试接口：返回quote对象的所有字段"""
-    from backend.config import TQSDK_QUOTE_CACHE
+    from .config.settings import TQSDK_QUOTE_CACHE
     
     quote = TQSDK_QUOTE_CACHE.get('AG')
     

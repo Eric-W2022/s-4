@@ -2624,8 +2624,9 @@ function updateLondonTradeTick(tick) {
         // 如果Tick的分钟时间戳大于当前K线的分钟时间戳，说明有新K线生成
         if (tickMinute > currentKlineMinute) {
             console.log(`[伦敦K线] 检测到新K线！旧K线: ${new Date(currentKlineMinute).toLocaleTimeString()}, 新Tick: ${new Date(tickMinute).toLocaleTimeString()}`);
-            // 不需要立即触发更新，定时器会自动更新
-            // updateAllData()有节流机制，会自动处理
+            // 立即触发数据更新，获取最新的K线数据
+            updateAllData();
+            return; // 新K线时，等待updateAllData更新数据后再继续
         }
     }
     
@@ -2660,23 +2661,45 @@ function updateLondonTradeTick(tick) {
                         // 获取当前K线系列数据
                         const klineSeriesData = option.series[0].data;
                         if (klineSeriesData && klineSeriesData.length > 0) {
-                            // 更新最后一根K线的数据
-                            const lastIndex = klineSeriesData.length - 1;
-                            klineSeriesData[lastIndex] = [
-                                currentLondonKlineRealtime.o,
-                                currentLondonKlineRealtime.c,
-                                currentLondonKlineRealtime.l,
-                                currentLondonKlineRealtime.h
-                            ];
+                            // 找到真实K线的最后一个位置（跳过后面的null值）
+                            // currentLondonKlineData.length 是真实K线的数量
+                            const lastRealKlineIndex = currentLondonKlineData.length - 1;
                             
-                            // 只更新K线系列数据，不触发完整重绘
-                            londonChart.setOption({
-                                series: [{
-                                    data: klineSeriesData
-                                }]
-                            }, false); // notMerge=false, 只合并更新
-                            
-                            lastLondonRealtimeUpdate = now;
+                            // 确保索引有效
+                            if (lastRealKlineIndex >= 0 && lastRealKlineIndex < klineSeriesData.length) {
+                                // 更新最后一根真实K线的数据
+                                const newKlineData = [
+                                    currentLondonKlineRealtime.o,
+                                    currentLondonKlineRealtime.c,
+                                    currentLondonKlineRealtime.l,
+                                    currentLondonKlineRealtime.h
+                                ];
+                                
+                                // 直接更新数组，然后只更新这个位置的系列数据
+                                klineSeriesData[lastRealKlineIndex] = newKlineData;
+                                
+                                // 使用setOption更新，指定要更新的系列索引
+                                londonChart.setOption({
+                                    series: [{
+                                        data: klineSeriesData
+                                    }]
+                                }, false); // notMerge=false, 只合并更新
+                                
+                                lastLondonRealtimeUpdate = now;
+                                
+                                // 偶尔打印日志确认更新成功
+                                if (Math.random() < 0.01) {
+                                    console.log(`[伦敦K线实时更新] 成功更新K线索引 ${lastRealKlineIndex}, OHLC: ${newKlineData.join('/')}`);
+                                }
+                            } else {
+                                if (Math.random() < 0.05) {
+                                    console.warn(`[伦敦K线实时更新] 索引越界: lastRealKlineIndex=${lastRealKlineIndex}, klineSeriesData.length=${klineSeriesData.length}, currentLondonKlineData.length=${currentLondonKlineData.length}`);
+                                }
+                            }
+                        } else {
+                            if (Math.random() < 0.05) {
+                                console.warn('[伦敦K线实时更新] klineSeriesData为空或长度为0');
+                            }
                         }
                     }
                 } catch (e) {
@@ -2684,7 +2707,10 @@ function updateLondonTradeTick(tick) {
                 }
             } else {
                 if (Math.random() < 0.02) { // 偶尔打印警告
-                    console.warn('[伦敦K线实时更新] 图表或数据未就绪');
+                    console.warn('[伦敦K线实时更新] 图表或数据未就绪', {
+                        hasChart: !!londonChart,
+                        hasData: !!(currentLondonKlineData && currentLondonKlineData.length > 0)
+                    });
                 }
             }
         }
@@ -3009,27 +3035,67 @@ function updateChart(chart, data, infoElementId) {
         // 1分钟K线预测
         if (isLondonChart && predictedLondonKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据（预测时间 <= 最新真实K线时间）
+            const beforeClean = predictedLondonKlines.length;
             predictedLondonKlines = predictedLondonKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedLondonKlines;
-            console.log('[K线预测] 清理后，伦敦1分钟预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，伦敦1分钟预测K线剩余:', predictedKlines.length, '(清理前:', beforeClean, ')');
+            
+            // 如果预测数据少于10个，自动触发新的预测
+            if (predictedKlines.length < 10 && beforeClean > 0) {
+                console.log('[K线预测] ⚠️ 预测数据不足10个，将自动触发新预测');
+                setTimeout(() => {
+                    console.log('[K线预测] 自动触发预测更新...');
+                    klinePredictionBackgroundTask();
+                }, 1000);
+            }
         } else if (isDomesticChart && predictedDomesticKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据
+            const beforeClean = predictedDomesticKlines.length;
             predictedDomesticKlines = predictedDomesticKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedDomesticKlines;
-            console.log('[K线预测] 清理后，国内1分钟预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，国内1分钟预测K线剩余:', predictedKlines.length, '(清理前:', beforeClean, ')');
+            
+            // 如果预测数据少于10个，自动触发新的预测
+            if (predictedKlines.length < 10 && beforeClean > 0) {
+                console.log('[K线预测] ⚠️ 预测数据不足10个，将自动触发新预测');
+                setTimeout(() => {
+                    console.log('[K线预测] 自动触发预测更新...');
+                    klinePredictionBackgroundTask();
+                }, 1000);
+            }
         }
     } else if (is15mChart) {
         // 15分钟K线预测
         if (isLondonChart && predictedLondon15mKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据
+            const beforeClean = predictedLondon15mKlines.length;
             predictedLondon15mKlines = predictedLondon15mKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedLondon15mKlines;
-            console.log('[K线预测] 清理后，伦敦15分钟预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，伦敦15分钟预测K线剩余:', predictedKlines.length, '(清理前:', beforeClean, ')');
+            
+            // 如果预测数据少于2根，自动触发新的预测
+            if (predictedKlines.length < 2 && beforeClean > 0) {
+                console.log('[K线预测] ⚠️ 15分钟预测数据不足2根，将自动触发新预测');
+                setTimeout(() => {
+                    console.log('[K线预测] 自动触发预测更新...');
+                    klinePredictionBackgroundTask();
+                }, 1000);
+            }
         } else if (isDomesticChart && predictedDomestic15mKlines.length > 0) {
             // 清理已经被真实K线覆盖的预测数据
+            const beforeClean = predictedDomestic15mKlines.length;
             predictedDomestic15mKlines = predictedDomestic15mKlines.filter(pred => pred.t > lastRealTimestamp);
             predictedKlines = predictedDomestic15mKlines;
-            console.log('[K线预测] 清理后，国内15分钟预测K线剩余:', predictedKlines.length);
+            console.log('[K线预测] 清理后，国内15分钟预测K线剩余:', predictedKlines.length, '(清理前:', beforeClean, ')');
+            
+            // 如果预测数据少于2根，自动触发新的预测
+            if (predictedKlines.length < 2 && beforeClean > 0) {
+                console.log('[K线预测] ⚠️ 15分钟预测数据不足2根，将自动触发新预测');
+                setTimeout(() => {
+                    console.log('[K线预测] 自动触发预测更新...');
+                    klinePredictionBackgroundTask();
+                }, 1000);
+            }
         }
     }
     
@@ -3085,12 +3151,20 @@ function updateChart(chart, data, infoElementId) {
     updateTradingStrategy();
     
     // 准备K线数据（真实K线）
-    const klineData = sortedData.map(item => [
+    let klineData = sortedData.map(item => [
         item.o, // 开盘价
         item.c, // 收盘价
         item.l, // 最低价
         item.h  // 最高价
     ]);
+    
+    // 为预测K线位置添加null值，使K线数据长度与时间轴一致
+    // 这样K线和成交量的X轴对齐就不会偏移
+    if (predictedKlines.length > 0) {
+        for (let i = 0; i < predictedKlines.length; i++) {
+            klineData.push(null); // 填充null，ECharts不会显示这些位置的K线
+        }
+    }
     
     // 准备预测K线数据（完整的OHLC数据，显示为蜡烛图）
     const predictedKlineData = predictedKlines.map(item => [
@@ -3262,6 +3336,8 @@ function updateChart(chart, data, infoElementId) {
     }
     
     // 如果是国内白银1分钟K线图，添加价格建议标记（开仓价、止损价、止盈价）
+    // 已隐藏：图表左上角的白色价格建议tab
+    /*
     if (!infoElementId.includes('daily') && !infoElementId.includes('15m') && infoElementId.includes('domestic') && lastPriceAdvice.entryPrice) {
         const formatPrice = (price) => {
             if (isLondon) {
@@ -3305,6 +3381,7 @@ function updateChart(chart, data, infoElementId) {
             });
         }
     }
+    */
     
     // 暂时移除价格通道线（markLine和markArea）以排查问题
     // TODO: 待图表刷新正常后，再考虑是否恢复
@@ -3557,22 +3634,12 @@ function updateChart(chart, data, infoElementId) {
             }
         },
         grid: [
-            // K线图grid（上方）
+            // K线图grid（占据绝大部分空间，下方留出空间给滑动条）
             {
                 left: '5%',
                 right: '10%',
                 top: '6%',
-                // K线图占70%，成交量占20%，滑动条占10%
-                height: '70%',
-                bottom: '30%',
-                containLabel: true
-            },
-            // 成交量grid（下方）
-            {
-                left: '5%',
-                right: '10%',
-                top: '70%', // 从K线图下方开始
-                height: '18%', // 成交量区域高度
+                height: '82%',
                 bottom: '12%', // 为滑动条留出空间
                 containLabel: true
             }
@@ -3584,27 +3651,7 @@ function updateChart(chart, data, infoElementId) {
                 data: allTimeData,
                 gridIndex: 0,
                 boundaryGap: false,
-                show: true // 只在K线图显示X轴标签
-            },
-            // 成交量X轴（也使用allTimeData，与K线图长度一致，便于dataZoom同步控制）
-            {
-                type: 'category',
-                data: allTimeData, // 使用allTimeData，与K线图X轴长度一致
-                gridIndex: 1,
-                boundaryGap: false,
-                show: false, // 隐藏成交量图的X轴标签（避免重复）
-                axisLine: {
-                    show: false, // 隐藏X轴线，避免遮挡标签
-                    lineStyle: {
-                        color: '#1e2548'
-                    }
-                },
-                axisLabel: {
-                    show: false // 隐藏成交量图的X轴标签
-                },
-                axisTick: {
-                    show: false
-                }
+                show: true // 显示X轴标签
             }
         ],
         yAxis: [
@@ -3649,25 +3696,6 @@ function updateChart(chart, data, infoElementId) {
                     return value.max + paddingTop;
                 },
                 splitNumber: isLondon ? 6 : 5
-            },
-            // 成交量Y轴
-            {
-                type: 'value',
-                gridIndex: 1,
-                position: 'left',
-                show: false, // 隐藏成交量Y轴
-                axisLine: {
-                    show: false,
-                    lineStyle: {
-                        color: '#1e2548'
-                    }
-                },
-                axisLabel: {
-                    show: false // 隐藏标签
-                },
-                splitLine: {
-                    show: false // 隐藏分割线
-                }
             }
         ],
         series: [
@@ -3866,23 +3894,6 @@ function updateChart(chart, data, infoElementId) {
                     padding: [2, 6],
                     distance: 5
                 }
-            },
-            // 成交量柱状图
-            {
-                name: '成交量',
-                type: 'bar',
-                data: volumeData,
-                xAxisIndex: 1, // 使用成交量X轴
-                yAxisIndex: 1, // 使用成交量Y轴
-                barWidth: '60%',
-                itemStyle: {
-                    // 颜色已经在volumeData中设置，这里也可以设置
-                },
-                emphasis: {
-                    itemStyle: {
-                        opacity: 0.8
-                    }
-                }
             }
         ]
     };
@@ -3906,11 +3917,11 @@ function updateChart(chart, data, infoElementId) {
             console.warn('[DataZoom] 获取当前缩放状态失败，使用默认值:', e);
         }
         
-        // 添加dataZoom组件：inside（鼠标滚轮）+ slider（滑动条）
+        // 添加dataZoom组件：inside（鼠标滚轮）+ slider（滑动条，显示成交量）
         option.dataZoom = [
             {
                 type: 'inside',
-                xAxisIndex: [0, 1], // 同时控制K线图和成交量图的X轴
+                xAxisIndex: [0], // 只控制K线图的X轴
                 start: currentStart, // 保持当前缩放状态
                 end: currentEnd,
                 zoomOnMouseWheel: true, // 允许鼠标滚轮缩放
@@ -3919,11 +3930,11 @@ function updateChart(chart, data, infoElementId) {
             },
             {
                 type: 'slider',
-                xAxisIndex: [0, 1], // 同时控制K线图和成交量图的X轴
+                xAxisIndex: [0], // 只控制K线图的X轴
                 start: currentStart, // 保持当前缩放状态
                 end: currentEnd,
                 bottom: '2%', // 滑动条位置
-                height: 20, // 滑动条高度
+                height: 50, // 滑动条高度（增加以显示成交量）
                 handleSize: '100%', // 手柄大小
                 handleStyle: {
                     color: '#667eea',
@@ -3936,13 +3947,14 @@ function updateChart(chart, data, infoElementId) {
                 borderColor: '#1e2548',
                 fillerColor: 'rgba(102, 126, 234, 0.15)',
                 backgroundColor: '#13172b',
+                // 在滑动条中显示成交量数据
                 dataBackground: {
                     lineStyle: {
                         color: '#667eea',
                         width: 1
                     },
                     areaStyle: {
-                        color: 'rgba(102, 126, 234, 0.2)'
+                        color: 'rgba(102, 126, 234, 0.25)'
                     }
                 },
                 selectedDataBackground: {
@@ -3951,7 +3963,7 @@ function updateChart(chart, data, infoElementId) {
                         width: 1.5
                     },
                     areaStyle: {
-                        color: 'rgba(102, 126, 234, 0.3)'
+                        color: 'rgba(102, 126, 234, 0.4)'
                     }
                 },
                 moveHandleSize: 5,
@@ -3960,7 +3972,13 @@ function updateChart(chart, data, infoElementId) {
                         borderColor: '#764ba2',
                         color: '#764ba2'
                     }
-                }
+                },
+                // 显示成交量数据
+                show: true,
+                showDetail: true,
+                showDataShadow: true,
+                realtime: true,
+                filterMode: 'filter'
             }
         ];
         

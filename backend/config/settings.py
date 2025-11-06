@@ -15,6 +15,14 @@ os.environ['PYTHONHTTPSVERIFY'] = '0'
 os.environ['CURL_CA_BUNDLE'] = ''
 ssl._create_default_https_context = ssl._create_unverified_context
 
+# 禁用代理（解决TqSdk连接问题）
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+# 删除可能存在的代理设置
+for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+    if proxy_var in os.environ:
+        del os.environ[proxy_var]
+
 # 尝试导入TqSdk
 try:
     from tqsdk import TqApi, TqAuth

@@ -12,7 +12,7 @@ import uuid
 import urllib.parse
 
 # 导入共享配置和工具函数
-from backend.config import (
+from ..config.settings import (
     TQSDK_KLINE_CACHE,
     TQSDK_QUOTE_CACHE,
     TQSDK_SUBSCRIPTION_RUNNING,
@@ -323,7 +323,7 @@ async def get_depth_tick(
             
             # 如果缓存为空，尝试直接获取
             if quote is None:
-                from backend.config import get_tqsdk_api
+                from ..config.settings import get_tqsdk_api
                 api = get_tqsdk_api()
                 contract = "KQ.m@SHFE.ag"
                 quote = api.get_quote(contract)
