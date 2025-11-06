@@ -9,7 +9,7 @@ body {
     background: #0a0e27;
     color: #e0e0e0;
     min-height: 100vh;
-    padding: 20px;
+    padding: 10px;
 }
 
 .container {
@@ -22,8 +22,8 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    padding: 20px;
+    margin-bottom: 10px;
+    padding: 15px;
     background: #13172b;
     border-radius: 12px;
     border: 1px solid #1e2548;
@@ -140,8 +140,8 @@ header h1 {
 
 .main-content {
     display: flex;
-    gap: 20px;
-    padding: 20px;
+    gap: 10px;
+    padding: 10px;
     flex-direction: row; /* 左右布局 */
 }
 
