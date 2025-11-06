@@ -126,7 +126,22 @@
             <div class="trading-strategy-panel">
                 <div class="strategy-header">
                     <h2>实时交易策略</h2>
-                    <button id="analyze-btn" class="analyze-btn">AI走势分析</button>
+                    <div class="model-selector-container">
+                        <div class="model-selector-display" id="model-selector-display">DeepSeek</div>
+                        <div class="model-selector-dropdown" id="model-selector-dropdown">
+                            <div class="model-selector-option" data-model="doubao-seed-1-6-thinking-250715">豆包</div>
+                            <div class="model-selector-option" data-model="deepseek-chat">DeepSeek</div>
+                            <div class="model-selector-option" data-model="qwen3-max">Qwen</div>
+                            <div class="model-selector-option" data-model="glm-4.6">GLM</div>
+                            <div class="model-selector-option" data-model="MiniMax-M2">MiniMax</div>
+                            <div class="model-selector-option" data-model="kimi-k2-0905-preview">Kimi</div>
+                            <div class="model-gap"></div>
+                            <div class="model-selector-option" data-model="gpt-5">GPT</div>
+                            <div class="model-selector-option" data-model="claude-sonnet-4-5">Claude</div>
+                            <div class="model-selector-option" data-model="google-ai-studio/gemini-2.5-pro">Gemini</div>
+                            <div class="model-selector-option" data-model="grok/grok-4">Grok</div>
+                        </div>
+                    </div>
                 </div>
                 <div id="trading-strategy-content" class="strategy-content">
                     <div class="loading">正在分析市场数据...</div>

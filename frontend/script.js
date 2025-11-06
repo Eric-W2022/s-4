@@ -2041,70 +2041,7 @@ function updateTradingStrategy() {
                 style="width: 100%; min-height: 80px; padding: 12px; background: rgba(19, 23, 43, 0.8); border: 1px solid #1e2548; border-radius: 6px; color: #e0e0e0; font-size: 13px; line-height: 1.6; font-family: inherit; resize: vertical; box-sizing: border-box;"
                 >${currentDescription}</textarea>
         </div>
-        <div class="strategy-section" style="margin-bottom: 20px;">
-            <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
-                模型选择
-            </div>
-            <div id="model-selector" style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div class="model-option ${selectedModel === 'doubao-seed-1-6-thinking-250715' ? 'active' : ''}" data-model="doubao-seed-1-6-thinking-250715" data-fullname="doubao-seed-1-6-thinking-250715">
-                    豆包
-                    <div class="tooltip">doubao-seed-1-6-thinking-250715</div>
-                </div>
-                <div class="model-option ${selectedModel === 'deepseek-chat' ? 'active' : ''}" data-model="deepseek-chat" data-fullname="deepseek-chat">
-                    DeepSeek
-                    <div class="tooltip">deepseek-chat</div>
-                </div>
-                <div class="model-option ${selectedModel === 'qwen3-max' ? 'active' : ''}" data-model="qwen3-max" data-fullname="qwen3-max">
-                    Qwen
-                    <div class="tooltip">qwen3-max</div>
-                </div>
-                <div class="model-option ${selectedModel === 'glm-4.6' ? 'active' : ''}" data-model="glm-4.6" data-fullname="glm-4.6">
-                    GLM
-                    <div class="tooltip">glm-4.6</div>
-                </div>
-                <div class="model-option ${selectedModel === 'MiniMax-M2' ? 'active' : ''}" data-model="MiniMax-M2" data-fullname="MiniMax-M2">
-                    MiniMax
-                    <div class="tooltip">MiniMax-M2</div>
-                </div>
-                <div class="model-option ${selectedModel === 'kimi-k2-0905-preview' ? 'active' : ''}" data-model="kimi-k2-0905-preview" data-fullname="kimi-k2-0905-preview">
-                    Kimi
-                    <div class="tooltip">kimi-k2-0905-preview</div>
-                </div>
-                <div class="model-gap"></div>
-                <div class="model-option ${selectedModel === 'gpt-5' ? 'active' : ''}" data-model="gpt-5" data-fullname="gpt-5">
-                    GPT
-                    <div class="tooltip">gpt-5</div>
-                </div>
-                <div class="model-option ${selectedModel === 'claude-sonnet-4-5' ? 'active' : ''}" data-model="claude-sonnet-4-5" data-fullname="claude-sonnet-4-5">
-                    Claude
-                    <div class="tooltip">claude-sonnet-4-5</div>
-                </div>
-                <div class="model-option ${selectedModel === 'google-ai-studio/gemini-2.5-pro' ? 'active' : ''}" data-model="google-ai-studio/gemini-2.5-pro" data-fullname="gemini-2.5-pro">
-                    Gemini
-                    <div class="tooltip">gemini-2.5-pro</div>
-                </div>
-                <div class="model-option ${selectedModel === 'grok/grok-4' ? 'active' : ''}" data-model="grok/grok-4" data-fullname="grok-4">
-                    Grok
-                    <div class="tooltip">grok-4</div>
-                </div>
-            </div>
-        </div>
     `;
-    
-    // 添加模型选择事件监听
-    const modelOptions = document.querySelectorAll('.model-option');
-    modelOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            // 移除所有active类
-            modelOptions.forEach(opt => opt.classList.remove('active'));
-            // 添加active类到当前选项
-            this.classList.add('active');
-            // 更新选中的模型
-            selectedModel = this.getAttribute('data-model');
-            saveSelectedModel(); // 保存到localStorage
-            console.log('[模型选择] 已选择模型:', selectedModel);
-        });
-    });
     
     // 添加输入框事件监听，保存当前描述
     const descriptionInput = document.getElementById('current-description-input');
@@ -2328,29 +2265,29 @@ function renderStrategyFromAI(displayStrategy) {
                 价格建议
             </div>
             <div style="padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-                <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 16px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 13px;">
                     ${priceToShow.entryPrice ? `
-                    <div style="text-align: center; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
-                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">建议开仓价</div>
-                        <div style="color: #ffffff; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.entryPrice)}</div>
+                    <div style="text-align: center; padding: 6px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 3px; white-space: nowrap; font-size: 11px;">开仓</div>
+                        <div style="color: #ffffff; font-weight: 600; font-size: 14px;">${Math.round(priceToShow.entryPrice)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.stopLoss ? `
-                    <div style="text-align: center; padding: 8px; background: rgba(74, 222, 128, 0.1); border-radius: 6px;">
-                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">止损价</div>
-                        <div style="color: #4ade80; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.stopLoss)}</div>
+                    <div style="text-align: center; padding: 6px; background: rgba(74, 222, 128, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 3px; white-space: nowrap; font-size: 11px;">止损</div>
+                        <div style="color: #4ade80; font-weight: 600; font-size: 14px;">${Math.round(priceToShow.stopLoss)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.takeProfit ? `
-                    <div style="text-align: center; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 6px;">
-                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">止盈价</div>
-                        <div style="color: #ef4444; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.takeProfit)}</div>
+                    <div style="text-align: center; padding: 6px; background: rgba(239, 68, 68, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 3px; white-space: nowrap; font-size: 11px;">止盈</div>
+                        <div style="color: #ef4444; font-weight: 600; font-size: 14px;">${Math.round(priceToShow.takeProfit)}</div>
                     </div>
                     ` : '<div></div>'}
                     ${priceToShow.lots ? `
-                    <div style="text-align: center; padding: 8px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
-                        <div style="color: #9ca3af; margin-bottom: 4px; white-space: nowrap;">建议手数</div>
-                        <div style="color: #fbbf24; font-weight: 600; font-size: 16px;">${Math.round(priceToShow.lots)}手</div>
+                    <div style="text-align: center; padding: 6px; background: rgba(251, 191, 36, 0.1); border-radius: 6px;">
+                        <div style="color: #9ca3af; margin-bottom: 3px; white-space: nowrap; font-size: 11px;">手数</div>
+                        <div style="color: #fbbf24; font-weight: 600; font-size: 14px;">${Math.round(priceToShow.lots)}手</div>
                     </div>
                     ` : '<div></div>'}
                 </div>
@@ -2441,56 +2378,6 @@ function renderStrategyFromAI(displayStrategy) {
             >${currentDescription}</textarea>
     </div>`;
     
-    // 模型选择（显示在当前描述下面）
-    html += `<div class="strategy-section" style="margin-bottom: 20px;">
-        <div style="font-size: 16px; font-weight: 600; color: #ffffff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1e2548;">
-            模型选择
-        </div>
-        <div id="model-selector" style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: rgba(19, 23, 43, 0.6); border-radius: 6px;">
-            <div class="model-option ${selectedModel === 'doubao-seed-1-6-thinking-250715' ? 'active' : ''}" data-model="doubao-seed-1-6-thinking-250715" data-fullname="doubao-seed-1-6-thinking-250715">
-                豆包
-                <div class="tooltip">doubao-seed-1-6-thinking-250715</div>
-            </div>
-            <div class="model-option ${selectedModel === 'deepseek-chat' ? 'active' : ''}" data-model="deepseek-chat" data-fullname="deepseek-chat">
-                DeepSeek
-                <div class="tooltip">deepseek-chat</div>
-            </div>
-            <div class="model-option ${selectedModel === 'qwen3-max' ? 'active' : ''}" data-model="qwen3-max" data-fullname="qwen3-max">
-                Qwen
-                <div class="tooltip">qwen3-max</div>
-            </div>
-            <div class="model-option ${selectedModel === 'glm-4.6' ? 'active' : ''}" data-model="glm-4.6" data-fullname="glm-4.6">
-                GLM
-                <div class="tooltip">glm-4.6</div>
-            </div>
-            <div class="model-option ${selectedModel === 'MiniMax-M2' ? 'active' : ''}" data-model="MiniMax-M2" data-fullname="MiniMax-M2">
-                MiniMax
-                <div class="tooltip">MiniMax-M2</div>
-            </div>
-            <div class="model-option ${selectedModel === 'kimi-k2-0905-preview' ? 'active' : ''}" data-model="kimi-k2-0905-preview" data-fullname="kimi-k2-0905-preview">
-                Kimi
-                <div class="tooltip">kimi-k2-0905-preview</div>
-            </div>
-            <div class="model-gap"></div>
-            <div class="model-option ${selectedModel === 'gpt-5' ? 'active' : ''}" data-model="gpt-5" data-fullname="gpt-5">
-                GPT
-                <div class="tooltip">gpt-5</div>
-            </div>
-            <div class="model-option ${selectedModel === 'claude-sonnet-4-5' ? 'active' : ''}" data-model="claude-sonnet-4-5" data-fullname="claude-sonnet-4-5">
-                Claude
-                <div class="tooltip">claude-sonnet-4-5</div>
-            </div>
-            <div class="model-option ${selectedModel === 'google-ai-studio/gemini-2.5-pro' ? 'active' : ''}" data-model="google-ai-studio/gemini-2.5-pro" data-fullname="gemini-2.5-pro">
-                Gemini
-                <div class="tooltip">gemini-2.5-pro</div>
-            </div>
-            <div class="model-option ${selectedModel === 'grok/grok-4' ? 'active' : ''}" data-model="grok/grok-4" data-fullname="grok-4">
-                Grok
-                <div class="tooltip">grok-4</div>
-            </div>
-        </div>
-    </div>`;
-    
     // 将HTML渲染到页面
     container.innerHTML = html;
     
@@ -2518,21 +2405,6 @@ function renderStrategyFromAI(displayStrategy) {
             saveCurrentDescription(); // 保存到localStorage
         });
     }
-    
-    // 添加模型选择事件监听
-    const modelOptions = document.querySelectorAll('.model-option');
-    modelOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            // 移除所有active类
-            modelOptions.forEach(opt => opt.classList.remove('active'));
-            // 添加active类到当前选项
-            this.classList.add('active');
-            // 更新选中的模型
-            selectedModel = this.getAttribute('data-model');
-            saveSelectedModel(); // 保存到localStorage
-            console.log('[模型选择] 已选择模型:', selectedModel);
-        });
-    });
 }
 
 // 更新布林带分析显示
@@ -3462,12 +3334,12 @@ function updateChart(chart, data, infoElementId) {
                     show: true,
                     position: 'start',
                     distance: 10,
-                    formatter: `开仓: ${formatPrice(entryPrice)}`,
+                    formatter: `${formatPrice(entryPrice)}`,
                     color: '#ffffff',
                     backgroundColor: '#fbbf24',
                     borderColor: '#fbbf24',
                     borderWidth: 1,
-                    padding: [4, 10],
+                    padding: [4, 8],
                     borderRadius: 3,
                     fontSize: 12,
                     fontWeight: 600
@@ -3490,12 +3362,12 @@ function updateChart(chart, data, infoElementId) {
                     show: true,
                     position: 'start',
                     distance: 10,
-                    formatter: `止损: ${formatPrice(stopLoss)}`,
+                    formatter: `${formatPrice(stopLoss)}`,
                     color: '#ffffff',
                     backgroundColor: '#4ade80',
                     borderColor: '#4ade80',
                     borderWidth: 1,
-                    padding: [4, 10],
+                    padding: [4, 8],
                     borderRadius: 3,
                     fontSize: 12,
                     fontWeight: 600
@@ -3518,12 +3390,12 @@ function updateChart(chart, data, infoElementId) {
                     show: true,
                     position: 'start',
                     distance: 10,
-                    formatter: `止盈: ${formatPrice(takeProfit)}`,
+                    formatter: `${formatPrice(takeProfit)}`,
                     color: '#ffffff',
                     backgroundColor: '#ef4444',
                     borderColor: '#ef4444',
                     borderWidth: 1,
-                    padding: [4, 10],
+                    padding: [4, 8],
                     borderRadius: 3,
                     fontSize: 12,
                     fontWeight: 600
@@ -3652,7 +3524,7 @@ function updateChart(chart, data, infoElementId) {
                         }
                         const formatPrice = isLondonChart ? lastPriceAdvice.entryPrice.toFixed(3) : Math.round(lastPriceAdvice.entryPrice).toString();
                         result += '<span style="display:inline-block;margin-right:5px;border-radius:2px;width:10px;height:10px;background-color:#fbbf24;"></span>';
-                        result += '<span style="color:#fbbf24;">建议开仓价</span>: ';
+                        result += '<span style="color:#fbbf24;">开仓价</span>: ';
                         result += '<span style="color:#ffffff;font-weight:600;">' + formatPrice + '</span><br/>';
                     }
                     
@@ -3687,8 +3559,8 @@ function updateChart(chart, data, infoElementId) {
         grid: [
             // K线图grid（上方）
             {
-                left: '8%',
-                right: '4%',
+                left: '5%',
+                right: '10%',
                 top: '6%',
                 // K线图占70%，成交量占20%，滑动条占10%
                 height: '70%',
@@ -3697,8 +3569,8 @@ function updateChart(chart, data, infoElementId) {
             },
             // 成交量grid（下方）
             {
-                left: '8%',
-                right: '4%',
+                left: '5%',
+                right: '10%',
                 top: '70%', // 从K线图下方开始
                 height: '18%', // 成交量区域高度
                 bottom: '12%', // 为滑动条留出空间
@@ -3897,7 +3769,27 @@ function updateChart(chart, data, infoElementId) {
                     opacity: 0
                 },
                 symbol: 'none',
-                smooth: false
+                smooth: false,
+                endLabel: {
+                    show: true,
+                    formatter: function(params) {
+                        const value = params.value;
+                        if (value !== null && value !== undefined) {
+                            // 根据市场类型格式化数值
+                            return isLondon ? value.toFixed(3) : Math.round(value).toString();
+                        }
+                        return '';
+                    },
+                    color: '#60a5fa',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: 'rgba(96, 165, 250, 0.15)',
+                    borderColor: '#60a5fa',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    padding: [2, 6],
+                    distance: 5
+                }
             },
             // 布林带中轨（移动平均线）
             {
@@ -3915,7 +3807,27 @@ function updateChart(chart, data, infoElementId) {
                     opacity: 0
                 },
                 symbol: 'none',
-                smooth: false
+                smooth: false,
+                endLabel: {
+                    show: true,
+                    formatter: function(params) {
+                        const value = params.value;
+                        if (value !== null && value !== undefined) {
+                            // 根据市场类型格式化数值
+                            return isLondon ? value.toFixed(3) : Math.round(value).toString();
+                        }
+                        return '';
+                    },
+                    color: '#a78bfa',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: 'rgba(167, 139, 250, 0.15)',
+                    borderColor: '#a78bfa',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    padding: [2, 6],
+                    distance: 5
+                }
             },
                 // 布林带下轨
             {
@@ -3933,7 +3845,27 @@ function updateChart(chart, data, infoElementId) {
                     opacity: 0
                 },
                 symbol: 'none',
-                smooth: false
+                smooth: false,
+                endLabel: {
+                    show: true,
+                    formatter: function(params) {
+                        const value = params.value;
+                        if (value !== null && value !== undefined) {
+                            // 根据市场类型格式化数值
+                            return isLondon ? value.toFixed(3) : Math.round(value).toString();
+                        }
+                        return '';
+                    },
+                    color: '#60a5fa',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: 'rgba(96, 165, 250, 0.15)',
+                    borderColor: '#60a5fa',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    padding: [2, 6],
+                    distance: 5
+                }
             },
             // 成交量柱状图
             {
@@ -5844,24 +5776,14 @@ ${londonPrediction.prices ? londonPrediction.prices.map((p, i) => `${i + 1}min: 
 
 // 执行AI分析
 async function performAnalysis() {
-    const analyzeBtn = document.getElementById('analyze-btn');
-    
-    if (!analyzeBtn) {
-        console.error('[performAnalysis] 分析按钮未找到');
-        return;
-    }
-    
-    // 如果正在分析中，直接返回，防止重复点击
+    // 如果正在分析中，直接返回，防止重复分析
     if (isAnalyzing) {
-        console.log('[performAnalysis] 正在分析中，忽略重复点击');
+        console.log('[performAnalysis] 正在分析中，忽略重复请求');
         return;
     }
     
-    // 立即设置分析状态和按钮状态
+    // 设置分析状态
     isAnalyzing = true;
-    analyzeBtn.disabled = true;
-    analyzeBtn.classList.add('analyzing');
-    analyzeBtn.textContent = '分析中...';
     
     try {
         // 强制获取最新的K线数据（国内和伦敦的1分钟K线、15分钟K线和日K线），不使用缓存，确保数据是最新的
@@ -5970,11 +5892,8 @@ async function performAnalysis() {
             `;
         }
     } finally {
-        // 恢复按钮和分析状态
+        // 恢复分析状态
         isAnalyzing = false;
-        analyzeBtn.disabled = false;
-        analyzeBtn.classList.remove('analyzing');
-        analyzeBtn.textContent = 'AI走势分析';
     }
 }
 
@@ -6173,12 +6092,19 @@ async function predictKlinesInBackground() {
     }
 }
 
-// 分析按钮点击处理函数（需要单独定义以便移除）
-function analyzeBtnClickHandler(e) {
-    e.preventDefault();
-    e.stopPropagation();
+// 模型选择器变化处理函数
+function modelSelectorChangeHandler(e) {
     // 初始化AudioContext（用户交互时）
     initAudioContext();
+    
+    // 更新选中的模型
+    selectedModel = e.target.value;
+    console.log('[模型选择] 切换到模型:', selectedModel);
+    
+    // 保存模型选择
+    saveSelectedModel();
+    
+    // 自动触发分析
     performAnalysis();
 }
 
@@ -6187,24 +6113,59 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('=' .repeat(50));
     console.log('📊 初始化AI分析功能...');
     console.log('=' .repeat(50));
-    // 分析按钮事件 - 确保绑定成功
-    const analyzeBtn = document.getElementById('analyze-btn');
-    if (analyzeBtn) {
-        // 移除可能存在的旧事件监听器，然后添加新的
-        analyzeBtn.removeEventListener('click', analyzeBtnClickHandler);
-        analyzeBtn.addEventListener('click', analyzeBtnClickHandler);
-        console.log('[初始化] AI分析按钮事件已绑定');
+    
+    // 加载上次选择的模型
+    loadSelectedModel();
+    
+    // 模型名称映射（用于显示）
+    const modelNameMap = {
+        'doubao-seed-1-6-thinking-250715': '豆包',
+        'deepseek-chat': 'DeepSeek',
+        'qwen3-max': 'Qwen',
+        'glm-4.6': 'GLM',
+        'MiniMax-M2': 'MiniMax',
+        'kimi-k2-0905-preview': 'Kimi',
+        'gpt-5': 'GPT',
+        'claude-sonnet-4-5': 'Claude',
+        'google-ai-studio/gemini-2.5-pro': 'Gemini',
+        'grok/grok-4': 'Grok'
+    };
+    
+    // 更新模型选择器显示
+    const modelSelectorDisplay = document.getElementById('model-selector-display');
+    if (modelSelectorDisplay) {
+        modelSelectorDisplay.textContent = modelNameMap[selectedModel] || 'DeepSeek';
+    }
+    
+    // 模型选择器下拉选项事件
+    const modelSelectorOptions = document.querySelectorAll('.model-selector-option');
+    if (modelSelectorOptions.length > 0) {
+        modelSelectorOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                // 初始化AudioContext（用户交互时）
+                initAudioContext();
+                
+                // 获取选中的模型
+                const modelValue = this.getAttribute('data-model');
+                selectedModel = modelValue;
+                
+                // 更新显示文本
+                if (modelSelectorDisplay) {
+                    modelSelectorDisplay.textContent = this.textContent;
+                }
+                
+                console.log('[模型选择] 切换到模型:', selectedModel);
+                
+                // 保存模型选择
+                saveSelectedModel();
+                
+                // 自动触发分析
+                performAnalysis();
+            });
+        });
+        console.log('[初始化] 模型选择器事件已绑定，当前模型:', selectedModel);
     } else {
-        console.warn('[初始化] AI分析按钮未找到，将在稍后重试');
-        // 如果按钮还没加载，延迟重试
-        setTimeout(() => {
-            const retryBtn = document.getElementById('analyze-btn');
-            if (retryBtn) {
-                retryBtn.removeEventListener('click', analyzeBtnClickHandler);
-                retryBtn.addEventListener('click', analyzeBtnClickHandler);
-                console.log('[初始化] AI分析按钮事件已绑定（重试）');
-            }
-        }, 500);
+        console.warn('[初始化] 模型选择器未找到');
     }
     
     // 在用户首次点击页面时初始化AudioContext（以便音效可以播放）
