@@ -4760,16 +4760,35 @@ window.addEventListener('resize', () => {
 let updateTimer = null;
 let tradeDepthTimer = null;
 
-// 更新成交价和盘口（每500ms一次，即1秒2次）
+// 更新成交价和盘口（每1-2秒一次，根据交易时间自动调整）
 // AG（国内白银）通过后端TqSdk接口HTTP轮询获取，Silver（伦敦白银）通过AllTick WebSocket实时推送
 async function updateTradeAndDepth() {
     try {
-        // 同时获取国内和伦敦的成交价、国内盘口数据
-        const [domesticTradeTick, londonTradeTick, domesticDepth] = await Promise.all([
-            fetchTradeTick(API_CONFIG.domesticSymbol), // AG通过TqSdk获取
-            fetchTradeTick(API_CONFIG.londonSymbol),   // Silver通过AllTick API获取（作为WebSocket的补充）
-            fetchDepthTick(API_CONFIG.domesticSymbol)  // AG盘口数据
-        ]);
+        // 检查国内白银是否在交易时间内
+        const isDomesticTrading = isDomesticTradingTime();
+        
+        // 根据交易时间决定是否获取国内数据
+        let promises = [
+            fetchTradeTick(API_CONFIG.londonSymbol)   // Silver通过AllTick API获取（作为WebSocket的补充）
+        ];
+        
+        // 只在交易时间内获取国内白银数据
+        if (isDomesticTrading) {
+            promises.unshift(
+                fetchTradeTick(API_CONFIG.domesticSymbol), // AG通过TqSdk获取
+                fetchDepthTick(API_CONFIG.domesticSymbol)  // AG盘口数据
+            );
+        }
+        
+        const results = await Promise.all(promises);
+        
+        // 解析结果
+        let domesticTradeTick, domesticDepth, londonTradeTick;
+        if (isDomesticTrading) {
+            [domesticTradeTick, domesticDepth, londonTradeTick] = results;
+        } else {
+            [londonTradeTick] = results;
+        }
         
         // 更新最新成交价（如果HTTP轮询返回了数据）
         if (domesticTradeTick) {
@@ -4779,8 +4798,8 @@ async function updateTradeAndDepth() {
             updateLondonTradeTick(londonTradeTick);
         }
         
-        // 更新国内盘口数据
-        if (domesticDepth) {
+        // 更新国内盘口数据（只在交易时间内）
+        if (isDomesticTrading && domesticDepth) {
             updateDomesticDepth(domesticDepth);
         }
         
@@ -4831,9 +4850,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 每1秒更新一次K线数据（加上节流机制，实际频率不会超过300ms一次）
     updateTimer = setInterval(updateAllData, 1000);
     
-    // 每2秒更新一次成交价和盘口数据（降低频率，WebSocket已提供实时Tick数据）
+    // 交易时间内每1秒更新一次盘口，非交易时间每2秒更新（只更新伦敦数据）
     updateTradeAndDepth(); // 立即执行一次
-    tradeDepthTimer = setInterval(updateTradeAndDepth, 2000);
+    
+    // 动态调整更新频率
+    function startTradeDepthTimer() {
+        if (tradeDepthTimer) {
+            clearInterval(tradeDepthTimer);
+        }
+        const isDomesticTrading = isDomesticTradingTime();
+        const interval = isDomesticTrading ? 1000 : 2000; // 交易时间1秒，非交易时间2秒
+        tradeDepthTimer = setInterval(updateTradeAndDepth, interval);
+        if (Math.random() < 0.1) {
+            console.log(`[盘口定时器] 国内${isDomesticTrading ? '交易中' : '休市'}，更新间隔: ${interval}ms`);
+        }
+    }
+    
+    startTradeDepthTimer();
+    
+    // 每分钟检查一次交易状态，动态调整更新频率
+    setInterval(() => {
+        const currentState = isDomesticTradingTime();
+        const currentInterval = tradeDepthTimer ? (currentState ? 1000 : 2000) : 0;
+        startTradeDepthTimer();
+    }, 60000);
     
     // 每5分钟自动执行一次K线预测（如果已经有AI分析结果）
     setInterval(() => {
