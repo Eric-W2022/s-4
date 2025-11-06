@@ -158,7 +158,13 @@ header h1 {
 }
 
 .right-panel {
-    flex: 0 0 420px; /* 增加宽度以容纳完整标题 */
+    flex: 0 0 420px; /* 市场数据区域：盘口+套利 */
+    display: flex;
+    flex-direction: column;
+}
+
+.strategy-panel {
+    flex: 0 0 450px; /* 交易策略区域：单独一列 */
     display: flex;
     flex-direction: column;
 }
@@ -976,9 +982,23 @@ footer p {
 }
 
 /* 响应式设计 */
+@media (max-width: 1600px) {
+    .right-panel {
+        flex: 0 0 380px; /* 中屏幕时稍微窄一点 */
+    }
+    
+    .strategy-panel {
+        flex: 0 0 400px; /* 中屏幕时稍微窄一点 */
+    }
+}
+
 @media (max-width: 1400px) {
     .right-panel {
-        flex: 0 0 320px; /* 小屏幕时稍微窄一点 */
+        flex: 0 0 320px; /* 小屏幕时更窄 */
+    }
+    
+    .strategy-panel {
+        flex: 0 0 350px; /* 小屏幕时更窄 */
     }
 }
 
@@ -992,6 +1012,11 @@ footer p {
     }
 
     .right-panel {
+        width: 100%;
+        flex: 1;
+    }
+    
+    .strategy-panel {
         width: 100%;
         flex: 1;
     }
@@ -1023,6 +1048,10 @@ footer p {
     }
 
     .right-panel {
+        width: 100%;
+    }
+    
+    .strategy-panel {
         width: 100%;
     }
 }
