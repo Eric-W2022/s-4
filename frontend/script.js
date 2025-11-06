@@ -4225,6 +4225,11 @@ let isUpdating = false; // 是否正在更新
 let pendingUpdate = false; // 是否有待处理的更新请求
 let lastUpdateTime = 0; // 上次更新时间
 const MIN_UPDATE_INTERVAL = 300; // 最小更新间隔（毫秒）
+let domesticDataLoaded = false; // 标记国内数据是否已加载过（非交易时间首次加载后不再刷新）
+
+// 缓存国内各时间周期的K线数据
+let currentDomestic15mKlineData = null;
+let currentDomesticDailyKlineData = null;
 
 async function updateAllData() {
     // 如果正在更新，标记为有待处理的请求，然后返回
@@ -4254,17 +4259,43 @@ async function updateAllData() {
     updateStatus('connecting');
     
     try {
-        // 同时获取国内和伦敦的K线数据
-        // 伦敦现货白银：1分钟K线（实时图表）、15分钟K线（中期图表）和90日K线（历史图表）
-        // 国内白银：1分钟K线（实时图表）、15分钟K线（中期图表）和90日K线（历史图表）
-        const [domesticKlineData, londonKlineData, london15mKlineData, domestic15mKlineData, londonDailyKlineData, domesticDailyKlineData] = await Promise.all([
-            fetchKlineData(API_CONFIG.domesticSymbol), // 国内1分钟K线
-            fetchKlineData(API_CONFIG.londonSymbol), // 伦敦1分钟K线
-            fetchKlineData(API_CONFIG.londonSymbol, '15m', 100), // 伦敦15分钟K线数据（100根）
-            fetchKlineData(API_CONFIG.domesticSymbol, '15m', 100), // 国内15分钟K线数据（100根）
-            fetchKlineData(API_CONFIG.londonSymbol, '1d', 90), // 伦敦90日K线数据
-            fetchKlineData(API_CONFIG.domesticSymbol, '1d', 90) // 国内90日K线数据
-        ]);
+        // 检查国内是否在交易时间
+        const isDomesticTrading = isDomesticTradingTime();
+        
+        // 准备请求数组
+        let promises = [];
+        let requestDomesticData = false;
+        
+        // 判断是否需要请求国内数据：交易时间内 或 首次加载
+        if (isDomesticTrading || !domesticDataLoaded) {
+            requestDomesticData = true;
+            promises = [
+                fetchKlineData(API_CONFIG.domesticSymbol), // 国内1分钟K线
+                fetchKlineData(API_CONFIG.londonSymbol), // 伦敦1分钟K线
+                fetchKlineData(API_CONFIG.londonSymbol, '15m', 100), // 伦敦15分钟K线数据（100根）
+                fetchKlineData(API_CONFIG.domesticSymbol, '15m', 100), // 国内15分钟K线数据（100根）
+                fetchKlineData(API_CONFIG.londonSymbol, '1d', 90), // 伦敦90日K线数据
+                fetchKlineData(API_CONFIG.domesticSymbol, '1d', 90) // 国内90日K线数据
+            ];
+            if (!domesticDataLoaded) {
+                console.log('[K线刷新] 首次加载，获取国内K线数据');
+            }
+        } else {
+            // 非交易时间且已加载过，只更新伦敦数据
+            promises = [
+                null, // 占位，不请求国内1分钟K线
+                fetchKlineData(API_CONFIG.londonSymbol), // 伦敦1分钟K线
+                fetchKlineData(API_CONFIG.londonSymbol, '15m', 100), // 伦敦15分钟K线数据（100根）
+                null, // 占位，不请求国内15分钟K线
+                fetchKlineData(API_CONFIG.londonSymbol, '1d', 90), // 伦敦90日K线数据
+                null // 占位，不请求国内90日K线
+            ];
+            if (Math.random() < 0.05) {
+                console.log('[K线刷新] 国内休市，跳过国内K线请求');
+            }
+        }
+        
+        const [domesticKlineData, londonKlineData, london15mKlineData, domestic15mKlineData, londonDailyKlineData, domesticDailyKlineData] = await Promise.all(promises);
         
         // 检查国内市场数据是否有更新
         if (domesticKlineData && domesticKlineData.length > 0) {
@@ -4356,12 +4387,22 @@ async function updateAllData() {
         }
         
         // 保存当前数据供下次比较
-        lastDomesticKlineData = domesticKlineData;
-        lastLondonKlineData = londonKlineData;
-        
-        // 保存K线数据供分析使用
-        currentDomesticKlineData = domesticKlineData;
-        currentLondonKlineData = londonKlineData;
+        // 只在获取到新数据时更新
+        if (domesticKlineData) {
+            lastDomesticKlineData = domesticKlineData;
+            currentDomesticKlineData = domesticKlineData;
+            domesticDataLoaded = true; // 标记已加载过国内数据
+        }
+        if (domestic15mKlineData) {
+            currentDomestic15mKlineData = domestic15mKlineData;
+        }
+        if (domesticDailyKlineData) {
+            currentDomesticDailyKlineData = domesticDailyKlineData;
+        }
+        if (londonKlineData) {
+            lastLondonKlineData = londonKlineData;
+            currentLondonKlineData = londonKlineData;
+        }
         
         // 初始化伦敦当前K线（用于实时更新）
         if (londonKlineData && londonKlineData.length > 0) {
@@ -4395,8 +4436,14 @@ async function updateAllData() {
         }
         
         // 更新国内白银K线图
-        if (domesticKlineData !== null && domesticKlineData.length > 0) {
-            console.log(`[图表更新] 准备更新国内图表，数据条数: ${domesticKlineData.length}`);
+        // 使用 currentDomesticKlineData（可能是新获取的或之前缓存的）
+        if (currentDomesticKlineData !== null && currentDomesticKlineData.length > 0) {
+            if (domesticKlineData) {
+                console.log(`[图表更新] 准备更新国内图表（新数据），数据条数: ${domesticKlineData.length}`);
+            } else if (Math.random() < 0.05) {
+                console.log(`[图表更新] 国内休市，使用缓存数据显示，数据条数: ${currentDomesticKlineData.length}`);
+            }
+            
             if (!domesticChart) {
                 console.warn('[数据更新] 国内图表未初始化，尝试重新初始化');
                 const domesticChartElement = document.getElementById('domestic-chart');
@@ -4408,13 +4455,16 @@ async function updateAllData() {
                 }
             }
             if (domesticChart) {
-                console.log(`[图表更新] 调用updateChart更新国内图表`);
-                updateChart(domesticChart, domesticKlineData, 'domestic-info');
-                console.log(`[图表更新] 国内图表更新完成`);
+                // 只在有新数据时更新图表
+                if (domesticKlineData) {
+                    console.log(`[图表更新] 调用updateChart更新国内图表`);
+                    updateChart(domesticChart, currentDomesticKlineData, 'domestic-info');
+                    console.log(`[图表更新] 国内图表更新完成`);
+                }
             } else {
                 console.error('[数据更新] 国内图表初始化失败，无法更新图表');
             }
-        } else {
+        } else if (domesticKlineData !== undefined && domesticKlineData !== null) {
             const domesticInfo = document.getElementById('domestic-info');
             if (domesticInfo) {
                 if (domesticKlineData === null) {
@@ -4581,7 +4631,9 @@ async function updateAllData() {
         }
         
         // 更新国内白银90日K线图
-        if (domesticDailyKlineData !== null && domesticDailyKlineData.length > 0) {
+        // 使用缓存数据（可能是新获取的或之前缓存的）
+        const displayDomesticDailyData = domesticDailyKlineData || currentDomesticDailyKlineData;
+        if (displayDomesticDailyData !== null && displayDomesticDailyData.length > 0) {
             if (!domesticDailyChart) {
                 const domesticDailyChartElement = document.getElementById('domestic-daily-chart');
                 if (domesticDailyChartElement) {
@@ -4628,7 +4680,10 @@ async function updateAllData() {
                 }
             }
             if (domesticDailyChart) {
-                updateChart(domesticDailyChart, domesticDailyKlineData, 'domestic-daily-info');
+                // 只在有新数据时更新
+                if (domesticDailyKlineData) {
+                    updateChart(domesticDailyChart, displayDomesticDailyData, 'domestic-daily-info');
+                }
             }
         } else {
             const domesticDailyInfo = document.getElementById('domestic-daily-info');
@@ -4642,7 +4697,9 @@ async function updateAllData() {
         }
         
         // 更新国内白银15分钟K线图
-        if (domestic15mKlineData !== null && domestic15mKlineData.length > 0) {
+        // 使用缓存数据（可能是新获取的或之前缓存的）
+        const displayDomestic15mData = domestic15mKlineData || currentDomestic15mKlineData;
+        if (displayDomestic15mData !== null && displayDomestic15mData.length > 0) {
             if (!domestic15mChart) {
                 const domestic15mChartElement = document.getElementById('domestic-15m-chart');
                 if (domestic15mChartElement) {
@@ -4689,7 +4746,10 @@ async function updateAllData() {
                 }
             }
             if (domestic15mChart) {
-                updateChart(domestic15mChart, domestic15mKlineData, 'domestic-15m-info');
+                // 只在有新数据时更新
+                if (domestic15mKlineData) {
+                    updateChart(domestic15mChart, displayDomestic15mData, 'domestic-15m-info');
+                }
             }
         } else {
             const domestic15mInfo = document.getElementById('domestic-15m-info');
