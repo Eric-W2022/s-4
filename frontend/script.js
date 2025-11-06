@@ -12,12 +12,8 @@ const API_CONFIG = {
     // WebSocket配置
     wsToken: '9d7f12b4c30826987a501d532ef75707-c-app',
     wsUrl: 'wss://quote.alltick.co/quote-b-ws-api',
-    // 大模型API配置（根据代理状态动态设置）
-    llmApiUrl: null, // 将在检测代理后动态设置
-    // 不开代理时使用的API URL（国内）
-    llmApiUrlChina: 'https://1256349444-is2nyxcqfv.ap-guangzhou.tencentscf.com/chat',
-    // 开代理时使用的API URL（新加坡）
-    llmApiUrlSingapore: 'https://1256349444-2ej4ahqihp.ap-singapore.tencentscf.com/chat'
+    // 大模型API配置 - 直接使用新加坡API
+    llmApiUrl: 'https://1256349444-2ej4ahqihp.ap-singapore.tencentscf.com/chat'
 };
 
 // WebSocket连接管理（订阅交易价格）
@@ -3177,31 +3173,7 @@ function updateChart(chart, data, infoElementId) {
     // 准备预测K线数据（只需要价格，用于显示虚线 - 用于1分钟K线）
     const predictedPrices = predictedKlines.map(item => item.c || item.o);
     
-    // 准备成交量数据（用于柱状图）
-    // 只为真实K线添加成交量，预测K线位置填充0（不显示）
-    const volumeData = sortedData.map((item, index) => {
-        // 根据涨跌显示不同颜色：上涨红色，下跌绿色
-        const isUp = item.c >= item.o;
-        return {
-            value: item.v || 0,
-            itemStyle: {
-                color: isUp ? '#ef4444' : '#4ade80' // 上涨红色，下跌绿色
-            }
-        };
-    });
-    
-    // 为预测K线位置添加0值（不显示成交量柱）
-    // 这样成交量X轴与K线X轴长度一致，但预测部分不显示成交量
-    if (predictedKlines.length > 0) {
-        for (let i = 0; i < predictedKlines.length; i++) {
-            volumeData.push({
-                value: 0, // 设置为0，不显示成交量柱
-                itemStyle: {
-                    color: 'transparent' // 透明色，完全不显示
-                }
-            });
-        }
-    }
+    // 注意：成交量显示已移至进度条，不再需要单独的成交量系列
     
     // 计算价格范围，用于设置Y轴范围
     let minPrice, maxPrice, paddingTop, paddingBottom, yAxisMin, yAxisMax;
@@ -5150,18 +5122,6 @@ async function callAnalysisAPI(domesticData, londonData, domesticDailyData = nul
     console.log('[callAnalysisAPI] londonPrediction:', londonPrediction ? '有' : '无');
     
     try {
-        // 先检测代理状态并设置API URL（如果还未检测）
-        if (API_CONFIG.llmApiUrl === null) {
-            console.log('[callAnalysisAPI] 开始检测代理状态...');
-            await detectProxy();
-        }
-        
-        // 确保API URL已设置
-        if (!API_CONFIG.llmApiUrl) {
-            console.warn('[callAnalysisAPI] API URL未设置，使用默认国内API');
-            API_CONFIG.llmApiUrl = API_CONFIG.llmApiUrlChina;
-        }
-        
         console.log('[callAnalysisAPI] 使用的API URL:', API_CONFIG.llmApiUrl);
         
         // 检查prompt.js是否已加载
@@ -5594,12 +5554,6 @@ async function callKlinePredictionAPI(marketType, klineData, londonPrediction = 
     }
     
     try {
-        // 检测代理状态
-        if (API_CONFIG.llmApiUrl === null) {
-            console.log('[K线预测] 开始检测代理状态...');
-            const isProxy = await detectProxyAndSetupAPI();
-            console.log('[K线预测] 代理检测完成，isProxy:', isProxy);
-        }
         
         // 准备系统提示词（根据市场类型选择）
         const systemPrompt = marketType === 'london' 
@@ -6198,13 +6152,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', initAudioOnInteraction, { once: true });
     document.addEventListener('touchstart', initAudioOnInteraction, { once: true });
     
-    // 页面加载时提前检测代理状态（后台进行，不阻塞页面）
-    detectProxy().then(isProxyEnabled => {
-        console.log('[页面初始化] 代理检测完成，是否开启代理:', isProxyEnabled);
-        console.log('[页面初始化] 使用的API URL:', API_CONFIG.llmApiUrl);
-    }).catch(error => {
-        console.warn('[页面初始化] 代理检测失败，将在调用API时重试:', error);
-    });
+    // 页面加载完成，显示使用的API
+    console.log('[页面初始化] 使用的API URL:', API_CONFIG.llmApiUrl);
     
     // 初始化时获取一次K线数据并自动触发AI分析
     setTimeout(async () => {
