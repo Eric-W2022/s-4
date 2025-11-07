@@ -196,13 +196,13 @@ export const createKlineChartOption = (
     grid: [
       {
         left: '5%',
-        right: '8%',  // 为布林带标签留出适当空间
+        right: '3%',  // 标签在线上，不需要额外空间
         top: '10%',
         height: '60%',
       },
       {
         left: '5%',
-        right: '8%',
+        right: '3%',
         top: '75%',
         height: '15%',
       },
@@ -353,6 +353,24 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
+        label: {
+          show: true,
+          position: 'end',
+          formatter: () => {
+            const lastValue = bollingerBands.upper[bollingerBands.upper.length - 1];
+            if (lastValue === null) return '';
+            return isLondonMarket ? lastValue.toFixed(3) : Math.round(lastValue).toString();
+          },
+          color: CHART_THEMES.PURPLE,
+          fontSize: 11,
+          fontWeight: 'bold',
+          fontFamily: 'Monaco, monospace',
+          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          padding: [3, 6],
+          borderColor: CHART_THEMES.PURPLE,
+          borderWidth: 1,
+          borderRadius: 3,
+        },
         emphasis: {
           disabled: true,
         },
@@ -368,6 +386,24 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
+        label: {
+          show: true,
+          position: 'end',
+          formatter: () => {
+            const lastValue = bollingerBands.middle[bollingerBands.middle.length - 1];
+            if (lastValue === null) return '';
+            return isLondonMarket ? lastValue.toFixed(3) : Math.round(lastValue).toString();
+          },
+          color: CHART_THEMES.YELLOW,
+          fontSize: 11,
+          fontWeight: 'bold',
+          fontFamily: 'Monaco, monospace',
+          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          padding: [3, 6],
+          borderColor: CHART_THEMES.YELLOW,
+          borderWidth: 1,
+          borderRadius: 3,
+        },
         emphasis: {
           disabled: true,
         },
@@ -383,6 +419,24 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
+        label: {
+          show: true,
+          position: 'end',
+          formatter: () => {
+            const lastValue = bollingerBands.lower[bollingerBands.lower.length - 1];
+            if (lastValue === null) return '';
+            return isLondonMarket ? lastValue.toFixed(3) : Math.round(lastValue).toString();
+          },
+          color: CHART_THEMES.PURPLE,
+          fontSize: 11,
+          fontWeight: 'bold',
+          fontFamily: 'Monaco, monospace',
+          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          padding: [3, 6],
+          borderColor: CHART_THEMES.PURPLE,
+          borderWidth: 1,
+          borderRadius: 3,
+        },
         emphasis: {
           disabled: true,
         },
@@ -404,90 +458,6 @@ export const createKlineChartOption = (
         }),
       },
     ],
-    graphic: (() => {
-      const graphics: any[] = [];
-      const lastIndex = bollingerBands.upper.length - 1;
-      
-      // 布林上轨标签
-      if (bollingerBands.upper[lastIndex] !== null) {
-        graphics.push({
-          type: 'group',
-          right: '1%',
-          bounding: 'raw',
-          children: [
-            {
-              type: 'text',
-              z: 100,
-              position: [0, 0],
-              style: {
-                text: `上轨 ${isLondonMarket ? bollingerBands.upper[lastIndex]?.toFixed(3) : Math.round(bollingerBands.upper[lastIndex] || 0)}`,
-                fill: CHART_THEMES.PURPLE,
-                font: 'bold 11px Monaco, monospace',
-                backgroundColor: 'rgba(19, 23, 43, 0.95)',
-                padding: [3, 6],
-                borderColor: CHART_THEMES.PURPLE,
-                borderWidth: 1,
-                borderRadius: 3,
-              },
-            },
-          ],
-        });
-      }
-      
-      // 布林中轨标签
-      if (bollingerBands.middle[lastIndex] !== null) {
-        graphics.push({
-          type: 'group',
-          right: '1%',
-          bounding: 'raw',
-          children: [
-            {
-              type: 'text',
-              z: 100,
-              position: [0, 0],
-              style: {
-                text: `中轨 ${isLondonMarket ? bollingerBands.middle[lastIndex]?.toFixed(3) : Math.round(bollingerBands.middle[lastIndex] || 0)}`,
-                fill: CHART_THEMES.YELLOW,
-                font: 'bold 11px Monaco, monospace',
-                backgroundColor: 'rgba(19, 23, 43, 0.95)',
-                padding: [3, 6],
-                borderColor: CHART_THEMES.YELLOW,
-                borderWidth: 1,
-                borderRadius: 3,
-              },
-            },
-          ],
-        });
-      }
-      
-      // 布林下轨标签
-      if (bollingerBands.lower[lastIndex] !== null) {
-        graphics.push({
-          type: 'group',
-          right: '1%',
-          bounding: 'raw',
-          children: [
-            {
-              type: 'text',
-              z: 100,
-              position: [0, 0],
-              style: {
-                text: `下轨 ${isLondonMarket ? bollingerBands.lower[lastIndex]?.toFixed(3) : Math.round(bollingerBands.lower[lastIndex] || 0)}`,
-                fill: CHART_THEMES.PURPLE,
-                font: 'bold 11px Monaco, monospace',
-                backgroundColor: 'rgba(19, 23, 43, 0.95)',
-                padding: [3, 6],
-                borderColor: CHART_THEMES.PURPLE,
-                borderWidth: 1,
-                borderRadius: 3,
-              },
-            },
-          ],
-        });
-      }
-      
-      return graphics;
-    })(),
   };
 };
 
