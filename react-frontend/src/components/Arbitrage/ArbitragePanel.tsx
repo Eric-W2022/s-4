@@ -68,14 +68,14 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       }
 
       return {
-        score: Math.round(score),
-        correlation: Number(correlation.toFixed(3)),
-        priceDiff: Number(priceDiff.toFixed(2)),
-        londonAmplitude: Number(londonAmplitude.toFixed(3)),
-        domesticAmplitude: Number(domesticAmplitude.toFixed(3)),
-        amplitudeDiff: Number(amplitudeDiff.toFixed(3)),
+        score: isNaN(score) ? 0 : Math.round(score),
+        correlation: isNaN(correlation) ? 0 : Number(correlation.toFixed(3)),
+        priceDiff: isNaN(priceDiff) ? 0 : Number(priceDiff.toFixed(2)),
+        londonAmplitude: isNaN(londonAmplitude) ? 0 : Number(londonAmplitude.toFixed(3)),
+        domesticAmplitude: isNaN(domesticAmplitude) ? 0 : Number(domesticAmplitude.toFixed(3)),
+        amplitudeDiff: isNaN(amplitudeDiff) ? 0 : Number(amplitudeDiff.toFixed(3)),
         direction,
-        domesticStrength: Number(domesticStrength.toFixed(3)),
+        domesticStrength: isNaN(domesticStrength) ? 0 : Number(domesticStrength.toFixed(3)),
       };
     }, [londonData, domesticData]);
 

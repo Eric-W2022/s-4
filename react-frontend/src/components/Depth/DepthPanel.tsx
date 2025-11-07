@@ -25,6 +25,9 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
     const askPercent = (totalAsk / total) * 100;
     const bidPercent = (totalBid / total) * 100;
     
+    // 确保百分比是有效数字
+    if (isNaN(askPercent) || isNaN(bidPercent)) return null;
+    
     let trend: 'bullish' | 'bearish' | 'neutral' = 'neutral';
     if (bidPercent > askPercent + 10) {
       trend = 'bullish'; // 多方优势

@@ -115,13 +115,20 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
         <div className="chart-header">
           <h2>
             {title}
-            {tradeTick && (
-              <span className={`title-price ${priceInfo ? (priceInfo.isPositive ? 'positive' : 'negative') : ''}`}>
-                {isLondonMarket 
-                  ? (typeof tradeTick.price === 'string' ? parseFloat(tradeTick.price).toFixed(3) : tradeTick.price.toFixed(3))
-                  : formatPrice(tradeTick.price)}
-              </span>
-            )}
+            {tradeTick && (() => {
+              let displayPrice = '';
+              if (isLondonMarket) {
+                const price = typeof tradeTick.price === 'string' ? parseFloat(tradeTick.price) : tradeTick.price;
+                displayPrice = !isNaN(price) ? price.toFixed(3) : '-';
+              } else {
+                displayPrice = formatPrice(tradeTick.price);
+              }
+              return (
+                <span className={`title-price ${priceInfo ? (priceInfo.isPositive ? 'positive' : 'negative') : ''}`}>
+                  {displayPrice}
+                </span>
+              );
+            })()}
           </h2>
         </div>
         {data && data.length > 0 ? (
