@@ -16,47 +16,25 @@
 
 ### 1. 安装依赖
 
-**后端依赖：**
-```bash
-pip install -r requirements.txt
-```
-
-新增依赖：`python-dotenv>=1.0.0`（已添加到requirements.txt）
-
 **前端依赖：**
 ```bash
 cd react-frontend
 npm install
 ```
 
-### 2. 配置大模型API
-
-创建 `.env` 文件在项目根目录：
-
+**后端依赖（仅用于市场数据）：**
 ```bash
-# 复制示例文件
-cp .env.example .env
-
-# 编辑 .env 文件，填入你的API配置
+pip install -r requirements.txt
 ```
 
-`.env` 文件内容：
-```bash
-# 大模型API配置
-LLM_API_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=your_api_key_here
-```
+### 2. 无需配置大模型API
 
-**支持的API服务商：**
+✅ **本系统采用纯前端实现，无需配置API密钥！**
 
-| 服务商 | API Base URL | 说明 |
-|--------|-------------|------|
-| OpenAI | https://api.openai.com/v1 | GPT系列 |
-| DeepSeek | https://api.deepseek.com/v1 | DeepSeek Chat |
-| 豆包（字节） | https://ark.cn-beijing.volces.com/api/v3 | 豆包系列 |
-| 通义千问 | https://dashscope.aliyuncs.com/compatible-mode/v1 | Qwen系列 |
-| 智谱AI | https://open.bigmodel.cn/api/paas/v4 | GLM系列 |
-| 其他兼容OpenAI接口的服务商 | - | 任何实现了OpenAI Chat Completions API的服务 |
+- 直接从浏览器请求新加坡服务器
+- 不需要创建 `.env` 文件
+- 不需要配置后端API
+- 开箱即用
 
 ### 3. 启动服务
 
@@ -119,45 +97,40 @@ s-4/
 
 ## API接口说明
 
-### 策略分析接口
+### 纯前端实现
 
-**端点：** `POST /api/strategy/analyze`
+本系统**直接从浏览器请求新加坡服务器**，无需后端代理：
+
+**端点：** `https://1256349444-fla6e0vfcj.ap-singapore.tencentscf.com/chat`
+
+**请求方式：** POST
 
 **请求体：**
 ```json
 {
   "model": "deepseek-chat",
-  "systemPrompt": "你是一位专业的贵金属交易策略分析师...",
   "messages": [
+    {"role": "system", "content": "你是一位专业的贵金属交易策略分析师..."},
     {"role": "user", "content": "【伦敦现货白银 1分钟K线】..."},
-    {"role": "user", "content": "【伦敦现货白银 15分钟K线】..."},
-    // ... 更多消息
-  ]
+    {"role": "user", "content": "【国内白银主力 1分钟K线】..."}
+  ],
+  "temperature": 0.7,
+  "max_tokens": 4000
 }
 ```
 
 **响应体：**
 ```json
 {
-  "ret": 200,
-  "msg": "ok",
-  "data": {
-    "tradingAdvice": {
-      "action": "买多",
-      "confidence": 75,
-      "riskLevel": "中",
-      "entryPrice": 8500,
-      "stopLoss": 8450,
-      "takeProfit": 8600,
-      "lots": 2,
-      "londonPricePrediction15min": 32.50,
-      "pricePrediction15min": 8520
-    },
-    "analysisReason": "技术面分析...",
-    "nextSteps": "后续操作建议..."
-  }
+  "choices": [{
+    "message": {
+      "content": "{\"tradingAdvice\":{...},\"analysisReason\":\"...\",\"nextSteps\":\"...\"}"
+    }
+  }]
 }
 ```
+
+服务会自动解析JSON响应并提取策略数据。
 
 ## 支持的AI模型
 
@@ -259,21 +232,17 @@ messages.push({
 ### 2. 策略分析失败
 
 **可能原因：**
-- `.env` 文件未配置或配置错误
-- API密钥无效
-- API服务不可用
-- 网络连接问题
+- 网络无法访问新加坡服务器
+- 市场数据未完全加载
+- AI服务响应超时
+- 浏览器控制台有错误
 
 **解决方法：**
-1. 检查 `.env` 文件是否存在且配置正确
-2. 验证API密钥是否有效
-3. 检查后端日志：`logs/app_*.log`
-4. 测试API连接：
-   ```bash
-   curl -X POST http://localhost:8080/api/strategy/analyze \
-     -H "Content-Type: application/json" \
-     -d '{"model":"deepseek-chat","systemPrompt":"test","messages":[]}'
-   ```
+1. 打开浏览器控制台（F12），查看详细错误信息
+2. 确认能否访问：`https://1256349444-fla6e0vfcj.ap-singapore.tencentscf.com`
+3. 检查所有K线数据是否已加载（6组数据）
+4. 等待更长时间（首次分析可能需要30秒）
+5. 刷新页面重试
 
 ### 3. 模型响应格式错误
 
@@ -286,16 +255,6 @@ messages.push({
 - 如果仍然失败，可能需要调整提示词，强调"只返回JSON"
 - 或在 `backend/routes/strategy.py` 中增强JSON提取逻辑
 
-### 4. python-dotenv导入错误
-
-**错误信息：** `ModuleNotFoundError: No module named 'dotenv'`
-
-**解决方法：**
-```bash
-pip install python-dotenv
-# 或
-pip install -r requirements.txt
-```
 
 ## 性能优化
 
@@ -348,10 +307,10 @@ pip install -r requirements.txt
 
 ## 安全注意事项
 
-1. **API密钥安全**
-   - 不要将 `.env` 文件提交到Git仓库
-   - `.env` 已在 `.gitignore` 中（确认）
-   - 定期更换API密钥
+1. **网络安全**
+   - 直接从浏览器请求新加坡服务器
+   - 确保HTTPS连接安全
+   - 所有市场数据仅用于AI分析
 
 2. **交易风险提示**
    - AI分析仅供参考，不构成投资建议
@@ -359,8 +318,9 @@ pip install -r requirements.txt
    - 建议添加免责声明
 
 3. **数据安全**
-   - 敏感交易数据不要发送给第三方API
-   - 考虑使用自部署的大模型
+   - 所有市场数据都是公开数据
+   - 不涉及个人账户信息
+   - 分析结果仅在浏览器本地显示
 
 ## 技术支持
 

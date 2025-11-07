@@ -84,8 +84,20 @@ export type ModelType =
  * 策略分析结果
  */
 export interface StrategyAnalysis {
-  content: string;
-  timestamp: number;
-  model: string;
+  tradingAdvice: {
+    action: '买多' | '卖空' | '观望';
+    confidence: number;
+    riskLevel: '高' | '中' | '低';
+    entryPrice: number;
+    stopLoss: number;
+    takeProfit: number;
+    lots: number;
+    londonPricePrediction15min: number;
+    pricePrediction15min: number;
+  };
+  analysisReason: string;
+  nextSteps: string;
+  timestamp?: number;
+  model?: string;
 }
 

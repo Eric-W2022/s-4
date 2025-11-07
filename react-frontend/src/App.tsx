@@ -41,6 +41,7 @@ function AppContent() {
     londonConnectionStatus,
     domesticConnectionStatus,
     strategy,
+    setStrategy,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -181,6 +182,77 @@ function AppContent() {
     if (domesticDepthQuery.data) setDomesticDepth(domesticDepthQuery.data);
   }, [domesticDepthQuery.data]);
 
+  // 自动触发AI策略分析
+  useEffect(() => {
+    const triggerAnalysis = async () => {
+      // 检查所有数据是否已加载
+      const hasAllData = 
+        londonKline1mQuery.data && londonKline1mQuery.data.length > 0 &&
+        londonKline15mQuery.data && londonKline15mQuery.data.length > 0 &&
+        londonKlineDailyQuery.data && londonKlineDailyQuery.data.length > 0 &&
+        domesticRealtimeKline.length > 0 &&
+        domesticKline15mQuery.data && domesticKline15mQuery.data.length > 0 &&
+        domesticKlineDailyQuery.data && domesticKlineDailyQuery.data.length > 0;
+      
+      if (!hasAllData) {
+        console.log('[自动分析] 等待数据加载完成...');
+        return;
+      }
+      
+      // 如果已经有策略数据，不重复分析
+      if (strategy) {
+        console.log('[自动分析] 已有策略数据，跳过');
+        return;
+      }
+      
+      console.log('[自动分析] 所有数据已就绪，开始分析...');
+      
+      try {
+        setStrategy({ isLoading: true } as any); // 设置加载状态
+        
+        const { analyzeStrategy } = await import('./services/strategyService');
+        
+        const result = await analyzeStrategy(
+          selectedModel,
+          londonKline1mQuery.data || [],
+          londonKline15mQuery.data || [],
+          londonKlineDailyQuery.data || [],
+          domesticRealtimeKline,
+          domesticKline15mQuery.data || [],
+          domesticKlineDailyQuery.data || [],
+          domesticDepthQuery.data || null
+        );
+        
+        setStrategy({
+          ...result,
+          timestamp: Date.now(),
+          model: selectedModel
+        } as any);
+        
+        console.log('[自动分析] 分析完成');
+      } catch (error: any) {
+        console.error('[自动分析] 分析失败:', error);
+        setStrategy(null);
+      }
+    };
+    
+    // 延迟5秒后触发分析，确保所有数据都已加载
+    const timer = setTimeout(triggerAnalysis, 5000);
+    
+    return () => clearTimeout(timer);
+  }, [
+    londonKline1mQuery.data,
+    londonKline15mQuery.data,
+    londonKlineDailyQuery.data,
+    domesticRealtimeKline,
+    domesticKline15mQuery.data,
+    domesticKlineDailyQuery.data,
+    domesticDepthQuery.data,
+    strategy,
+    selectedModel,
+    setStrategy
+  ]);
+
   return (
     <div className="container">
       <div className="main-content">
@@ -251,7 +323,7 @@ function AppContent() {
             strategy={strategy}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-            isLoading={false}
+            isLoading={!!(strategy && (strategy as any).isLoading === true)}
           />
         </div>
       </div>
