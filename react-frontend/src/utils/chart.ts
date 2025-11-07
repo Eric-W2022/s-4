@@ -258,9 +258,9 @@ export const createKlineChartOption = (
               return `${month}-${day}`;
             } else {
               // 分钟K线显示时:分
-              const hours = String(date.getHours()).padStart(2, '0');
-              const minutes = String(date.getMinutes()).padStart(2, '0');
-              return `${hours}:${minutes}`;
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
             }
           },
           interval: 'auto',

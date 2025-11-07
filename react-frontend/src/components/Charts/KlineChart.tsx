@@ -132,27 +132,13 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
             {title}
             <StatusDot status={displayStatus} />
             {tradeTick && (
-              <span className="title-price">
+              <span className={`title-price ${priceInfo ? (priceInfo.isPositive ? 'positive' : 'negative') : ''}`}>
                 {isLondonMarket 
                   ? (typeof tradeTick.price === 'string' ? parseFloat(tradeTick.price).toFixed(3) : tradeTick.price.toFixed(3))
                   : formatPrice(tradeTick.price)}
               </span>
             )}
           </h2>
-          <div className="chart-info">
-            {priceInfo && (
-              <>
-                <span className="price">
-                  {isLondonMarket ? priceInfo.price.toFixed(3) : formatPrice(priceInfo.price)}
-                </span>
-                <span className={`change ${priceInfo.isPositive ? 'positive' : 'negative'}`}>
-                  {priceInfo.isPositive ? '+' : ''}
-                  {isLondonMarket ? priceInfo.change.toFixed(3) : formatPrice(priceInfo.change)} ({priceInfo.isPositive ? '+' : ''}
-                  {priceInfo.changePercent.toFixed(2)}%)
-                </span>
-              </>
-            )}
-          </div>
         </div>
         {data && data.length > 0 ? (
           <ReactECharts
