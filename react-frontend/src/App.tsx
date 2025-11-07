@@ -55,6 +55,9 @@ function AppContent() {
 
   // 防止自动分析无限循环的标记
   const hasAttemptedAnalysisRef = useRef(false);
+  
+  // 记录上次使用的模型
+  const lastAnalyzedModelRef = useRef<ModelType | null>(null);
 
   // 国内白银 WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
@@ -270,22 +273,37 @@ function AppContent() {
         return;
       }
       
-      // 如果已经尝试过分析，不再重复
-      if (hasAttemptedAnalysisRef.current) {
+      // 检查模型是否变化
+      const modelChanged = lastAnalyzedModelRef.current !== null && 
+                          lastAnalyzedModelRef.current !== selectedModel;
+      
+      // 如果模型变化，重置标记并强制重新分析
+      if (modelChanged) {
+        console.log('[自动分析] 🔄 模型已切换:', lastAnalyzedModelRef.current, '->', selectedModel);
+        hasAttemptedAnalysisRef.current = false;
+      }
+      
+      // 如果已经尝试过分析且模型未变化，不再重复
+      if (hasAttemptedAnalysisRef.current && !modelChanged) {
         return;
       }
       
-      // 如果已经有策略数据且不是加载中，不重复分析
-      if (strategy && !(strategy as any).isLoading) {
+      // 如果已经有策略数据且不是加载中且模型未变化，不重复分析
+      if (strategy && !(strategy as any).isLoading && !modelChanged) {
         console.log('[自动分析] 已有策略数据，跳过');
         hasAttemptedAnalysisRef.current = true;
         return;
       }
       
-      console.log('[自动分析] ✅ 所有数据已就绪，立即开始分析...');
+      if (modelChanged) {
+        console.log('[自动分析] 🔄 立即使用新模型重新分析...');
+      } else {
+        console.log('[自动分析] ✅ 所有数据已就绪，立即开始分析...');
+      }
       
       // 标记为已尝试，防止无限循环
       hasAttemptedAnalysisRef.current = true;
+      lastAnalyzedModelRef.current = selectedModel;
       
       try {
         setStrategy({ isLoading: true } as any); // 设置加载状态

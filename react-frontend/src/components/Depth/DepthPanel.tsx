@@ -200,7 +200,7 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                   <div className="extended-value">{data.open_interest ? formatVolume(data.open_interest) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
-                  <div className="extended-label">持仓变化</div>
+                  <div className="extended-label">持仓差</div>
                   <div className={`extended-value ${
                     data.open_interest && data.pre_open_interest 
                       ? (parseFloat(data.open_interest) - parseFloat(data.pre_open_interest) >= 0 ? 'price-up' : 'price-down')
