@@ -8,12 +8,12 @@ export const useKlineData = (
   symbol: string,
   interval: string,
   limit: number = 100,
-  refetchInterval?: number
+  refetchInterval?: number | false
 ) => {
   return useQuery({
     queryKey: ['kline', symbol, interval, limit],
     queryFn: () => marketDataApi.getKline(symbol, interval, limit),
-    refetchInterval: refetchInterval || UPDATE_INTERVALS.KLINE_1M,
+    refetchInterval: refetchInterval === false ? false : (refetchInterval || UPDATE_INTERVALS.KLINE_1M),
     staleTime: 5000, // 数据5秒内视为新鲜
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),

@@ -140,16 +140,24 @@ export const createKlineChartOption = (
         let lowerValue: number | null = null;
         
         params.forEach((item: any) => {
-          if (item.seriesName === 'K线' && item.data && Array.isArray(item.data)) {
-            // category轴下candlestick数据格式：[开, 收, 低, 高]
-            const [open, close, low, high] = item.data;
+          if (item.seriesName === 'K线') {
+            // ECharts candlestick 在tooltip中，value数组格式为：[open, close, lowest, highest]
+            const klineValue = item.value || item.data;
+            if (!Array.isArray(klineValue) || klineValue.length < 4) return;
+            
+            // 注意：ECharts candlestick 标准格式是 [open, close, lowest, highest]
+            const open = klineValue[0];
+            const close = klineValue[1];
+            const lowest = klineValue[2];
+            const highest = klineValue[3];
+            
             const color = close >= open ? CHART_THEMES.RED : CHART_THEMES.GREEN;
             const formatValue = (val: number) => isLondonMarket ? val.toFixed(3) : Math.round(val).toString();
             result += `<div style="margin-top: 8px;">`;
             result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">开盘：</span><span style="color: ${color}; font-weight: bold;">${formatValue(open)}</span><br/>`;
             result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">收盘：</span><span style="color: ${color}; font-weight: bold;">${formatValue(close)}</span><br/>`;
-            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最高：</span><span style="color: ${CHART_THEMES.RED}; font-weight: bold;">${formatValue(high)}</span><br/>`;
-            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最低：</span><span style="color: ${CHART_THEMES.GREEN}; font-weight: bold;">${formatValue(low)}</span>`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最高：</span><span style="color: ${CHART_THEMES.RED}; font-weight: bold;">${formatValue(highest)}</span><br/>`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最低：</span><span style="color: ${CHART_THEMES.GREEN}; font-weight: bold;">${formatValue(lowest)}</span>`;
             result += `</div>`;
           } else if (item.seriesName === '布林上轨') {
             upperValue = item.value;

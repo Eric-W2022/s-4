@@ -45,6 +45,7 @@ function AppContent() {
 
   // 国内白银实时K线数据（WebSocket）
   const [domesticRealtimeKline, setDomesticRealtimeKline] = useState<KlineData[]>([]);
+  const [isWebSocketActive, setIsWebSocketActive] = useState(false);
 
   // WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
@@ -57,11 +58,17 @@ function AppContent() {
   }, []);
 
   const handleInitialData = useCallback((klines: KlineData[]) => {
+    console.log('[WebSocket] 收到初始数据，条数:', klines.length);
     setDomesticRealtimeKline(klines);
+    setIsWebSocketActive(true);
   }, []);
 
   const handleStatusChange = useCallback((status: 'connected' | 'connecting' | 'error' | 'closed') => {
     setDomesticConnectionStatus(status);
+    // WebSocket断开时清除标记，重新使用轮询数据
+    if (status === 'error' || status === 'closed') {
+      setIsWebSocketActive(false);
+    }
   }, [setDomesticConnectionStatus]);
 
   // 建立 WebSocket 连接
@@ -93,12 +100,12 @@ function AppContent() {
   );
   const londonTradeTickQuery = useTradeTick(SYMBOLS.LONDON);
 
-  // 国内白银数据查询（1分钟K线用作fallback，主要通过WebSocket）
+  // 国内白银数据查询（1分钟K线用作fallback）
   const domesticKline1mQuery = useKlineData(
     SYMBOLS.DOMESTIC,
     INTERVALS.ONE_MINUTE,
     100,
-    60000 // 1分钟轮询一次作为备份（WebSocket失败时的fallback）
+    isWebSocketActive ? false : 10000 // WebSocket活跃时禁用轮询，否则10秒轮询
   );
   const domesticKline15mQuery = useKlineData(
     SYMBOLS.DOMESTIC,
@@ -114,6 +121,14 @@ function AppContent() {
   );
   const domesticTradeTickQuery = useTradeTick(SYMBOLS.DOMESTIC);
   const domesticDepthQuery = useDepth(SYMBOLS.DOMESTIC);
+
+  // 初始化 WebSocket 数据（仅在 WebSocket 未活跃且有轮询数据时）
+  useEffect(() => {
+    if (!isWebSocketActive && domesticKline1mQuery.data && domesticRealtimeKline.length === 0) {
+      console.log('[初始化] 使用轮询数据初始化K线');
+      setDomesticRealtimeKline(domesticKline1mQuery.data);
+    }
+  }, [isWebSocketActive, domesticKline1mQuery.data, domesticRealtimeKline.length]);
 
   // 更新状态
   useEffect(() => {
@@ -197,11 +212,11 @@ function AppContent() {
         <div className="middle-panel">
           <KlineChart
             title="国内白银主力"
-            data={domesticRealtimeKline.length > 0 ? domesticRealtimeKline : (domesticKline1mQuery.data || [])}
+            data={domesticRealtimeKline}
             tradeTick={domesticTradeTickQuery.data}
             status={domesticConnectionStatus}
             height={600}
-            isLoading={domesticKline1mQuery.isLoading && !domesticKline1mQuery.data && domesticRealtimeKline.length === 0}
+            isLoading={domesticRealtimeKline.length === 0}
           />
           <KlineChart
             title="国内白银主力（15分钟K线）"
@@ -225,8 +240,8 @@ function AppContent() {
           />
           <ArbitragePanel
             londonData={londonKline1mQuery.data || []}
-            domesticData={domesticRealtimeKline.length > 0 ? domesticRealtimeKline : (domesticKline1mQuery.data || [])}
-            isLoading={(londonKline1mQuery.isLoading && !londonKline1mQuery.data) || (domesticKline1mQuery.isLoading && !domesticKline1mQuery.data && domesticRealtimeKline.length === 0)}
+            domesticData={domesticRealtimeKline}
+            isLoading={(londonKline1mQuery.isLoading && !londonKline1mQuery.data) || domesticRealtimeKline.length === 0}
           />
         </div>
 

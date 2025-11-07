@@ -81,64 +81,45 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       );
     }
 
-    // 判断是否有套利机会（振幅差 > 0.5%）
-    const hasOpportunity = arbitrageMetrics.amplitudeDiff > 0.5;
-    
-    // 确定振幅差颜色
-    const getAmplitudeDiffColor = (diff: number) => {
-      if (diff > 0.5) return '#ef4444'; // 大于0.5% - 红色（有机会）
-      if (diff > 0.3) return '#fbbf24'; // 0.3%-0.5% - 黄色（关注）
-      return '#4ade80'; // 小于0.3% - 绿色（正常）
+    // 确定得分颜色
+    const getScoreColor = (score: number) => {
+      if (score >= 70) return '#ef4444'; // 高机会 - 红色
+      if (score >= 40) return '#fbbf24'; // 中等机会 - 黄色
+      return '#4ade80'; // 低机会 - 绿色
     };
 
     return (
       <div className="arbitrage-panel">
         <div className="arbitrage-header">
-          <h3>套利机会监测</h3>
+          <h3>套利追踪（最后一根K线）</h3>
           <span className="arbitrage-update-time">{formatTime(Date.now())}</span>
         </div>
 
         <div className="arbitrage-content">
-          {/* 振幅差异 - 核心指标 */}
+          {/* 套利得分 */}
           <div className="arbitrage-score-section">
             <div className="arbitrage-score-main">
-              <span className="arbitrage-score-label">振幅差异</span>
+              <span className="arbitrage-score-label">套利机会指数</span>
               <span 
                 className="arbitrage-score-value"
-                style={{ 
-                  color: getAmplitudeDiffColor(arbitrageMetrics.amplitudeDiff),
-                  fontSize: '2.5rem',
-                  fontWeight: 'bold'
-                }}
+                style={{ color: getScoreColor(arbitrageMetrics.score) }}
               >
-                {arbitrageMetrics.amplitudeDiff.toFixed(3)}%
+                {arbitrageMetrics.score}
               </span>
             </div>
             <div className="arbitrage-score-bar">
               <div
                 className="arbitrage-score-fill"
                 style={{
-                  width: `${Math.min(arbitrageMetrics.amplitudeDiff * 100, 100)}%`,
-                  backgroundColor: getAmplitudeDiffColor(arbitrageMetrics.amplitudeDiff),
+                  width: `${arbitrageMetrics.score}%`,
+                  backgroundColor: getScoreColor(arbitrageMetrics.score),
                 }}
               />
             </div>
           </div>
 
-          {/* 两市场振幅对比 */}
+          {/* 关键指标 */}
           <div className="arbitrage-metrics-row">
-            <div className="arbitrage-metric-item">
-              <div className="arbitrage-metric-label">伦敦振幅</div>
-              <div className="arbitrage-metric-value">
-                {arbitrageMetrics.londonAmplitude.toFixed(3)}%
-              </div>
-            </div>
-            <div className="arbitrage-metric-item">
-              <div className="arbitrage-metric-label">国内振幅</div>
-              <div className="arbitrage-metric-value">
-                {arbitrageMetrics.domesticAmplitude.toFixed(3)}%
-              </div>
-            </div>
             <div className="arbitrage-metric-item">
               <div className="arbitrage-metric-label">相关性</div>
               <div 
@@ -148,28 +129,20 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
                 {arbitrageMetrics.correlation.toFixed(2)}
               </div>
             </div>
+            <div className="arbitrage-metric-item">
+              <div className="arbitrage-metric-label">振幅差</div>
+              <div className="arbitrage-metric-value">
+                {arbitrageMetrics.amplitudeDiff.toFixed(2)}%
+              </div>
+            </div>
           </div>
 
           {/* 套利机会提示 */}
-          {hasOpportunity && (
-            <div className="arbitrage-opportunity" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: '#ef4444' }}>
-              <div className="arbitrage-opportunity-title" style={{ color: '#ef4444' }}>
-                🚨 套利机会出现！
-              </div>
+          {arbitrageMetrics.score >= 60 && (
+            <div className="arbitrage-opportunity">
+              <div className="arbitrage-opportunity-title">⚠️ 潜在套利机会</div>
               <div className="arbitrage-opportunity-text">
-                振幅差异超过 0.5%，两市场波动显著不同，建议关注交易机会
-              </div>
-            </div>
-          )}
-          
-          {/* 正常状态提示 */}
-          {!hasOpportunity && arbitrageMetrics.amplitudeDiff > 0.3 && (
-            <div className="arbitrage-opportunity" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: '#fbbf24' }}>
-              <div className="arbitrage-opportunity-title" style={{ color: '#f59e0b' }}>
-                ⚠️ 关注中
-              </div>
-              <div className="arbitrage-opportunity-text">
-                振幅差异适中，继续观察
+                两市场出现明显差异，建议关注
               </div>
             </div>
           )}
