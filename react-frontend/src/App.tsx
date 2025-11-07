@@ -58,6 +58,9 @@ function AppContent() {
   
   // 记录上次使用的模型
   const lastAnalyzedModelRef = useRef<ModelType | null>(null);
+  
+  // 记录上次分析时间
+  const lastAnalysisTimeRef = useRef<number>(0);
 
   // 国内白银 WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
@@ -277,33 +280,50 @@ function AppContent() {
       const modelChanged = lastAnalyzedModelRef.current !== null && 
                           lastAnalyzedModelRef.current !== selectedModel;
       
-      // 如果模型变化，重置标记并强制重新分析
+      // 检查是否已经分析过（避免首次重复）
+      const hasAnalyzed = lastAnalysisTimeRef.current > 0;
+      
+      // 检查距离上次分析的时间间隔
+      const now = Date.now();
+      const timeSinceLastAnalysis = now - lastAnalysisTimeRef.current;
+      const oneMinute = 60000; // 60秒
+      
+      // 决定是否需要分析
+      let shouldAnalyze = false;
+      let reason = '';
+      
       if (modelChanged) {
+        // 模型变化，立即分析
+        shouldAnalyze = true;
+        reason = '模型切换';
         console.log('[自动分析] 🔄 模型已切换:', lastAnalyzedModelRef.current, '->', selectedModel);
-        hasAttemptedAnalysisRef.current = false;
+      } else if (!hasAnalyzed) {
+        // 首次分析
+        shouldAnalyze = true;
+        reason = '首次加载';
+        console.log('[自动分析] ✅ 所有数据已就绪，首次分析...');
+      } else if (timeSinceLastAnalysis >= oneMinute) {
+        // 距离上次分析超过1分钟
+        shouldAnalyze = true;
+        reason = '定时更新';
+        console.log('[自动分析] 🔄 距离上次分析已过1分钟，自动更新...');
       }
       
-      // 如果已经尝试过分析且模型未变化，不再重复
-      if (hasAttemptedAnalysisRef.current && !modelChanged) {
+      if (!shouldAnalyze) {
         return;
       }
       
-      // 如果已经有策略数据且不是加载中且模型未变化，不重复分析
-      if (strategy && !(strategy as any).isLoading && !modelChanged) {
-        console.log('[自动分析] 已有策略数据，跳过');
-        hasAttemptedAnalysisRef.current = true;
+      // 如果正在加载中，不重复触发
+      if (strategy && (strategy as any).isLoading) {
+        console.log('[自动分析] 正在分析中，跳过');
         return;
       }
       
-      if (modelChanged) {
-        console.log('[自动分析] 🔄 立即使用新模型重新分析...');
-      } else {
-        console.log('[自动分析] ✅ 所有数据已就绪，立即开始分析...');
-      }
+      console.log(`[自动分析] 开始分析，原因: ${reason}`);
       
-      // 标记为已尝试，防止无限循环
-      hasAttemptedAnalysisRef.current = true;
+      // 更新记录
       lastAnalyzedModelRef.current = selectedModel;
+      lastAnalysisTimeRef.current = now;
       
       try {
         setStrategy({ isLoading: true } as any); // 设置加载状态
@@ -341,6 +361,13 @@ function AppContent() {
     
     // 数据就绪后立即触发，无延迟
     triggerAnalysis();
+    
+    // 设置定时器，每分钟检查一次是否需要更新
+    const timer = setInterval(() => {
+      triggerAnalysis();
+    }, 10000); // 每10秒检查一次（函数内部会判断是否满足1分钟）
+    
+    return () => clearInterval(timer);
   }, [
     londonRealtimeKline,
     londonKline1mQuery.data,

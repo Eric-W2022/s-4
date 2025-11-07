@@ -14,7 +14,7 @@
 
 .status-dot.connecting {
   background: #3b82f6;
-  animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
 }
 
 .status-dot.trading {
@@ -23,20 +23,12 @@
 }
 
 .status-dot.closed {
-  background: #fbbf24;
+  background: #fbbf24; /* 非交易时间→黄色 */
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
 }
 
 .status-dot.error {
   background: #ef4444;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
 }
 
