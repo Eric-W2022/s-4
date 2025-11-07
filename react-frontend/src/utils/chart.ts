@@ -89,6 +89,17 @@ export const createKlineChartOption = (
   const chartData = convertKlineDataToEcharts(processedData);
   const bollingerBands = calculateBollingerBands(processedData);
 
+  // 计算默认缩放范围（1分钟K线默认显示最后60根）
+  const is1MinuteKline = !isDailyKline && !title.includes('15分钟');
+  let dataZoomStart = 0;
+  let dataZoomEnd = 100;
+  
+  if (is1MinuteKline && processedData.length > 60) {
+    // 显示最后60根K线
+    dataZoomStart = ((processedData.length - 60) / processedData.length) * 100;
+    dataZoomEnd = 100;
+  }
+
   return {
     backgroundColor: 'transparent',
     animation: true,
@@ -218,10 +229,41 @@ export const createKlineChartOption = (
         },
         axisLabel: {
           color: CHART_THEMES.TEXT_SECONDARY,
-          formatter: (value: any) => {
-            const timestamp = typeof value === 'string' ? parseFloat(value) : value;
-            if (isNaN(timestamp)) return '';
+          formatter: (value: any, index: number) => {
+            // value 可能是字符串或数字
+            let timestamp: number;
+            if (typeof value === 'string') {
+              timestamp = parseFloat(value);
+            } else if (typeof value === 'number') {
+              timestamp = value;
+            } else {
+              return '';
+            }
+            
+            if (isNaN(timestamp)) {
+              return '';
+            }
+            
+            // 修正时间戳格式（处理多余的位数）
+            // 正常毫秒时间戳是13位，如果超过13位，可能是纳秒或其他格式
+            const timestampStr = String(Math.floor(timestamp));
+            if (timestampStr.length > 13) {
+              // 超过13位，除以10的(位数-13)次方
+              const excess = timestampStr.length - 13;
+              timestamp = Math.floor(timestamp / Math.pow(10, excess));
+            } else if (timestampStr.length < 13 && timestampStr.length >= 10) {
+              // 10-12位，可能是秒级时间戳，转换为毫秒
+              timestamp = timestamp * 1000;
+            }
+            
+            // 创建日期对象
             const date = new Date(timestamp);
+            
+            // 验证日期是否有效
+            if (isNaN(date.getTime())) {
+              return '';
+            }
+            
             if (isDailyKline) {
               // 日K线显示月-日
               const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -234,6 +276,9 @@ export const createKlineChartOption = (
               return `${hours}:${minutes}`;
             }
           },
+          interval: 'auto',
+          showMaxLabel: true,
+          showMinLabel: true,
         },
         splitLine: { show: false },
       },
@@ -285,14 +330,16 @@ export const createKlineChartOption = (
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        // 不设置 start 和 end，让 ECharts 保持用户的缩放状态
+        start: dataZoomStart,
+        end: dataZoomEnd,
       },
       {
         show: true,
         xAxisIndex: [0, 1],
         type: 'slider',
         top: '92%',
-        // 不设置 start 和 end，让 ECharts 保持用户的缩放状态
+        start: dataZoomStart,
+        end: dataZoomEnd,
         backgroundColor: CHART_THEMES.PANEL_BG,
         borderColor: CHART_THEMES.BORDER,
         fillerColor: 'rgba(102, 126, 234, 0.2)',

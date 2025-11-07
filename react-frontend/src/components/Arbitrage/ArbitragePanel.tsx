@@ -49,6 +49,20 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       const amplitudeScore = Math.min(amplitudeDiff * 10, 50); // 振幅差贡献50分
       const score = Math.min(correlationScore + amplitudeScore, 100);
 
+      // 判断套利方向（多单或空单）
+      // 逻辑：
+      // 1. 如果国内相对伦敦涨得更快/跌得更慢 -> 做空国内（空单）
+      // 2. 如果国内相对伦敦涨得更慢/跌得更快 -> 做多国内（多单）
+      const domesticStrength = domesticChange - londonChange; // 正值表示国内更强
+      let direction: 'long' | 'short' | 'neutral';
+      if (Math.abs(domesticStrength) < 0.1) {
+        direction = 'neutral'; // 差异太小，不建议套利
+      } else if (domesticStrength > 0) {
+        direction = 'short'; // 国内相对更强，做空国内
+      } else {
+        direction = 'long'; // 国内相对更弱，做多国内
+      }
+
       return {
         score: Math.round(score),
         correlation: Number(correlation.toFixed(3)),
@@ -56,6 +70,8 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
         londonAmplitude: Number(londonAmplitude.toFixed(3)),
         domesticAmplitude: Number(domesticAmplitude.toFixed(3)),
         amplitudeDiff: Number(amplitudeDiff.toFixed(3)),
+        direction,
+        domesticStrength: Number(domesticStrength.toFixed(3)),
       };
     }, [londonData, domesticData]);
 
@@ -135,14 +151,31 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
                 {arbitrageMetrics.amplitudeDiff.toFixed(2)}%
               </div>
             </div>
+            <div className="arbitrage-metric-item">
+              <div className="arbitrage-metric-label">套利方向</div>
+              <div 
+                className="arbitrage-metric-value"
+                style={{ 
+                  color: arbitrageMetrics.direction === 'long' ? '#4ade80' : 
+                         arbitrageMetrics.direction === 'short' ? '#ef4444' : '#9ca3af',
+                  fontWeight: 'bold'
+                }}
+              >
+                {arbitrageMetrics.direction === 'long' ? '多单' :
+                 arbitrageMetrics.direction === 'short' ? '空单' : '观望'}
+              </div>
+            </div>
           </div>
 
           {/* 套利机会提示 */}
-          {arbitrageMetrics.score >= 60 && (
+          {arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' && (
             <div className="arbitrage-opportunity">
               <div className="arbitrage-opportunity-title">⚠️ 潜在套利机会</div>
               <div className="arbitrage-opportunity-text">
-                两市场出现明显差异，建议关注
+                建议{arbitrageMetrics.direction === 'long' ? '做多' : '做空'}国内白银
+                {arbitrageMetrics.direction === 'long' 
+                  ? '（国内相对偏弱）' 
+                  : '（国内相对偏强）'}
               </div>
             </div>
           )}

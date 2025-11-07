@@ -9,6 +9,10 @@ import math
 import ssl
 import certifi
 import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 解决SSL证书验证问题
 os.environ['PYTHONHTTPSVERIFY'] = '0'
@@ -69,6 +73,10 @@ else:
 # 外汇、贵金属、加密货币、原油、CFD指数、商品接口地址
 ALLTICK_BASE_URL = "https://quote.alltick.co/quote-b-api"
 ALLTICK_TOKEN = "9d7f12b4c30826987a501d532ef75707-c-app"
+
+# 大模型API配置（用于策略分析）
+LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "https://api.openai.com/v1")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 
 # K线类型映射: interval -> kline_type
 # 1=1分钟, 2=5分钟, 3=15分钟, 4=30分钟, 5=1小时, 8=日K, 9=周K, 10=月K
