@@ -14,64 +14,37 @@ interface ArbitragePanelProps {
 
 export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
   ({ londonData, domesticData, isLoading }) => {
-    // 计算套利指标
+    // 计算套利指标（只追踪最后一根K线）
     const arbitrageMetrics = useMemo(() => {
-      if (!londonData || londonData.length < 5 || !domesticData || domesticData.length < 5) {
+      if (!londonData || londonData.length < 2 || !domesticData || domesticData.length < 2) {
         return null;
       }
 
-      // 取最近5根K线
-      const londonRecent = londonData.slice(-5);
-      const domesticRecent = domesticData.slice(-5);
+      // 只取最后一根K线和前一根K线（用于计算变化率）
+      const londonLatest = londonData[londonData.length - 1];
+      const londonPrevious = londonData[londonData.length - 2];
+      const domesticLatest = domesticData[domesticData.length - 1];
+      const domesticPrevious = domesticData[domesticData.length - 2];
 
-      // 计算相关性
-      const calculateCorrelation = () => {
-        const londonChanges = londonRecent.map((k, i) => 
-          i > 0 ? ((k.c - londonRecent[i - 1].c) / londonRecent[i - 1].c) * 100 : 0
-        ).slice(1);
-        const domesticChanges = domesticRecent.map((k, i) => 
-          i > 0 ? ((k.c - domesticRecent[i - 1].c) / domesticRecent[i - 1].c) * 100 : 0
-        ).slice(1);
-
-        const n = londonChanges.length;
-        const meanLondon = londonChanges.reduce((a, b) => a + b, 0) / n;
-        const meanDomestic = domesticChanges.reduce((a, b) => a + b, 0) / n;
-
-        let numerator = 0;
-        let denomLondon = 0;
-        let denomDomestic = 0;
-
-        for (let i = 0; i < n; i++) {
-          const diffLondon = londonChanges[i] - meanLondon;
-          const diffDomestic = domesticChanges[i] - meanDomestic;
-          numerator += diffLondon * diffDomestic;
-          denomLondon += diffLondon * diffLondon;
-          denomDomestic += diffDomestic * diffDomestic;
-        }
-
-        const correlation = numerator / Math.sqrt(denomLondon * denomDomestic);
-        return isNaN(correlation) ? 0 : correlation;
-      };
+      // 计算相关性（基于最后一根K线的变化方向）
+      const londonChange = ((londonLatest.c - londonPrevious.c) / londonPrevious.c) * 100;
+      const domesticChange = ((domesticLatest.c - domesticPrevious.c) / domesticPrevious.c) * 100;
+      
+      // 简化的相关性：同向为正，反向为负
+      const correlation = londonChange * domesticChange > 0 
+        ? Math.min(Math.abs(londonChange), Math.abs(domesticChange)) / Math.max(Math.abs(londonChange), Math.abs(domesticChange))
+        : -Math.min(Math.abs(londonChange), Math.abs(domesticChange)) / Math.max(Math.abs(londonChange), Math.abs(domesticChange));
 
       // 计算价差
-      const londonLatest = londonRecent[londonRecent.length - 1].c;
-      const domesticLatest = domesticRecent[domesticRecent.length - 1].c;
       const exchangeRate = 235; // 汇率
-      const priceDiff = domesticLatest - londonLatest * exchangeRate;
+      const priceDiff = domesticLatest.c - londonLatest.c * exchangeRate;
 
-      // 计算振幅
-      const londonAmplitude = londonRecent.reduce((sum, k) => {
-        return sum + ((k.h - k.l) / k.l) * 100;
-      }, 0) / londonRecent.length;
-
-      const domesticAmplitude = domesticRecent.reduce((sum, k) => {
-        return sum + ((k.h - k.l) / k.l) * 100;
-      }, 0) / domesticRecent.length;
-
+      // 计算最后一根K线的振幅
+      const londonAmplitude = ((londonLatest.h - londonLatest.l) / londonLatest.l) * 100;
+      const domesticAmplitude = ((domesticLatest.h - domesticLatest.l) / domesticLatest.l) * 100;
       const amplitudeDiff = Math.abs(domesticAmplitude - londonAmplitude);
 
       // 计算套利得分 (0-100)
-      const correlation = calculateCorrelation();
       const correlationScore = Math.abs(correlation) * 50; // 相关性贡献50分
       const amplitudeScore = Math.min(amplitudeDiff * 10, 50); // 振幅差贡献50分
       const score = Math.min(correlationScore + amplitudeScore, 100);
@@ -101,9 +74,9 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       return (
         <div className="arbitrage-panel">
           <div className="arbitrage-header">
-            <h3>套利追踪（最近5根K线）</h3>
+            <h3>套利追踪（最后一根K线）</h3>
           </div>
-          <div className="no-data">数据不足，需要至少5根K线</div>
+          <div className="no-data">数据不足，需要至少2根K线</div>
         </div>
       );
     }

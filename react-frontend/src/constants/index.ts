@@ -40,11 +40,14 @@ export const CHART_THEMES = {
 } as const;
 
 export const UPDATE_INTERVALS = {
-  KLINE_1M: 30000, // 30秒更新一次1分钟K线
+  KLINE_1M: 10000, // 10秒更新一次1分钟K线（与旧项目一致）
   KLINE_15M: 60000, // 60秒更新一次15分钟K线
   KLINE_1D: 300000, // 5分钟更新一次日K线
   TRADE_TICK: 1000, // 1秒更新一次实时价格
   DEPTH: 2000, // 2秒更新一次盘口
   STRATEGY: 60000, // 60秒更新一次策略
 } as const;
+
+// WebSocket 配置
+export const ENABLE_WEBSOCKET = true; // 是否启用 WebSocket 实时更新
 

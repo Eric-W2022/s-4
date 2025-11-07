@@ -2,6 +2,52 @@
 import type { EChartsOption } from 'echarts';
 import type { KlineData } from '../types';
 import { CHART_THEMES } from '../constants';
+import { filterTradingTimeKlines } from './time';
+
+/**
+ * 计算布林带指标
+ * @param data K线数据
+ * @param period 周期，默认20
+ * @param multiplier 标准差倍数，默认2
+ */
+export const calculateBollingerBands = (
+  data: KlineData[],
+  period: number = 20,
+  multiplier: number = 2
+) => {
+  const upper: (number | null)[] = [];
+  const middle: (number | null)[] = [];
+  const lower: (number | null)[] = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      upper.push(null);
+      middle.push(null);
+      lower.push(null);
+      continue;
+    }
+
+    // 计算简单移动平均
+    let sum = 0;
+    for (let j = 0; j < period; j++) {
+      sum += data[i - j].c;
+    }
+    const ma = sum / period;
+
+    // 计算标准差
+    let variance = 0;
+    for (let j = 0; j < period; j++) {
+      variance += Math.pow(data[i - j].c - ma, 2);
+    }
+    const stdDev = Math.sqrt(variance / period);
+
+    middle.push(ma);
+    upper.push(ma + multiplier * stdDev);
+    lower.push(ma - multiplier * stdDev);
+  }
+
+  return { upper, middle, lower };
+};
 
 /**
  * 将K线数据转换为ECharts格式
@@ -24,10 +70,38 @@ export const createKlineChartOption = (
   data: KlineData[],
   title: string
 ): EChartsOption => {
-  const chartData = convertKlineDataToEcharts(data);
+  // 判断是否是伦敦市场（需要显示小数）
+  const isLondonMarket = title.includes('伦敦');
+  // 判断是否是日K线（显示日期而非时间）
+  const isDailyKline = title.includes('90日') || title.includes('日K线');
+  // 判断是否是国内1分钟K线（需要过滤非交易时间）
+  const isDomestic1m = !isLondonMarket && !isDailyKline && !title.includes('15分钟');
+
+  console.log(`[图表配置] 标题: "${title}", 伦敦: ${isLondonMarket}, 日K: ${isDailyKline}, 国内1分: ${isDomestic1m}`);
+
+  // 过滤交易时间数据（仅对国内1分钟K线）
+  let processedData = data;
+  let sessionBreaks: number[] = [];
+  if (isDomestic1m) {
+    console.log(`[K线过滤] 开始过滤，原始数据条数: ${data.length}`);
+    if (data.length > 0) {
+      console.log(`[K线过滤] 第一条数据时间: ${new Date(data[0].t).toLocaleString()}`);
+      console.log(`[K线过滤] 最后一条数据时间: ${new Date(data[data.length - 1].t).toLocaleString()}`);
+    }
+    const result = filterTradingTimeKlines(data);
+    processedData = result.filtered;
+    sessionBreaks = result.sessionBreaks;
+    console.log(`[K线过滤] 过滤后数据条数: ${processedData.length}, 时段边界: ${sessionBreaks.length}个`);
+  }
+
+  const chartData = convertKlineDataToEcharts(processedData);
+  const bollingerBands = calculateBollingerBands(processedData);
 
   return {
     backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 300,
+    animationEasing: 'cubicOut',
     title: {
       text: title,
       textStyle: {
@@ -49,58 +123,124 @@ export const createKlineChartOption = (
       textStyle: {
         color: CHART_THEMES.TEXT,
       },
+      formatter: (params: any) => {
+        if (!Array.isArray(params) || params.length === 0) return '';
+        
+        const param = params[0];
+        // 对于time类型的X轴，axisValue是时间戳
+        const timestamp = param.axisValue || param.name;
+        const date = new Date(timestamp);
+        const year = String(date.getFullYear()).slice(-2); // 只取后两位
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        
+        // 根据K线类型显示不同的时间格式
+        const timeStr = isDailyKline 
+          ? `${month}-${day}`  // 日K线只显示月-日，不带年份
+          : `${year}-${month}-${day} ${hours}:${minutes}`;  // 分钟K线显示日期+时间
+        
+        let result = `<div style="padding: 5px;">${timeStr}<br/>`;
+        
+        let upperValue: number | null = null;
+        let middleValue: number | null = null;
+        let lowerValue: number | null = null;
+        
+        params.forEach((item: any) => {
+          if (item.seriesName === 'K线' && item.data && Array.isArray(item.data)) {
+            // time轴下candlestick数据格式：[时间, 开, 收, 低, 高]
+            const [, open, close, low, high] = item.data;
+            const color = close >= open ? CHART_THEMES.RED : CHART_THEMES.GREEN;
+            const formatValue = (val: number) => isLondonMarket ? val.toFixed(3) : Math.round(val).toString();
+            result += `<div style="margin-top: 8px;">`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">开盘：</span><span style="color: ${color}; font-weight: bold;">${formatValue(open)}</span><br/>`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">收盘：</span><span style="color: ${color}; font-weight: bold;">${formatValue(close)}</span><br/>`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最高：</span><span style="color: ${CHART_THEMES.RED}; font-weight: bold;">${formatValue(high)}</span><br/>`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最低：</span><span style="color: ${CHART_THEMES.GREEN}; font-weight: bold;">${formatValue(low)}</span>`;
+            result += `</div>`;
+          } else if (item.seriesName === '布林上轨') {
+            upperValue = Array.isArray(item.value) ? item.value[1] : item.value;
+          } else if (item.seriesName === '布林中轨') {
+            middleValue = Array.isArray(item.value) ? item.value[1] : item.value;
+          } else if (item.seriesName === '布林下轨') {
+            lowerValue = Array.isArray(item.value) ? item.value[1] : item.value;
+          } else if (item.seriesName === '成交量') {
+            const volumeValue = Array.isArray(item.value) ? item.value[1] : item.value;
+            result += `<div style="margin-top: 8px;">`;
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">成交量：</span><span style="color: ${CHART_THEMES.BLUE}; font-weight: bold;">${volumeValue}</span>`;
+            result += `</div>`;
+          }
+        });
+        
+        // 显示布林带数据
+        if (upperValue !== null || middleValue !== null || lowerValue !== null) {
+          const formatBollinger = (val: number) => isLondonMarket ? val.toFixed(3) : Math.round(val).toString();
+          result += `<div style="margin-top: 8px; border-top: 1px solid ${CHART_THEMES.BORDER}; padding-top: 8px;">`;
+          if (upperValue !== null) {
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">布林上轨：</span><span style="color: ${CHART_THEMES.PURPLE}; font-weight: bold;">${formatBollinger(upperValue)}</span><br/>`;
+          }
+          if (middleValue !== null) {
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">布林中轨：</span><span style="color: ${CHART_THEMES.YELLOW}; font-weight: bold;">${formatBollinger(middleValue)}</span><br/>`;
+          }
+          if (lowerValue !== null) {
+            result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">布林下轨：</span><span style="color: ${CHART_THEMES.PURPLE}; font-weight: bold;">${formatBollinger(lowerValue)}</span>`;
+          }
+          result += `</div>`;
+        }
+        
+        result += `</div>`;
+        return result;
+      },
     },
     grid: [
       {
         left: '5%',
-        right: '3%',
+        right: '8%',  // 为布林带标签留出适当空间
         top: '10%',
         height: '60%',
       },
       {
         left: '5%',
-        right: '3%',
+        right: '8%',
         top: '75%',
         height: '15%',
       },
     ],
     xAxis: [
       {
-        type: 'category',
-        data: chartData.map((item) => item[0]),
-        scale: true,
+        type: 'time',
         boundaryGap: true,
         axisLine: {
           lineStyle: { color: CHART_THEMES.BORDER },
         },
         axisLabel: {
           color: CHART_THEMES.TEXT_SECONDARY,
-          formatter: (value: string | number) => {
-            // ECharts 会将时间戳转为字符串，需要转回数字
-            const timestamp = typeof value === 'string' ? parseFloat(value) : value;
-            if (isNaN(timestamp)) return '';
-            const date = new Date(timestamp);
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            return `${hours}:${minutes}`;
+          formatter: (value: number) => {
+            const date = new Date(value);
+            if (isDailyKline) {
+              // 日K线显示月-日
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${month}-${day}`;
+            } else {
+              // 分钟K线显示时:分
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              return `${hours}:${minutes}`;
+            }
           },
         },
         splitLine: { show: false },
-        min: 'dataMin',
-        max: 'dataMax',
       },
       {
-        type: 'category',
+        type: 'time',
         gridIndex: 1,
-        data: chartData.map((item) => item[0]),
-        scale: true,
         boundaryGap: true,
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: { show: false },
         splitLine: { show: false },
-        min: 'dataMin',
-        max: 'dataMax',
       },
     ],
     yAxis: [
@@ -114,6 +254,9 @@ export const createKlineChartOption = (
         },
         axisLabel: {
           color: CHART_THEMES.TEXT_SECONDARY,
+          formatter: (value: number) => {
+            return isLondonMarket ? value.toFixed(3) : Math.round(value).toString();
+          },
         },
         splitLine: {
           lineStyle: {
@@ -136,16 +279,14 @@ export const createKlineChartOption = (
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        start: 0,
-        end: 100,
+        // 不设置 start 和 end，让 ECharts 保持用户的缩放状态
       },
       {
         show: true,
         xAxisIndex: [0, 1],
         type: 'slider',
         top: '92%',
-        start: 0,
-        end: 100,
+        // 不设置 start 和 end，让 ECharts 保持用户的缩放状态
         backgroundColor: CHART_THEMES.PANEL_BG,
         borderColor: CHART_THEMES.BORDER,
         fillerColor: 'rgba(102, 126, 234, 0.2)',
@@ -158,7 +299,7 @@ export const createKlineChartOption = (
       {
         name: 'K线',
         type: 'candlestick',
-        data: chartData.map((item) => [item[1], item[2], item[3], item[4]]),
+        data: chartData.map((item) => [item[0], item[1], item[2], item[3], item[4]]), // [时间, 开, 收, 低, 高]
         itemStyle: {
           color: CHART_THEMES.RED, // 涨
           color0: CHART_THEMES.GREEN, // 跌
@@ -170,6 +311,75 @@ export const createKlineChartOption = (
             borderWidth: 2,
           },
         },
+        // 添加交易时段分割线（仅国内1分钟K线）
+        markLine: sessionBreaks.length > 0 ? {
+          silent: true,
+          symbol: 'none',
+          label: {
+            show: false,
+          },
+          lineStyle: {
+            color: CHART_THEMES.BLUE,
+            width: 2,
+            type: 'solid',
+            opacity: 0.6,
+          },
+          data: sessionBreaks.map(index => ({
+            xAxis: chartData[index][0], // 时间戳
+            label: {
+              show: true,
+              position: 'end',
+              formatter: '交易时段',
+              color: CHART_THEMES.BLUE,
+              fontSize: 10,
+            },
+          })),
+        } : undefined,
+      },
+      {
+        name: '布林上轨',
+        type: 'line',
+        data: chartData.map((item, index) => [item[0], bollingerBands.upper[index]]),
+        smooth: true,
+        lineStyle: {
+          color: CHART_THEMES.PURPLE,
+          width: 1.5,
+          opacity: 0.8,
+        },
+        showSymbol: false,
+        emphasis: {
+          disabled: true,
+        },
+      },
+      {
+        name: '布林中轨',
+        type: 'line',
+        data: chartData.map((item, index) => [item[0], bollingerBands.middle[index]]),
+        smooth: true,
+        lineStyle: {
+          color: CHART_THEMES.YELLOW,
+          width: 1.5,
+          opacity: 0.8,
+        },
+        showSymbol: false,
+        emphasis: {
+          disabled: true,
+        },
+      },
+      {
+        name: '布林下轨',
+        type: 'line',
+        data: chartData.map((item, index) => [item[0], bollingerBands.lower[index]]),
+        smooth: true,
+        lineStyle: {
+          color: CHART_THEMES.PURPLE,
+          width: 1.5,
+          opacity: 0.8,
+        },
+        showSymbol: false,
+        emphasis: {
+          disabled: true,
+        },
       },
       {
         name: '成交量',
@@ -177,10 +387,11 @@ export const createKlineChartOption = (
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: chartData.map((item, index) => {
+          const timestamp = item[0];
           const volume = item[5];
           const isRise = index > 0 && item[2] >= chartData[index - 1][2];
           return {
-            value: volume,
+            value: [timestamp, volume],
             itemStyle: {
               color: isRise ? CHART_THEMES.RED : CHART_THEMES.GREEN,
             },
@@ -188,6 +399,90 @@ export const createKlineChartOption = (
         }),
       },
     ],
+    graphic: (() => {
+      const graphics: any[] = [];
+      const lastIndex = bollingerBands.upper.length - 1;
+      
+      // 布林上轨标签
+      if (bollingerBands.upper[lastIndex] !== null) {
+        graphics.push({
+          type: 'group',
+          right: '1%',
+          bounding: 'raw',
+          children: [
+            {
+              type: 'text',
+              z: 100,
+              position: [0, 0],
+              style: {
+                text: `上轨 ${isLondonMarket ? bollingerBands.upper[lastIndex]?.toFixed(3) : Math.round(bollingerBands.upper[lastIndex] || 0)}`,
+                fill: CHART_THEMES.PURPLE,
+                font: 'bold 11px Monaco, monospace',
+                backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                padding: [3, 6],
+                borderColor: CHART_THEMES.PURPLE,
+                borderWidth: 1,
+                borderRadius: 3,
+              },
+            },
+          ],
+        });
+      }
+      
+      // 布林中轨标签
+      if (bollingerBands.middle[lastIndex] !== null) {
+        graphics.push({
+          type: 'group',
+          right: '1%',
+          bounding: 'raw',
+          children: [
+            {
+              type: 'text',
+              z: 100,
+              position: [0, 0],
+              style: {
+                text: `中轨 ${isLondonMarket ? bollingerBands.middle[lastIndex]?.toFixed(3) : Math.round(bollingerBands.middle[lastIndex] || 0)}`,
+                fill: CHART_THEMES.YELLOW,
+                font: 'bold 11px Monaco, monospace',
+                backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                padding: [3, 6],
+                borderColor: CHART_THEMES.YELLOW,
+                borderWidth: 1,
+                borderRadius: 3,
+              },
+            },
+          ],
+        });
+      }
+      
+      // 布林下轨标签
+      if (bollingerBands.lower[lastIndex] !== null) {
+        graphics.push({
+          type: 'group',
+          right: '1%',
+          bounding: 'raw',
+          children: [
+            {
+              type: 'text',
+              z: 100,
+              position: [0, 0],
+              style: {
+                text: `下轨 ${isLondonMarket ? bollingerBands.lower[lastIndex]?.toFixed(3) : Math.round(bollingerBands.lower[lastIndex] || 0)}`,
+                fill: CHART_THEMES.PURPLE,
+                font: 'bold 11px Monaco, monospace',
+                backgroundColor: 'rgba(19, 23, 43, 0.95)',
+                padding: [3, 6],
+                borderColor: CHART_THEMES.PURPLE,
+                borderWidth: 1,
+                borderRadius: 3,
+              },
+            },
+          ],
+        });
+      }
+      
+      return graphics;
+    })(),
   };
 };
 
@@ -207,9 +502,13 @@ export const calculateChange = (current: number, previous: number) => {
 /**
  * 格式化价格
  */
-export const formatPrice = (price: number | string, decimals: number = 2): string => {
+export const formatPrice = (price: number | string, decimals: number = 0): string => {
   const num = typeof price === 'string' ? parseFloat(price) : price;
-  if (isNaN(num)) return '0.00';
+  if (isNaN(num)) return '0';
+  // 如果是整数，不显示小数点
+  if (decimals === 0 || num === Math.floor(num)) {
+    return Math.round(num).toString();
+  }
   return num.toFixed(decimals);
 };
 

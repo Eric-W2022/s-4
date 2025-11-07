@@ -165,13 +165,13 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                 <div className="extended-data-item">
                   <div className="extended-label">涨跌</div>
                   <div className={`extended-value ${parseFloat(data.change || '0') >= 0 ? 'price-up' : 'price-down'}`}>
-                    {data.change ? formatPrice(data.change) : '--'}
+                    {data.change ? (parseFloat(data.change) >= 0 ? '+' : '') + formatPrice(data.change) : '--'}
                   </div>
                 </div>
                 <div className="extended-data-item">
                   <div className="extended-label">涨跌幅</div>
                   <div className={`extended-value ${parseFloat(data.change_percent || '0') >= 0 ? 'price-up' : 'price-down'}`}>
-                    {data.change_percent ? `${data.change_percent}%` : '--'}
+                    {data.change_percent ? (parseFloat(data.change_percent) >= 0 ? '+' : '') + data.change_percent + '%' : '--'}
                   </div>
                 </div>
                 <div className="extended-data-item">

@@ -1,13 +1,15 @@
 // 主应用组件
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAppStore } from './store/appStore';
 import { useKlineData, useTradeTick, useDepth } from './hooks/useMarketData';
+import { useDomesticWebSocket } from './hooks/useDomesticWebSocket';
 import { KlineChart } from './components/Charts/KlineChart';
 import { DepthPanel } from './components/Depth/DepthPanel';
 import { ArbitragePanel } from './components/Arbitrage/ArbitragePanel';
 import { StrategyPanel } from './components/Strategy/StrategyPanel';
-import { SYMBOLS, INTERVALS, UPDATE_INTERVALS } from './constants';
+import { SYMBOLS, INTERVALS, UPDATE_INTERVALS, ENABLE_WEBSOCKET } from './constants';
+import type { KlineData } from './types';
 import './App.css';
 
 // 创建 React Query 客户端
@@ -41,6 +43,35 @@ function AppContent() {
     strategy,
   } = useAppStore();
 
+  // 国内白银实时K线数据（WebSocket）
+  const [domesticRealtimeKline, setDomesticRealtimeKline] = useState<KlineData[]>([]);
+
+  // WebSocket 回调
+  const handleKlineUpdate = useCallback((kline: KlineData) => {
+    setDomesticRealtimeKline(prev => {
+      if (prev.length === 0) return [kline];
+      const newData = [...prev];
+      newData[newData.length - 1] = kline;
+      return newData;
+    });
+  }, []);
+
+  const handleInitialData = useCallback((klines: KlineData[]) => {
+    setDomesticRealtimeKline(klines);
+  }, []);
+
+  const handleStatusChange = useCallback((status: 'connected' | 'connecting' | 'error' | 'closed') => {
+    setDomesticConnectionStatus(status);
+  }, [setDomesticConnectionStatus]);
+
+  // 建立 WebSocket 连接
+  useDomesticWebSocket({
+    enabled: ENABLE_WEBSOCKET,
+    onKlineUpdate: handleKlineUpdate,
+    onInitialData: handleInitialData,
+    onStatusChange: handleStatusChange,
+  });
+
   // 伦敦白银数据查询
   const londonKline1mQuery = useKlineData(
     SYMBOLS.LONDON,
@@ -62,12 +93,12 @@ function AppContent() {
   );
   const londonTradeTickQuery = useTradeTick(SYMBOLS.LONDON);
 
-  // 国内白银数据查询
+  // 国内白银数据查询（1分钟K线用作fallback，主要通过WebSocket）
   const domesticKline1mQuery = useKlineData(
     SYMBOLS.DOMESTIC,
     INTERVALS.ONE_MINUTE,
     100,
-    UPDATE_INTERVALS.KLINE_1M
+    60000 // 1分钟轮询一次作为备份（WebSocket失败时的fallback）
   );
   const domesticKline15mQuery = useKlineData(
     SYMBOLS.DOMESTIC,
@@ -141,69 +172,61 @@ function AppContent() {
         {/* 左侧：伦敦现货白银K线图 */}
         <div className="left-panel">
           <KlineChart
-            key={`london-1m-${londonKline1mQuery.dataUpdatedAt}`}
             title="伦敦现货白银"
             data={londonKline1mQuery.data || []}
             tradeTick={londonTradeTickQuery.data}
             status={londonConnectionStatus}
             height={600}
-            isLoading={londonKline1mQuery.isLoading}
+            isLoading={londonKline1mQuery.isLoading && !londonKline1mQuery.data}
           />
           <KlineChart
-            key={`london-15m-${londonKline15mQuery.dataUpdatedAt}`}
             title="伦敦现货白银（15分钟K线）"
             data={londonKline15mQuery.data || []}
             height={400}
-            isLoading={londonKline15mQuery.isLoading}
+            isLoading={londonKline15mQuery.isLoading && !londonKline15mQuery.data}
           />
           <KlineChart
-            key={`london-daily-${londonKlineDailyQuery.dataUpdatedAt}`}
             title="伦敦现货白银（90日K线）"
             data={londonKlineDailyQuery.data || []}
             height={400}
-            isLoading={londonKlineDailyQuery.isLoading}
+            isLoading={londonKlineDailyQuery.isLoading && !londonKlineDailyQuery.data}
           />
         </div>
 
         {/* 中间：国内白银K线图 */}
         <div className="middle-panel">
           <KlineChart
-            key={`domestic-1m-${domesticKline1mQuery.dataUpdatedAt}`}
             title="国内白银主力"
-            data={domesticKline1mQuery.data || []}
+            data={domesticRealtimeKline.length > 0 ? domesticRealtimeKline : (domesticKline1mQuery.data || [])}
             tradeTick={domesticTradeTickQuery.data}
             status={domesticConnectionStatus}
             height={600}
-            isLoading={domesticKline1mQuery.isLoading}
+            isLoading={domesticKline1mQuery.isLoading && !domesticKline1mQuery.data && domesticRealtimeKline.length === 0}
           />
           <KlineChart
-            key={`domestic-15m-${domesticKline15mQuery.dataUpdatedAt}`}
             title="国内白银主力（15分钟K线）"
             data={domesticKline15mQuery.data || []}
             height={400}
-            isLoading={domesticKline15mQuery.isLoading}
+            isLoading={domesticKline15mQuery.isLoading && !domesticKline15mQuery.data}
           />
           <KlineChart
-            key={`domestic-daily-${domesticKlineDailyQuery.dataUpdatedAt}`}
             title="国内白银主力（90日K线）"
             data={domesticKlineDailyQuery.data || []}
             height={400}
-            isLoading={domesticKlineDailyQuery.isLoading}
+            isLoading={domesticKlineDailyQuery.isLoading && !domesticKlineDailyQuery.data}
           />
         </div>
 
         {/* 右侧：市场数据区域 */}
         <div className="right-panel">
           <DepthPanel 
-            key={`depth-${domesticDepthQuery.dataUpdatedAt}`}
             data={domesticDepthQuery.data || null} 
-            isLoading={domesticDepthQuery.isLoading} 
+            isLoading={domesticDepthQuery.isLoading && !domesticDepthQuery.data} 
           />
           <ArbitragePanel
-            key={`arbitrage-${londonKline1mQuery.dataUpdatedAt}-${domesticKline1mQuery.dataUpdatedAt}`}
             londonData={londonKline1mQuery.data || []}
-            domesticData={domesticKline1mQuery.data || []}
-            isLoading={londonKline1mQuery.isLoading || domesticKline1mQuery.isLoading}
+            domesticData={domesticRealtimeKline.length > 0 ? domesticRealtimeKline : (domesticKline1mQuery.data || [])}
+            isLoading={(londonKline1mQuery.isLoading && !londonKline1mQuery.data) || (domesticKline1mQuery.isLoading && !domesticKline1mQuery.data && domesticRealtimeKline.length === 0)}
           />
         </div>
 

@@ -18,6 +18,9 @@ interface KlineChartProps {
 }
 
 export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, status, height = 600, isLoading = false }) => {
+    // 判断是否是伦敦市场
+    const isLondonMarket = title.includes('伦敦');
+    
     // 使用 useMemo 缓存图表配置，避免不必要的重新计算
     const chartOption: EChartsOption = useMemo(() => {
       if (!data || data.length === 0) {
@@ -60,17 +63,21 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
             {status && <StatusDot status={status} />}
             {tradeTick && (
               <span className="title-price">
-                {formatPrice(tradeTick.price)}
+                {isLondonMarket 
+                  ? (typeof tradeTick.price === 'string' ? parseFloat(tradeTick.price).toFixed(3) : tradeTick.price.toFixed(3))
+                  : formatPrice(tradeTick.price)}
               </span>
             )}
           </h2>
           <div className="chart-info">
             {priceInfo && (
               <>
-                <span className="price">{formatPrice(priceInfo.price)}</span>
+                <span className="price">
+                  {isLondonMarket ? priceInfo.price.toFixed(3) : formatPrice(priceInfo.price)}
+                </span>
                 <span className={`change ${priceInfo.isPositive ? 'positive' : 'negative'}`}>
                   {priceInfo.isPositive ? '+' : ''}
-                  {formatPrice(priceInfo.change)} ({priceInfo.isPositive ? '+' : ''}
+                  {isLondonMarket ? priceInfo.change.toFixed(3) : formatPrice(priceInfo.change)} ({priceInfo.isPositive ? '+' : ''}
                   {priceInfo.changePercent.toFixed(2)}%)
                 </span>
               </>
@@ -82,7 +89,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
             option={chartOption}
             style={{ height: `${height}px`, width: '100%' }}
             notMerge={false}
-            lazyUpdate={false}
+            lazyUpdate={true}
             opts={{ renderer: 'canvas' }}
           />
         ) : (

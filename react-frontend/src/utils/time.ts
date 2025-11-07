@@ -61,3 +61,56 @@ export const isMarketOpen = (marketType: 'london' | 'domestic'): boolean => {
   }
 };
 
+/**
+ * 判断指定时间戳是否在国内白银交易时间内
+ */
+export const isDomesticTradingTime = (timestamp: number): boolean => {
+  const date = dayjs(timestamp);
+  const hour = date.hour();
+  const minute = date.minute();
+  const day = date.day();
+
+  // 周末休市
+  if (day === 0 || day === 6) return false;
+
+  // 白天交易时段：9:00-15:00
+  if (hour >= 9 && hour < 15) return true;
+
+  // 夜盘交易时段：21:00-次日2:30
+  if (hour >= 21) return true;
+  if (hour < 2) return true;
+  if (hour === 2 && minute <= 30) return true;
+
+  return false;
+};
+
+/**
+ * 过滤掉非交易时间的K线数据，并标记时段边界
+ */
+export const filterTradingTimeKlines = (klines: any[]) => {
+  const filtered: any[] = [];
+  const sessionBreaks: number[] = []; // 记录交易时段分割点的索引
+  
+  let lastWasNonTrading = false;
+
+  for (let i = 0; i < klines.length; i++) {
+    const kline = klines[i];
+    const isTrading = isDomesticTradingTime(kline.t);
+    
+    if (isTrading) {
+      // 如果从非交易时间进入交易时间，标记为时段边界
+      if (lastWasNonTrading && filtered.length > 0) {
+        sessionBreaks.push(filtered.length);
+        console.log(`[时段边界] 索引 ${filtered.length}, 时间: ${new Date(kline.t).toLocaleString()}`);
+      }
+      filtered.push(kline);
+      lastWasNonTrading = false;
+    } else {
+      lastWasNonTrading = true;
+    }
+  }
+  
+  console.log(`[过滤结果] 原始: ${klines.length}根, 过滤后: ${filtered.length}根, 边界: ${sessionBreaks.length}个`);
+  return { filtered, sessionBreaks };
+};
+
