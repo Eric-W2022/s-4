@@ -182,9 +182,16 @@ async def get_kline(
                 logger.warning(f"[API错误] Symbol: {symbol} | Status: {response.status_code} | Ret: {ret_code} | Error: {error_data.get('msg')}")
                 logger.debug(f"错误详情: {json.dumps(response_log, ensure_ascii=False)}")
                 
+                # 确保返回标准HTTP状态码
+                http_status = 400  # 客户端错误（如无效的symbol）
+                if response.status_code >= 500:
+                    http_status = 502  # 上游服务器错误
+                elif response.status_code >= 400 and response.status_code < 500:
+                    http_status = response.status_code
+                
                 return JSONResponse(
                     content=error_data,
-                    status_code=response.status_code if response.status_code != 200 else 400
+                    status_code=http_status
                 )
                 
     except httpx.TimeoutException as e:
@@ -287,7 +294,15 @@ async def get_trade_tick(
                     "trace": api_response.get("trace", trace_id)
                 }
                 logger.warning(f"[Trade-Tick错误] Symbol: {symbol} | Ret: {ret_code} | Error: {error_data.get('msg')}")
-                return JSONResponse(content=error_data, status_code=response.status_code if response.status_code != 200 else 400)
+                
+                # 确保返回标准HTTP状态码
+                http_status = 400  # 客户端错误（如无效的symbol）
+                if response.status_code >= 500:
+                    http_status = 502  # 上游服务器错误
+                elif response.status_code >= 400 and response.status_code < 500:
+                    http_status = response.status_code
+                
+                return JSONResponse(content=error_data, status_code=http_status)
                 
     except httpx.TimeoutException as e:
         logger.error(f"[Trade-Tick超时] Symbol: {symbol} | Error: {str(e)}")
@@ -475,7 +490,15 @@ async def get_depth_tick(
                     "trace": api_response.get("trace", trace_id)
                 }
                 logger.warning(f"[Depth-Tick错误] Symbol: {symbol} | Ret: {ret_code} | Error: {error_data.get('msg')}")
-                return JSONResponse(content=error_data, status_code=response.status_code if response.status_code != 200 else 400)
+                
+                # 确保返回标准HTTP状态码
+                http_status = 400  # 客户端错误（如无效的symbol）
+                if response.status_code >= 500:
+                    http_status = 502  # 上游服务器错误
+                elif response.status_code >= 400 and response.status_code < 500:
+                    http_status = response.status_code
+                
+                return JSONResponse(content=error_data, status_code=http_status)
                 
     except httpx.TimeoutException as e:
         logger.error(f"[Depth-Tick超时] Symbol: {symbol} | Error: {str(e)}")
