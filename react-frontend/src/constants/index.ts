@@ -44,7 +44,7 @@ export const UPDATE_INTERVALS = {
   KLINE_15M: 60000, // 60秒更新一次15分钟K线
   KLINE_1D: 300000, // 5分钟更新一次日K线
   TRADE_TICK: 1000, // 1秒更新一次实时价格
-  DEPTH: 2000, // 2秒更新一次盘口
+  DEPTH: 1000, // 1秒更新一次盘口
   STRATEGY: 60000, // 60秒更新一次策略
 } as const;
 
