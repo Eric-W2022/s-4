@@ -121,28 +121,33 @@ export async function analyzeStrategy(
     // 解析JSON响应
     let strategyData: StrategyAnalysisResult;
     
+    // 预处理：清理可能存在的markdown代码块标记
+    content = content.trim();
+    
+    // 移除开头的```json或```
+    if (content.startsWith('```json')) {
+      content = content.substring(7).trim();
+    } else if (content.startsWith('```')) {
+      content = content.substring(3).trim();
+    }
+    
+    // 移除结尾的```
+    if (content.endsWith('```')) {
+      content = content.substring(0, content.length - 3).trim();
+    }
+    
     try {
       // 尝试直接解析JSON
       strategyData = JSON.parse(content);
     } catch (e) {
-      console.warn('[策略分析] 直接JSON解析失败，尝试提取...');
+      console.warn('[策略分析] 直接JSON解析失败，尝试提取JSON部分...');
       
-      // 尝试从markdown代码块中提取
-      if (content.includes('```json')) {
-        const jsonStart = content.indexOf('```json') + 7;
-        const jsonEnd = content.indexOf('```', jsonStart);
-        content = content.substring(jsonStart, jsonEnd).trim();
-      } else if (content.includes('```')) {
-        const jsonStart = content.indexOf('```') + 3;
-        const jsonEnd = content.indexOf('```', jsonStart);
-        content = content.substring(jsonStart, jsonEnd).trim();
-      } else {
-        // 查找第一个{和最后一个}
-        const firstBrace = content.indexOf('{');
-        const lastBrace = content.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1) {
-          content = content.substring(firstBrace, lastBrace + 1);
-        }
+      // 查找第一个{和最后一个}
+      const firstBrace = content.indexOf('{');
+      const lastBrace = content.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        content = content.substring(firstBrace, lastBrace + 1);
+        console.log('[策略分析] 提取JSON部分，长度:', content.length);
       }
       
       strategyData = JSON.parse(content);
