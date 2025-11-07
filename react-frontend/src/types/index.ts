@@ -96,6 +96,11 @@ export interface StrategyAnalysis {
     pricePrediction15min: number;
   };
   analysisReason: string;
+  chartAnalysis?: {
+    pastChart: string;      // 过去图形分析
+    currentChart: string;   // 当前图形分析
+    futureChart: string;    // 未来图形预测
+  };
   timestamp?: number;
   model?: string;
 }

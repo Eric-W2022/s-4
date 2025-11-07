@@ -203,6 +203,36 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                 </div>
               </div>
 
+              {/* 图形分析 */}
+              {strategy.chartAnalysis && (
+                <div className="analysis-section chart-analysis">
+                  <h3>图形分析</h3>
+                  <div className="chart-analysis-grid">
+                    <div className="chart-analysis-item">
+                      <div className="chart-analysis-label">
+                        <span className="label-icon">📊</span>
+                        <span>过去图形</span>
+                      </div>
+                      <p className="chart-analysis-text">{strategy.chartAnalysis.pastChart}</p>
+                    </div>
+                    <div className="chart-analysis-item">
+                      <div className="chart-analysis-label">
+                        <span className="label-icon">📈</span>
+                        <span>当前图形</span>
+                      </div>
+                      <p className="chart-analysis-text">{strategy.chartAnalysis.currentChart}</p>
+                    </div>
+                    <div className="chart-analysis-item">
+                      <div className="chart-analysis-label">
+                        <span className="label-icon">🔮</span>
+                        <span>未来预测</span>
+                      </div>
+                      <p className="chart-analysis-text">{strategy.chartAnalysis.futureChart}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 分析理由 */}
               <div className="analysis-section analysis-reason">
                 <h3>分析理由</h3>
