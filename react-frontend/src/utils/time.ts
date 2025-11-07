@@ -101,7 +101,6 @@ export const filterTradingTimeKlines = (klines: any[]) => {
       // 如果从非交易时间进入交易时间，标记为时段边界
       if (lastWasNonTrading && filtered.length > 0) {
         sessionBreaks.push(filtered.length);
-        console.log(`[时段边界] 索引 ${filtered.length}, 时间: ${new Date(kline.t).toLocaleString()}`);
       }
       filtered.push(kline);
       lastWasNonTrading = false;
@@ -110,7 +109,6 @@ export const filterTradingTimeKlines = (klines: any[]) => {
     }
   }
   
-  console.log(`[过滤结果] 原始: ${klines.length}根, 过滤后: ${filtered.length}根, 边界: ${sessionBreaks.length}个`);
   return { filtered, sessionBreaks };
 };
 

@@ -40,7 +40,7 @@ export const CHART_THEMES = {
 } as const;
 
 export const UPDATE_INTERVALS = {
-  KLINE_1M: 10000, // 10秒更新一次1分钟K线（与旧项目一致）
+  KLINE_1M: 1000, // 1秒更新一次1分钟K线（实时刷新）
   KLINE_15M: 60000, // 60秒更新一次15分钟K线
   KLINE_1D: 300000, // 5分钟更新一次日K线
   TRADE_TICK: 1000, // 1秒更新一次实时价格

@@ -72,12 +72,12 @@ function AppContent() {
     onStatusChange: handleStatusChange,
   });
 
-  // 伦敦白银数据查询
+  // 伦敦白银数据查询（每秒刷新）
   const londonKline1mQuery = useKlineData(
     SYMBOLS.LONDON,
     INTERVALS.ONE_MINUTE,
     100,
-    UPDATE_INTERVALS.KLINE_1M
+    1000 // 1秒刷新一次
   );
   const londonKline15mQuery = useKlineData(
     SYMBOLS.LONDON,

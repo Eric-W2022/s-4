@@ -77,21 +77,13 @@ export const createKlineChartOption = (
   // 判断是否是国内1分钟K线（需要过滤非交易时间）
   const isDomestic1m = !isLondonMarket && !isDailyKline && !title.includes('15分钟');
 
-  console.log(`[图表配置] 标题: "${title}", 伦敦: ${isLondonMarket}, 日K: ${isDailyKline}, 国内1分: ${isDomestic1m}`);
-
   // 过滤交易时间数据（仅对国内1分钟K线）
   let processedData = data;
   let sessionBreaks: number[] = [];
   if (isDomestic1m) {
-    console.log(`[K线过滤] 开始过滤，原始数据条数: ${data.length}`);
-    if (data.length > 0) {
-      console.log(`[K线过滤] 第一条数据时间: ${new Date(data[0].t).toLocaleString()}`);
-      console.log(`[K线过滤] 最后一条数据时间: ${new Date(data[data.length - 1].t).toLocaleString()}`);
-    }
     const result = filterTradingTimeKlines(data);
     processedData = result.filtered;
     sessionBreaks = result.sessionBreaks;
-    console.log(`[K线过滤] 过滤后数据条数: ${processedData.length}, 时段边界: ${sessionBreaks.length}个`);
   }
 
   const chartData = convertKlineDataToEcharts(processedData);
@@ -127,8 +119,8 @@ export const createKlineChartOption = (
         if (!Array.isArray(params) || params.length === 0) return '';
         
         const param = params[0];
-        // 对于time类型的X轴，axisValue是时间戳
-        const timestamp = param.axisValue || param.name;
+        // 对于category类型的X轴，name就是时间戳
+        const timestamp = typeof param.name === 'string' ? parseFloat(param.name) : param.name;
         const date = new Date(timestamp);
         const year = String(date.getFullYear()).slice(-2); // 只取后两位
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -149,8 +141,8 @@ export const createKlineChartOption = (
         
         params.forEach((item: any) => {
           if (item.seriesName === 'K线' && item.data && Array.isArray(item.data)) {
-            // time轴下candlestick数据格式：[时间, 开, 收, 低, 高]
-            const [, open, close, low, high] = item.data;
+            // category轴下candlestick数据格式：[开, 收, 低, 高]
+            const [open, close, low, high] = item.data;
             const color = close >= open ? CHART_THEMES.RED : CHART_THEMES.GREEN;
             const formatValue = (val: number) => isLondonMarket ? val.toFixed(3) : Math.round(val).toString();
             result += `<div style="margin-top: 8px;">`;
@@ -160,13 +152,13 @@ export const createKlineChartOption = (
             result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最低：</span><span style="color: ${CHART_THEMES.GREEN}; font-weight: bold;">${formatValue(low)}</span>`;
             result += `</div>`;
           } else if (item.seriesName === '布林上轨') {
-            upperValue = Array.isArray(item.value) ? item.value[1] : item.value;
+            upperValue = item.value;
           } else if (item.seriesName === '布林中轨') {
-            middleValue = Array.isArray(item.value) ? item.value[1] : item.value;
+            middleValue = item.value;
           } else if (item.seriesName === '布林下轨') {
-            lowerValue = Array.isArray(item.value) ? item.value[1] : item.value;
+            lowerValue = item.value;
           } else if (item.seriesName === '成交量') {
-            const volumeValue = Array.isArray(item.value) ? item.value[1] : item.value;
+            const volumeValue = item.value;
             result += `<div style="margin-top: 8px;">`;
             result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">成交量：</span><span style="color: ${CHART_THEMES.BLUE}; font-weight: bold;">${volumeValue}</span>`;
             result += `</div>`;
@@ -209,15 +201,19 @@ export const createKlineChartOption = (
     ],
     xAxis: [
       {
-        type: 'time',
+        type: 'category',
+        data: chartData.map((item) => item[0]), // 时间戳数组
+        scale: true,
         boundaryGap: true,
         axisLine: {
           lineStyle: { color: CHART_THEMES.BORDER },
         },
         axisLabel: {
           color: CHART_THEMES.TEXT_SECONDARY,
-          formatter: (value: number) => {
-            const date = new Date(value);
+          formatter: (value: any) => {
+            const timestamp = typeof value === 'string' ? parseFloat(value) : value;
+            if (isNaN(timestamp)) return '';
+            const date = new Date(timestamp);
             if (isDailyKline) {
               // 日K线显示月-日
               const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -234,8 +230,10 @@ export const createKlineChartOption = (
         splitLine: { show: false },
       },
       {
-        type: 'time',
+        type: 'category',
         gridIndex: 1,
+        data: chartData.map((item) => item[0]),
+        scale: true,
         boundaryGap: true,
         axisLine: { show: false },
         axisTick: { show: false },
@@ -299,7 +297,7 @@ export const createKlineChartOption = (
       {
         name: 'K线',
         type: 'candlestick',
-        data: chartData.map((item) => [item[0], item[1], item[2], item[3], item[4]]), // [时间, 开, 收, 低, 高]
+        data: chartData.map((item) => [item[1], item[2], item[3], item[4]]), // [开, 收, 低, 高]
         itemStyle: {
           color: CHART_THEMES.RED, // 涨
           color0: CHART_THEMES.GREEN, // 跌
@@ -325,7 +323,7 @@ export const createKlineChartOption = (
             opacity: 0.6,
           },
           data: sessionBreaks.map(index => ({
-            xAxis: chartData[index][0], // 时间戳
+            xAxis: index, // category轴使用索引
             label: {
               show: true,
               position: 'end',
@@ -339,7 +337,7 @@ export const createKlineChartOption = (
       {
         name: '布林上轨',
         type: 'line',
-        data: chartData.map((item, index) => [item[0], bollingerBands.upper[index]]),
+        data: bollingerBands.upper,
         smooth: true,
         lineStyle: {
           color: CHART_THEMES.PURPLE,
@@ -354,7 +352,7 @@ export const createKlineChartOption = (
       {
         name: '布林中轨',
         type: 'line',
-        data: chartData.map((item, index) => [item[0], bollingerBands.middle[index]]),
+        data: bollingerBands.middle,
         smooth: true,
         lineStyle: {
           color: CHART_THEMES.YELLOW,
@@ -369,7 +367,7 @@ export const createKlineChartOption = (
       {
         name: '布林下轨',
         type: 'line',
-        data: chartData.map((item, index) => [item[0], bollingerBands.lower[index]]),
+        data: bollingerBands.lower,
         smooth: true,
         lineStyle: {
           color: CHART_THEMES.PURPLE,
@@ -387,11 +385,10 @@ export const createKlineChartOption = (
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: chartData.map((item, index) => {
-          const timestamp = item[0];
           const volume = item[5];
           const isRise = index > 0 && item[2] >= chartData[index - 1][2];
           return {
-            value: [timestamp, volume],
+            value: volume,
             itemStyle: {
               color: isRise ? CHART_THEMES.RED : CHART_THEMES.GREEN,
             },
