@@ -88,9 +88,7 @@ export function getSystemPrompt(): string {
     "lots": 整数（建议手数，1-5手）,
     "londonPricePrediction15min": 数字（预测15分钟后伦敦白银价格，美元）,
     "pricePrediction15min": 数字（预测15分钟后国内白银价格，人民币）
-  },
-  "analysisReason": "字符串（详细说明交易建议的理由，包括技术面、趋势、盘口等分析）",
-  "nextSteps": "字符串（后续操作思路和需要关注的关键价位）"
+  }
 }
 
 注意事项：

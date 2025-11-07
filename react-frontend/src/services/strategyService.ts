@@ -19,8 +19,8 @@ interface StrategyAnalysisResult {
     londonPricePrediction15min: number;
     pricePrediction15min: number;
   };
-  analysisReason: string;
-  nextSteps: string;
+  analysisReason?: string;  // 已废弃
+  nextSteps?: string;        // 已废弃
 }
 
 /**

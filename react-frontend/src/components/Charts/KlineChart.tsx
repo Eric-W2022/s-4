@@ -3,6 +3,7 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { createKlineChartOption, formatPrice } from '../../utils/chart';
+import { isMarketOpen } from '../../utils/time';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
 import { StatusDot } from '../Common/StatusDot';
 import type { KlineData, TradeTickData } from '../../types';
@@ -20,6 +21,19 @@ interface KlineChartProps {
 export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, status, height = 600, isLoading = false }) => {
     // 判断是否是伦敦市场
     const isLondonMarket = title.includes('伦敦');
+    
+    // 判断是否在交易时间
+    const isTradingTime = useMemo(() => {
+      return isMarketOpen(isLondonMarket ? 'london' : 'domestic');
+    }, [isLondonMarket]);
+    
+    // 计算实际显示的状态
+    const displayStatus = useMemo(() => {
+      if (!isTradingTime && !isLondonMarket) {
+        return 'closed'; // 非交易时间显示黄色
+      }
+      return status || 'connecting';
+    }, [isTradingTime, isLondonMarket, status]);
     
     // 图表实例引用
     const chartRef = useRef<ReactECharts>(null);
@@ -116,7 +130,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
         <div className="chart-header">
           <h2>
             {title}
-            {status && <StatusDot status={status} />}
+            <StatusDot status={displayStatus} />
             {tradeTick && (
               <span className="title-price">
                 {isLondonMarket 

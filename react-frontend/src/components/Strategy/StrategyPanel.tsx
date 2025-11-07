@@ -66,9 +66,14 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         <div className="strategy-content">
           {isLoading && (
             <div className="strategy-content-loading-overlay">
-              <div className="loading-text">
-                <span className="loading-spinner" />
-                正在分析市场数据...
+              <div className="loading-container">
+                <div className="loading-spinner-large"></div>
+                <div className="loading-text">AI 正在分析市场数据...</div>
+                <div className="loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               </div>
             </div>
           )}
@@ -170,18 +175,6 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* 分析理由 */}
-              <div className="analysis-section">
-                <h3>分析理由</h3>
-                <p className="analysis-text">{strategy.analysisReason}</p>
-              </div>
-
-              {/* 后续思路 */}
-              <div className="analysis-section">
-                <h3>后续思路</h3>
-                <p className="analysis-text">{strategy.nextSteps}</p>
               </div>
             </div>
           )}

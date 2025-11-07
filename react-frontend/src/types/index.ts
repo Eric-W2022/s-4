@@ -95,8 +95,8 @@ export interface StrategyAnalysis {
     londonPricePrediction15min: number;
     pricePrediction15min: number;
   };
-  analysisReason: string;
-  nextSteps: string;
+  analysisReason?: string;  // 已废弃，保留兼容性
+  nextSteps?: string;        // 已废弃，保留兼容性
   timestamp?: number;
   model?: string;
 }

@@ -123,7 +123,6 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
     // 确定得分颜色
     const getScoreColor = (score: number) => {
       if (score >= 70) return '#ef4444'; // 高机会 - 红色
-      if (score >= 40) return '#fbbf24'; // 中等机会 - 黄色
       return '#4ade80'; // 低机会 - 绿色
     };
 
@@ -193,30 +192,18 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
           {/* 套利机会提示 */}
           {showOpportunity && arbitrageMetrics && (
             <div className="arbitrage-opportunity">
-              <div className="arbitrage-opportunity-title">
-                ⚠️ 潜在套利机会 - 
-                <span style={{ 
-                  color: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
-                  fontWeight: 'bold',
-                  marginLeft: '8px'
-                }}>
-                  {arbitrageMetrics.direction === 'long' ? '做多' : '做空'}
-                </span>
-              </div>
               <div className="arbitrage-opportunity-text">
-                建议
                 <span style={{ 
-                  color: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
+                  color: '#ffffff',
+                  backgroundColor: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
                   fontWeight: 'bold',
-                  fontSize: '16px',
-                  margin: '0 4px'
+                  fontSize: '18px',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  display: 'inline-block'
                 }}>
-                  {arbitrageMetrics.direction === 'long' ? '做多' : '做空'}
+                  {arbitrageMetrics.direction === 'long' ? '买多' : '卖空'}
                 </span>
-                国内白银
-                {arbitrageMetrics.direction === 'long' 
-                  ? '（国内相对偏弱）' 
-                  : '（国内相对偏强）'}
               </div>
             </div>
           )}
