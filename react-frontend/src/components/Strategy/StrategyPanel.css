@@ -6,7 +6,7 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 100%;
-  height: 600px;
+  height: 100%;
   overflow: hidden;
   box-sizing: border-box;
   display: flex;
@@ -57,48 +57,22 @@
   justify-content: center;
   z-index: 10;
   border-radius: 12px;
-  min-height: 200px;
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.loading-spinner-large {
-  width: 60px;
-  height: 60px;
-  border: 4px solid rgba(96, 165, 250, 0.2);
-  border-top-color: #60a5fa;
-  border-right-color: #60a5fa;
-  border-radius: 50%;
-  animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
-  box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
-}
-
-.loading-text {
-  color: #60a5fa;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+  min-height: 100%;
 }
 
 .loading-dots {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
 }
 
 .loading-dots span {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   background: #60a5fa;
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out both;
-  box-shadow: 0 0 10px rgba(96, 165, 250, 0.6);
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.8);
 }
 
 .loading-dots span:nth-child(1) {
@@ -283,41 +257,38 @@
   border: 2px solid #fbbf24;
 }
 
-/* 信心度和风险进度条 */
-.confidence-risk-bar-container {
-  margin-top: 8px;
+/* 信心度、风险、价格预测 - 4个等宽卡片一行显示 */
+.info-cards-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 12px;
 }
 
-.confidence-risk-bar {
-  height: 40px;
-  background: #0f1425;
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
+.info-card {
+  background: rgba(15, 18, 33, 0.5);
+  border-radius: 6px;
+  padding: 8px 6px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 16px;
-  border: 1px solid rgba(96, 165, 250, 0.2);
+  border: 1px solid rgba(30, 37, 72, 0.5);
+  min-height: 60px;
 }
 
-.confidence-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  border-radius: 8px;
-  transition: width 0.5s ease, background-color 0.3s ease;
-  opacity: 0.3;
+.info-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  font-weight: 500;
 }
 
-.confidence-text {
-  position: relative;
-  z-index: 1;
-  font-size: 16px;
+.info-value {
+  font-size: 14px;
   font-weight: 700;
-  color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  font-family: 'Monaco', 'Courier New', monospace;
+  transition: color 0.3s ease;
 }
 
 .confidence-fill {
@@ -358,7 +329,7 @@
 }
 
 .price-value {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   font-family: 'Monaco', 'Courier New', monospace;
   color: #ffffff;
@@ -381,48 +352,18 @@
   color: #fbbf24;
 }
 
-/* 价格预测 */
-.price-prediction {
-  border-left-color: #fbbf24;
+
+/* 分析理由 */
+.analysis-reason {
+  border-left-color: #60a5fa;
 }
 
-.prediction-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.prediction-item {
-  background: rgba(15, 18, 33, 0.5);
-  border-radius: 6px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border: 1px solid rgba(30, 37, 72, 0.5);
-}
-
-.prediction-label {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-bottom: 6px;
-}
-
-.prediction-value {
-  font-size: 16px;
-  font-weight: 700;
-  font-family: 'Monaco', 'Courier New', monospace;
-  color: #fbbf24;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  transition: color 0.3s ease;
-}
-
-.prediction-arrow {
-  font-size: 20px;
-  font-weight: 700;
+.analysis-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #e0e0e0;
+  margin: 0;
+  text-align: justify;
 }
 
 .no-data {
@@ -430,6 +371,10 @@
   color: #6b7280;
   padding: 40px 20px;
   font-size: 14px;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes spin {

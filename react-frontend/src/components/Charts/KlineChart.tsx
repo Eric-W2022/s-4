@@ -64,42 +64,22 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
       
       const prevData = prevDataRef.current;
       
-      // 首次加载或数据条数变化 - 完全更新
-      if (!isInitializedRef.current || prevData.length === 0 || prevData.length !== data.length) {
+      // 首次加载 - 完全初始化
+      if (!isInitializedRef.current) {
         chartInstance.setOption(chartOption, {
-          notMerge: false,
-          replaceMerge: ['series', 'xAxis', 'yAxis'],
-          lazyUpdate: true,
+          notMerge: true, // 首次完全替换
+          lazyUpdate: false,
         });
         prevDataRef.current = data;
         isInitializedRef.current = true;
         return;
       }
       
-      // 检查是否只有最后一根K线变化
-      const isOnlyLastBarChanged = data.length === prevData.length && 
-        data.slice(0, -1).every((item, index) => {
-          const prev = prevData[index];
-          return item.t === prev.t && item.o === prev.o && 
-                 item.c === prev.c && item.h === prev.h && item.l === prev.l;
-        });
-      
-      if (isOnlyLastBarChanged) {
-        // 只更新最后一根K线，使用静默更新
-        chartInstance.setOption(chartOption, {
-          notMerge: false,
-          replaceMerge: ['series'],
-          lazyUpdate: true,
-          silent: true, // 静默更新，不触发事件
-        });
-      } else {
-        // 多根K线变化 - 更新系列和坐标轴
-        chartInstance.setOption(chartOption, {
-          notMerge: false,
-          replaceMerge: ['series', 'xAxis', 'yAxis'],
-          lazyUpdate: true,
-        });
-      }
+      // 后续更新 - 使用合并模式，保持 dataZoom 状态
+      chartInstance.setOption(chartOption, {
+        notMerge: false, // 合并模式，保持用户交互状态（dataZoom等）
+        lazyUpdate: true, // 延迟更新，提高性能
+      });
       
       prevDataRef.current = data;
     }, [chartOption, data, title]);

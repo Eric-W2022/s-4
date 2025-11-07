@@ -19,8 +19,7 @@ interface StrategyAnalysisResult {
     londonPricePrediction15min: number;
     pricePrediction15min: number;
   };
-  analysisReason?: string;  // 已废弃
-  nextSteps?: string;        // 已废弃
+  analysisReason: string;
 }
 
 /**
@@ -160,6 +159,7 @@ export async function analyzeStrategy(
     console.log('  - 信心度:', strategyData.tradingAdvice.confidence + '%');
     console.log('  - 风险:', strategyData.tradingAdvice.riskLevel);
     console.log('  - 入场价:', strategyData.tradingAdvice.entryPrice);
+    console.log('  - 分析理由:', strategyData.analysisReason);
     
     return strategyData;
     

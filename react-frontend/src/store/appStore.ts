@@ -41,11 +41,25 @@ interface AppState {
   setDomesticConnectionStatus: (status: 'connected' | 'connecting' | 'error' | 'closed') => void;
 }
 
+// 从localStorage加载保存的模型
+const loadSelectedModel = (): ModelType => {
+  try {
+    const saved = localStorage.getItem('selectedModel');
+    if (saved) {
+      console.log('[Store] 从localStorage加载模型:', saved);
+      return saved as ModelType;
+    }
+  } catch (error) {
+    console.error('[Store] 加载模型失败:', error);
+  }
+  return 'deepseek-chat'; // 默认模型
+};
+
 export const useAppStore = create<AppState>()(
   devtools(
     (set) => ({
       // 初始状态
-      selectedModel: 'deepseek-chat',
+      selectedModel: loadSelectedModel(),
       londonKline1m: [],
       londonKline15m: [],
       londonKlineDaily: [],
@@ -60,7 +74,16 @@ export const useAppStore = create<AppState>()(
       domesticConnectionStatus: 'connecting',
 
       // Actions
-      setSelectedModel: (model) => set({ selectedModel: model }),
+      setSelectedModel: (model) => {
+        // 保存到localStorage
+        try {
+          localStorage.setItem('selectedModel', model);
+          console.log('[Store] 保存模型到localStorage:', model);
+        } catch (error) {
+          console.error('[Store] 保存模型失败:', error);
+        }
+        set({ selectedModel: model });
+      },
       setLondonKline1m: (data) => set({ londonKline1m: data }),
       setLondonKline15m: (data) => set({ londonKline15m: data }),
       setLondonKlineDaily: (data) => set({ londonKlineDaily: data }),

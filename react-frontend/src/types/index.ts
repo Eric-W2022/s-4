@@ -74,7 +74,7 @@ export type ModelType =
   | 'qwen3-max'
   | 'glm-4.6'
   | 'MiniMax-M2'
-  | 'kimi-k2-0905-preview'
+  | 'kimi-k2-turbo-preview'
   | 'gpt-5'
   | 'claude-sonnet-4-5'
   | 'google-ai-studio/gemini-2.5-pro'
@@ -95,8 +95,7 @@ export interface StrategyAnalysis {
     londonPricePrediction15min: number;
     pricePrediction15min: number;
   };
-  analysisReason?: string;  // 已废弃，保留兼容性
-  nextSteps?: string;        // 已废弃，保留兼容性
+  analysisReason: string;
   timestamp?: number;
   model?: string;
 }

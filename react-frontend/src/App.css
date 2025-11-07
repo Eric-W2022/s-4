@@ -33,6 +33,7 @@
   min-width: 320px;
   max-width: 320px;
   overflow-x: hidden;
+  height: calc(100vh - 20px);
 }
 
 /* 响应式设计 */

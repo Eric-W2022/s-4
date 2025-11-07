@@ -358,23 +358,23 @@ export const createKlineChartOption = (
         markLine: (() => {
           const markLineData: any[] = [];
           
-          // 添加交易时段分割线（仅国内1分钟K线）
+        // 添加交易时段分割线（仅国内1分钟K线）
           if (sessionBreaks.length > 0) {
             markLineData.push(...sessionBreaks.map(index => ({
               xAxis: index,
-              label: {
+          label: {
                 show: true,
                 position: 'end',
                 formatter: '交易时段',
                 color: CHART_THEMES.BLUE,
                 fontSize: 10,
-              },
-              lineStyle: {
-                color: CHART_THEMES.BLUE,
-                width: 2,
-                type: 'solid',
-                opacity: 0.6,
-              },
+          },
+          lineStyle: {
+            color: CHART_THEMES.BLUE,
+            width: 2,
+            type: 'solid',
+            opacity: 0.6,
+          },
             })));
           }
           
@@ -432,9 +432,9 @@ export const createKlineChartOption = (
             if (strategyPrices.takeProfit) {
               markLineData.push({
                 yAxis: strategyPrices.takeProfit,
-                label: {
-                  show: true,
-                  position: 'end',
+            label: {
+              show: true,
+              position: 'end',
                   formatter: `${Math.round(strategyPrices.takeProfit)}`,
                   color: '#ef4444',
                   fontSize: 12,
@@ -448,7 +448,7 @@ export const createKlineChartOption = (
                   width: 2,
                   type: 'dashed',
                   opacity: 0.8,
-                },
+            },
               });
             }
           }

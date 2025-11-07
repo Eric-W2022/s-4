@@ -53,7 +53,7 @@ setStrategy(result);
 - qwen3-max
 - glm-4.6
 - MiniMax-M2
-- kimi-k2-0905-preview
+- kimi-k2-turbo-preview
 - gpt-5
 - claude-sonnet-4-5
 - google-ai-studio/gemini-2.5-pro

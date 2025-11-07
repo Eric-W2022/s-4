@@ -19,7 +19,7 @@ export const MODEL_OPTIONS = [
   { label: 'Qwen', value: 'qwen3-max' },
   { label: 'GLM', value: 'glm-4.6' },
   { label: 'MiniMax', value: 'MiniMax-M2' },
-  { label: 'Kimi', value: 'kimi-k2-0905-preview' },
+  { label: 'Kimi', value: 'kimi-k2-turbo-preview' },
   { label: 'GPT', value: 'gpt-5' },
   { label: 'Claude', value: 'claude-sonnet-4-5' },
   { label: 'Gemini', value: 'google-ai-studio/gemini-2.5-pro' },

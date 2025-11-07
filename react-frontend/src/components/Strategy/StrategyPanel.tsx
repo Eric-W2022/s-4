@@ -68,25 +68,23 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         <div className="strategy-content">
           {isLoading && (
             <div className="strategy-content-loading-overlay">
-              <div className="loading-container">
-                <div className="loading-spinner-large"></div>
-                <div className="loading-text">AI 正在分析市场数据...</div>
-                <div className="loading-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
+              <div className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
               </div>
             </div>
           )}
 
           {!isLoading && !strategy && (
-            <div className="no-data">等待市场数据...</div>
+            <div className="no-data">
+              <div>等待市场数据...</div>
+            </div>
           )}
 
           {!isLoading && strategy && (strategy as any).error && (
-            <div className="no-data" style={{ color: '#ef4444' }}>
-              分析失败: {(strategy as any).error}
+            <div className="no-data">
+              <div style={{ color: '#ef4444' }}>分析失败: {(strategy as any).error}</div>
             </div>
           )}
 
@@ -106,25 +104,69 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                   </span>
                 </div>
                 
-                {/* 信心度进度条 */}
-                <div className="confidence-risk-bar-container">
-                  <div className="confidence-risk-bar">
-                    {/* 信心度填充（颜色体现风险） */}
-                    <div
-                      className="confidence-fill"
+                {/* 信心度、风险、15分钟价格预测 - 4个等宽卡片一行显示 */}
+                <div className="info-cards-row">
+                  {/* 信心度 */}
+                  <div className="info-card">
+                    <div className="info-label">信心度</div>
+                    <div 
+                      className="info-value"
                       style={{
-                        width: `${strategy.tradingAdvice.confidence}%`,
-                        backgroundColor:
-                          strategy.tradingAdvice.confidence >= 70
-                            ? '#4ade80'
-                            : strategy.tradingAdvice.confidence >= 40
-                            ? '#fbbf24'
-                            : '#ef4444',
+                        color: strategy.tradingAdvice.confidence >= 70
+                          ? '#4ade80'
+                          : strategy.tradingAdvice.confidence >= 40
+                          ? '#fbbf24'
+                          : '#ef4444'
                       }}
-                    />
-                    {/* 信心度文字 - 居中 */}
-                    <div className="confidence-text">
-                      信心度 {strategy.tradingAdvice.confidence}%
+                    >
+                      {strategy.tradingAdvice.confidence}%
+                    </div>
+                  </div>
+                  
+                  {/* 风险 */}
+                  <div className="info-card">
+                    <div className="info-label">风险</div>
+                    <div
+                      className="info-value"
+                      style={{
+                        color: strategy.tradingAdvice.riskLevel === '低'
+                            ? '#4ade80'
+                          : strategy.tradingAdvice.riskLevel === '中'
+                            ? '#fbbf24'
+                          : '#ef4444'
+                      }}
+                    >
+                      {strategy.tradingAdvice.riskLevel}
+                    </div>
+                  </div>
+                  
+                  {/* 伦敦预测 */}
+                  <div className="info-card">
+                    <div className="info-label">伦敦</div>
+                    <div 
+                      className="info-value info-value-price"
+                      style={{
+                        color: londonCurrentPrice 
+                          ? (strategy.tradingAdvice.londonPricePrediction15min > londonCurrentPrice ? '#ef4444' : '#22c55e')
+                          : '#e0e0e0'
+                      }}
+                    >
+                      {strategy.tradingAdvice.londonPricePrediction15min.toFixed(2)}
+                    </div>
+                  </div>
+                  
+                  {/* 国内预测 */}
+                  <div className="info-card">
+                    <div className="info-label">国内</div>
+                    <div 
+                      className="info-value info-value-price"
+                      style={{
+                        color: domesticCurrentPrice 
+                          ? (strategy.tradingAdvice.pricePrediction15min > domesticCurrentPrice ? '#ef4444' : '#22c55e')
+                          : '#e0e0e0'
+                      }}
+                    >
+                      {strategy.tradingAdvice.pricePrediction15min.toFixed(0)}
                     </div>
                   </div>
                 </div>
@@ -161,37 +203,10 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                 </div>
               </div>
 
-              {/* 价格预测 */}
-              <div className="analysis-section price-prediction">
-                <h3>15分钟价格预测</h3>
-                <div className="prediction-grid">
-                  <div className="prediction-item">
-                    <div className="prediction-label">伦敦白银</div>
-                    <div 
-                      className="prediction-value"
-                      style={{
-                        color: londonCurrentPrice 
-                          ? (strategy.tradingAdvice.londonPricePrediction15min > londonCurrentPrice ? '#ef4444' : '#22c55e')
-                          : '#e0e0e0'
-                      }}
-                    >
-                      ${strategy.tradingAdvice.londonPricePrediction15min.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="prediction-item">
-                    <div className="prediction-label">国内白银</div>
-                    <div 
-                      className="prediction-value"
-                      style={{
-                        color: domesticCurrentPrice 
-                          ? (strategy.tradingAdvice.pricePrediction15min > domesticCurrentPrice ? '#ef4444' : '#22c55e')
-                          : '#e0e0e0'
-                      }}
-                    >
-                      ¥{strategy.tradingAdvice.pricePrediction15min.toFixed(0)}
-                    </div>
-                  </div>
-                </div>
+              {/* 分析理由 */}
+              <div className="analysis-section analysis-reason">
+                <h3>分析理由</h3>
+                <p className="analysis-text">{strategy.analysisReason}</p>
               </div>
             </div>
           )}
