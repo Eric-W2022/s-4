@@ -288,31 +288,35 @@
 
 .price-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
 .price-item {
   background: rgba(15, 18, 33, 0.5);
   border-radius: 6px;
-  padding: 10px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   border: 1px solid rgba(30, 37, 72, 0.5);
+  min-width: 0; /* 允许内容收缩 */
 }
 
 .price-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #9ca3af;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
+  white-space: nowrap;
 }
 
 .price-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   font-family: 'Monaco', 'Courier New', monospace;
   color: #ffffff;
+  white-space: nowrap;
 }
 
 .price-value.entry {

@@ -1,14 +1,15 @@
 // 主应用组件
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAppStore } from './store/appStore';
 import { useKlineData, useTradeTick, useDepth } from './hooks/useMarketData';
 import { useDomesticWebSocket } from './hooks/useDomesticWebSocket';
+import { useLondonWebSocket } from './hooks/useLondonWebSocket';
 import { KlineChart } from './components/Charts/KlineChart';
 import { DepthPanel } from './components/Depth/DepthPanel';
 import { ArbitragePanel } from './components/Arbitrage/ArbitragePanel';
 import { StrategyPanel } from './components/Strategy/StrategyPanel';
-import { SYMBOLS, INTERVALS, UPDATE_INTERVALS, ENABLE_WEBSOCKET } from './constants';
+import { SYMBOLS, INTERVALS, UPDATE_INTERVALS, ENABLE_WEBSOCKET, ENABLE_LONDON_WEBSOCKET, ALLTICK_CONFIG } from './constants';
 import type { KlineData } from './types';
 import './App.css';
 
@@ -48,7 +49,14 @@ function AppContent() {
   const [domesticRealtimeKline, setDomesticRealtimeKline] = useState<KlineData[]>([]);
   const [isWebSocketActive, setIsWebSocketActive] = useState(false);
 
-  // WebSocket 回调
+  // 伦敦白银实时K线数据（AllTick WebSocket）
+  const [londonRealtimeKline, setLondonRealtimeKline] = useState<KlineData[]>([]);
+  const [isLondonWebSocketActive, setIsLondonWebSocketActive] = useState(false);
+
+  // 防止自动分析无限循环的标记
+  const hasAttemptedAnalysisRef = useRef(false);
+
+  // 国内白银 WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
     setDomesticRealtimeKline(prev => {
       if (prev.length === 0) return [kline];
@@ -59,7 +67,7 @@ function AppContent() {
   }, []);
 
   const handleInitialData = useCallback((klines: KlineData[]) => {
-    console.log('[WebSocket] 收到初始数据，条数:', klines.length);
+    console.log('[国内WebSocket] 收到初始数据，条数:', klines.length);
     setDomesticRealtimeKline(klines);
     setIsWebSocketActive(true);
   }, []);
@@ -72,7 +80,41 @@ function AppContent() {
     }
   }, [setDomesticConnectionStatus]);
 
-  // 建立 WebSocket 连接
+  // 伦敦白银 WebSocket 回调
+  const handleLondonKlineUpdate = useCallback((kline: KlineData) => {
+    setLondonRealtimeKline(prev => {
+      if (prev.length === 0) return [kline];
+      const newData = [...prev];
+      newData[newData.length - 1] = kline;
+      return newData;
+    });
+  }, []);
+
+  const handleLondonInitialData = useCallback((klines: KlineData[]) => {
+    console.log('[伦敦WebSocket] 收到初始数据，条数:', klines.length);
+    setLondonRealtimeKline(klines);
+    setIsLondonWebSocketActive(true);
+  }, []);
+
+  const handleLondonTradeTickUpdate = useCallback((price: number, timestamp: number) => {
+    // 更新实时价格
+    setLondonTradeTick({
+      price,
+      change: 0, // AllTick不提供涨跌额
+      changePercent: 0, // AllTick不提供涨跌幅
+      timestamp,
+    });
+  }, [setLondonTradeTick]);
+
+  const handleLondonStatusChange = useCallback((status: 'connected' | 'connecting' | 'error' | 'closed') => {
+    setLondonConnectionStatus(status);
+    // WebSocket断开时清除标记，重新使用轮询数据
+    if (status === 'error' || status === 'closed') {
+      setIsLondonWebSocketActive(false);
+    }
+  }, [setLondonConnectionStatus]);
+
+  // 建立国内白银 WebSocket 连接
   useDomesticWebSocket({
     enabled: ENABLE_WEBSOCKET,
     onKlineUpdate: handleKlineUpdate,
@@ -80,12 +122,24 @@ function AppContent() {
     onStatusChange: handleStatusChange,
   });
 
-  // 伦敦白银数据查询（每秒刷新）
+  // 建立伦敦白银 WebSocket 连接（AllTick）
+  useLondonWebSocket({
+    symbol: SYMBOLS.LONDON,
+    wsUrl: ALLTICK_CONFIG.wsUrl,
+    token: ALLTICK_CONFIG.token,
+    enabled: ENABLE_LONDON_WEBSOCKET,
+    onKlineUpdate: handleLondonKlineUpdate,
+    onInitialData: handleLondonInitialData,
+    onTradeTickUpdate: handleLondonTradeTickUpdate,
+    onStatusChange: handleLondonStatusChange,
+  });
+
+  // 伦敦白银数据查询（WebSocket活跃时禁用轮询）
   const londonKline1mQuery = useKlineData(
     SYMBOLS.LONDON,
     INTERVALS.ONE_MINUTE,
     100,
-    1000 // 1秒刷新一次
+    isLondonWebSocketActive ? false : UPDATE_INTERVALS.KLINE_1M // WebSocket活跃时禁用轮询，否则500ms轮询
   );
   const londonKline15mQuery = useKlineData(
     SYMBOLS.LONDON,
@@ -123,13 +177,21 @@ function AppContent() {
   const domesticTradeTickQuery = useTradeTick(SYMBOLS.DOMESTIC);
   const domesticDepthQuery = useDepth(SYMBOLS.DOMESTIC);
 
-  // 初始化 WebSocket 数据（仅在 WebSocket 未活跃且有轮询数据时）
+  // 初始化国内 WebSocket 数据（仅在 WebSocket 未活跃且有轮询数据时）
   useEffect(() => {
     if (!isWebSocketActive && domesticKline1mQuery.data && domesticRealtimeKline.length === 0) {
-      console.log('[初始化] 使用轮询数据初始化K线');
+      console.log('[初始化] 使用轮询数据初始化国内K线');
       setDomesticRealtimeKline(domesticKline1mQuery.data);
     }
   }, [isWebSocketActive, domesticKline1mQuery.data, domesticRealtimeKline.length]);
+
+  // 初始化伦敦 WebSocket 数据（仅在 WebSocket 未活跃且有轮询数据时）
+  useEffect(() => {
+    if (!isLondonWebSocketActive && londonKline1mQuery.data && londonRealtimeKline.length === 0) {
+      console.log('[初始化] 使用轮询数据初始化伦敦K线');
+      setLondonRealtimeKline(londonKline1mQuery.data);
+    }
+  }, [isLondonWebSocketActive, londonKline1mQuery.data, londonRealtimeKline.length]);
 
   // 更新状态
   useEffect(() => {
@@ -182,15 +244,24 @@ function AppContent() {
     if (domesticDepthQuery.data) setDomesticDepth(domesticDepthQuery.data);
   }, [domesticDepthQuery.data]);
 
-  // 自动触发AI策略分析
+  // 自动触发AI策略分析（数据就绪后立即触发，无延迟）
   useEffect(() => {
     const triggerAnalysis = async () => {
+      // 使用WebSocket数据优先，否则使用轮询数据
+      const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
+        ? londonRealtimeKline 
+        : londonKline1mQuery.data;
+      
+      const domesticData = domesticRealtimeKline.length > 0 
+        ? domesticRealtimeKline 
+        : domesticKline1mQuery.data;
+      
       // 检查所有数据是否已加载
       const hasAllData = 
-        londonKline1mQuery.data && londonKline1mQuery.data.length > 0 &&
+        londonData && londonData.length > 0 &&
         londonKline15mQuery.data && londonKline15mQuery.data.length > 0 &&
         londonKlineDailyQuery.data && londonKlineDailyQuery.data.length > 0 &&
-        domesticRealtimeKline.length > 0 &&
+        domesticData && domesticData.length > 0 &&
         domesticKline15mQuery.data && domesticKline15mQuery.data.length > 0 &&
         domesticKlineDailyQuery.data && domesticKlineDailyQuery.data.length > 0;
       
@@ -199,13 +270,22 @@ function AppContent() {
         return;
       }
       
-      // 如果已经有策略数据，不重复分析
-      if (strategy) {
-        console.log('[自动分析] 已有策略数据，跳过');
+      // 如果已经尝试过分析，不再重复
+      if (hasAttemptedAnalysisRef.current) {
         return;
       }
       
-      console.log('[自动分析] 所有数据已就绪，开始分析...');
+      // 如果已经有策略数据且不是加载中，不重复分析
+      if (strategy && !(strategy as any).isLoading) {
+        console.log('[自动分析] 已有策略数据，跳过');
+        hasAttemptedAnalysisRef.current = true;
+        return;
+      }
+      
+      console.log('[自动分析] ✅ 所有数据已就绪，立即开始分析...');
+      
+      // 标记为已尝试，防止无限循环
+      hasAttemptedAnalysisRef.current = true;
       
       try {
         setStrategy({ isLoading: true } as any); // 设置加载状态
@@ -214,12 +294,12 @@ function AppContent() {
         
         const result = await analyzeStrategy(
           selectedModel,
-          londonKline1mQuery.data || [],
-          londonKline15mQuery.data || [],
-          londonKlineDailyQuery.data || [],
-          domesticRealtimeKline,
-          domesticKline15mQuery.data || [],
-          domesticKlineDailyQuery.data || [],
+          londonData,
+          londonKline15mQuery.data,
+          londonKlineDailyQuery.data,
+          domesticData,
+          domesticKline15mQuery.data,
+          domesticKlineDailyQuery.data,
           domesticDepthQuery.data || null
         );
         
@@ -229,25 +309,31 @@ function AppContent() {
           model: selectedModel
         } as any);
         
-        console.log('[自动分析] 分析完成');
+        console.log('[自动分析] ✅ 分析完成，已更新策略面板');
       } catch (error: any) {
-        console.error('[自动分析] 分析失败:', error);
-        setStrategy(null);
+        console.error('[自动分析] ❌ 分析失败:', error);
+        // 失败时设置一个错误状态，而不是 null，避免触发重新分析
+        setStrategy({ 
+          isLoading: false, 
+          error: error.message || '分析失败',
+          timestamp: Date.now() 
+        } as any);
       }
     };
     
-    // 延迟5秒后触发分析，确保所有数据都已加载
-    const timer = setTimeout(triggerAnalysis, 5000);
-    
-    return () => clearTimeout(timer);
+    // 数据就绪后立即触发，无延迟
+    triggerAnalysis();
   }, [
+    londonRealtimeKline,
     londonKline1mQuery.data,
     londonKline15mQuery.data,
     londonKlineDailyQuery.data,
     domesticRealtimeKline,
+    domesticKline1mQuery.data,
     domesticKline15mQuery.data,
     domesticKlineDailyQuery.data,
     domesticDepthQuery.data,
+    isLondonWebSocketActive,
     strategy,
     selectedModel,
     setStrategy
@@ -260,7 +346,7 @@ function AppContent() {
         <div className="left-panel">
           <KlineChart
             title="伦敦现货白银"
-            data={londonKline1mQuery.data || []}
+            data={isLondonWebSocketActive && londonRealtimeKline.length > 0 ? londonRealtimeKline : (londonKline1mQuery.data || [])}
             tradeTick={londonTradeTickQuery.data}
             status={londonConnectionStatus}
             height={600}

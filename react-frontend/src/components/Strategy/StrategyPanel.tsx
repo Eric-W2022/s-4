@@ -77,7 +77,13 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
             <div className="no-data">等待市场数据...</div>
           )}
 
-          {!isLoading && strategy && (
+          {!isLoading && strategy && (strategy as any).error && (
+            <div className="no-data" style={{ color: '#ef4444' }}>
+              分析失败: {(strategy as any).error}
+            </div>
+          )}
+
+          {!isLoading && strategy && strategy.tradingAdvice && (
             <div className="analysis-result">
               {/* 交易建议卡片 */}
               <div className="analysis-section trading-advice-card">

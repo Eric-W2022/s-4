@@ -89,22 +89,9 @@ export const createKlineChartOption = (
   const chartData = convertKlineDataToEcharts(processedData);
   const bollingerBands = calculateBollingerBands(processedData);
 
-  // 计算默认缩放范围（1分钟K线默认显示最后60根）
-  const is1MinuteKline = !isDailyKline && !title.includes('15分钟');
-  let dataZoomStart = 0;
-  let dataZoomEnd = 100;
-  
-  if (is1MinuteKline && processedData.length > 60) {
-    // 显示最后60根K线
-    dataZoomStart = ((processedData.length - 60) / processedData.length) * 100;
-    dataZoomEnd = 100;
-  }
-
   return {
     backgroundColor: 'transparent',
-    animation: true,
-    animationDuration: 300,
-    animationEasing: 'cubicOut',
+    animation: false, // 关闭动画，避免刷新时闪烁
     title: {
       text: title,
       textStyle: {
@@ -330,16 +317,14 @@ export const createKlineChartOption = (
       {
         type: 'inside',
         xAxisIndex: [0, 1],
-        start: dataZoomStart,
-        end: dataZoomEnd,
+        // 不设置 start 和 end，保持用户的缩放状态
       },
       {
         show: true,
         xAxisIndex: [0, 1],
         type: 'slider',
         top: '92%',
-        start: dataZoomStart,
-        end: dataZoomEnd,
+        // 不设置 start 和 end，保持用户的缩放状态
         backgroundColor: CHART_THEMES.PANEL_BG,
         borderColor: CHART_THEMES.BORDER,
         fillerColor: 'rgba(102, 126, 234, 0.2)',

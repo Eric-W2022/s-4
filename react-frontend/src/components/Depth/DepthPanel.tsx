@@ -1,7 +1,7 @@
 // 盘口深度面板组件
 import React, { useMemo } from 'react';
 import { formatPrice, formatVolume } from '../../utils/chart';
-import { formatTime } from '../../utils/time';
+import { formatTime, formatTimestamp } from '../../utils/time';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
 import type { DepthData } from '../../types';
 import './DepthPanel.css';
@@ -68,7 +68,7 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
       <div className="depth-header">
         <h3>国内白银盘口</h3>
         <span className="depth-update-time">
-          {data.datetime ? formatTime(data.datetime) : '--'}
+          {data.datetime ? formatTimestamp(data.datetime, 'HH:mm:ss') : '--'}
         </span>
       </div>
 
@@ -119,7 +119,7 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                 {emotion.trend === 'bullish' ? '多方优势' : 
                  emotion.trend === 'bearish' ? '空方优势' : '多空平衡'}
               </span>
-              <span className="trend-time">{formatTime(Date.now())}</span>
+              <span className="trend-time">{formatTimestamp(Date.now(), 'HH:mm:ss')}</span>
             </div>
             <div className="emotion-bar-labels">
               <span className="emotion-label-ask">
@@ -155,7 +155,6 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
         {/* 扩展数据 */}
         {data.last_price && (
           <div className="depth-extended-data">
-            <div className="extended-data-title">市场数据</div>
             <div className="extended-data-grid">
               <div className="extended-data-row">
                 <div className="extended-data-item">

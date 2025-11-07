@@ -376,6 +376,28 @@ async def get_depth_tick(
             
             change_value, change_percent_value = calculate_change()
             
+            # 处理datetime字段 - TqSdk返回纳秒级时间戳，需转换为毫秒
+            def get_datetime_ms():
+                try:
+                    if hasattr(quote, 'datetime'):
+                        dt_value = quote.datetime
+                        if dt_value is not None:
+                            # TqSdk的datetime是纳秒级时间戳，转换为毫秒
+                            if isinstance(dt_value, (int, float)):
+                                # 纳秒转毫秒
+                                return str(int(dt_value / 1000000))
+                            elif isinstance(dt_value, str):
+                                # 如果是字符串，尝试转换
+                                try:
+                                    dt_ns = int(dt_value)
+                                    return str(int(dt_ns / 1000000))
+                                except:
+                                    pass
+                    # 如果获取失败，使用当前时间
+                    return str(int(datetime.now().timestamp() * 1000))
+                except:
+                    return str(int(datetime.now().timestamp() * 1000))
+            
             # 构造返回数据（模拟AllTick格式，并扩展更多字段）
             result = {
                 "ret": 200,
@@ -436,7 +458,7 @@ async def get_depth_tick(
                         "instrument_name": get_field('instrument_name'),  # 合约名称
                         "price_tick": get_field('price_tick'),  # 价格变动单位
                         "volume_multiple": get_field('volume_multiple', as_int=True),  # 合约乘数
-                        "datetime": get_field('datetime')  # 行情时间
+                        "datetime": get_datetime_ms()  # 行情时间（毫秒时间戳）
                     }]
                 }
             }

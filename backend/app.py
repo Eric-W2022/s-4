@@ -138,8 +138,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     last_quote_data = current_quote
                 
-                # 等待一小段时间再检查
-                await asyncio.sleep(0.5)
+                # 等待一小段时间再检查（最大200ms推送一次，每秒5次）
+                await asyncio.sleep(0.2)
                 
             except WebSocketDisconnect:
                 break

@@ -1,5 +1,5 @@
 // 套利追踪面板组件
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { formatPrice } from '../../utils/chart';
 import { formatTime } from '../../utils/time';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
@@ -14,6 +14,9 @@ interface ArbitragePanelProps {
 
 export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
   ({ londonData, domesticData, isLoading }) => {
+    // 控制提示显示状态
+    const [showOpportunity, setShowOpportunity] = useState(false);
+    
     // 计算套利指标（只追踪最后一根K线）
     const arbitrageMetrics = useMemo(() => {
       if (!londonData || londonData.length < 2 || !domesticData || domesticData.length < 2) {
@@ -55,7 +58,8 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       // 2. 如果国内相对伦敦涨得更慢/跌得更快 -> 做多国内（多单）
       const domesticStrength = domesticChange - londonChange; // 正值表示国内更强
       let direction: 'long' | 'short' | 'neutral';
-      if (Math.abs(domesticStrength) < 0.1) {
+      // 降低阈值到0.01%，使其更敏感
+      if (Math.abs(domesticStrength) < 0.01) {
         direction = 'neutral'; // 差异太小，不建议套利
       } else if (domesticStrength > 0) {
         direction = 'short'; // 国内相对更强，做空国内
@@ -75,6 +79,25 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       };
     }, [londonData, domesticData]);
 
+    // 控制提示显示逻辑：当有新的套利机会时显示，5秒后自动隐藏
+    useEffect(() => {
+      if (arbitrageMetrics && arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral') {
+        // 显示提示
+        setShowOpportunity(true);
+        
+        // 5秒后自动隐藏
+        const timer = setTimeout(() => {
+          setShowOpportunity(false);
+        }, 5000);
+        
+        // 清理定时器
+        return () => clearTimeout(timer);
+      } else {
+        // 如果条件不满足，立即隐藏
+        setShowOpportunity(false);
+      }
+    }, [arbitrageMetrics?.score, arbitrageMetrics?.direction]);
+
     if (isLoading) {
       return (
         <div className="arbitrage-panel">
@@ -90,7 +113,7 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       return (
         <div className="arbitrage-panel">
           <div className="arbitrage-header">
-            <h3>套利追踪（最后一根K线）</h3>
+            <h3>最后1根K线套利</h3>
           </div>
           <div className="no-data">数据不足，需要至少2根K线</div>
         </div>
@@ -107,7 +130,7 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
     return (
       <div className="arbitrage-panel">
         <div className="arbitrage-header">
-          <h3>套利追踪（最后一根K线）</h3>
+          <h3>最后1根K线套利</h3>
           <span className="arbitrage-update-time">{formatTime(Date.now())}</span>
         </div>
 
@@ -156,8 +179,8 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
               <div 
                 className="arbitrage-metric-value"
                 style={{ 
-                  color: arbitrageMetrics.direction === 'long' ? '#4ade80' : 
-                         arbitrageMetrics.direction === 'short' ? '#ef4444' : '#9ca3af',
+                  color: arbitrageMetrics.direction === 'long' ? '#ef4444' : 
+                         arbitrageMetrics.direction === 'short' ? '#4ade80' : '#9ca3af',
                   fontWeight: 'bold'
                 }}
               >
@@ -168,11 +191,29 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
           </div>
 
           {/* 套利机会提示 */}
-          {arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' && (
+          {showOpportunity && arbitrageMetrics && (
             <div className="arbitrage-opportunity">
-              <div className="arbitrage-opportunity-title">⚠️ 潜在套利机会</div>
+              <div className="arbitrage-opportunity-title">
+                ⚠️ 潜在套利机会 - 
+                <span style={{ 
+                  color: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
+                  fontWeight: 'bold',
+                  marginLeft: '8px'
+                }}>
+                  {arbitrageMetrics.direction === 'long' ? '做多' : '做空'}
+                </span>
+              </div>
               <div className="arbitrage-opportunity-text">
-                建议{arbitrageMetrics.direction === 'long' ? '做多' : '做空'}国内白银
+                建议
+                <span style={{ 
+                  color: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
+                  fontWeight: 'bold',
+                  fontSize: '16px',
+                  margin: '0 4px'
+                }}>
+                  {arbitrageMetrics.direction === 'long' ? '做多' : '做空'}
+                </span>
+                国内白银
                 {arbitrageMetrics.direction === 'long' 
                   ? '（国内相对偏弱）' 
                   : '（国内相对偏强）'}

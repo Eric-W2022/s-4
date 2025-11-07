@@ -40,14 +40,21 @@ export const CHART_THEMES = {
 } as const;
 
 export const UPDATE_INTERVALS = {
-  KLINE_1M: 1000, // 1秒更新一次1分钟K线（实时刷新）
+  KLINE_1M: 500, // 每秒更新2次1分钟K线（500ms，高频实时刷新）
   KLINE_15M: 60000, // 60秒更新一次15分钟K线
   KLINE_1D: 300000, // 5分钟更新一次日K线
-  TRADE_TICK: 1000, // 1秒更新一次实时价格
-  DEPTH: 1000, // 1秒更新一次盘口
+  TRADE_TICK: 500, // 每秒更新2次实时价格
+  DEPTH: 500, // 每秒更新2次盘口
   STRATEGY: 60000, // 60秒更新一次策略
 } as const;
 
 // WebSocket 配置
-export const ENABLE_WEBSOCKET = true; // 是否启用 WebSocket 实时更新
+export const ENABLE_WEBSOCKET = true; // 是否启用 WebSocket 实时更新（国内白银）
+export const ENABLE_LONDON_WEBSOCKET = true; // 是否启用 WebSocket 实时更新（伦敦白银）
+
+// AllTick WebSocket 配置（伦敦白银）
+export const ALLTICK_CONFIG = {
+  wsUrl: 'wss://quote.alltick.co/quote-b-ws-api',
+  token: '9d7f12b4c30826987a501d532ef75707-c-app',
+} as const;
 
