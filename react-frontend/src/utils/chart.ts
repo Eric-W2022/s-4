@@ -68,7 +68,12 @@ export const convertKlineDataToEcharts = (data: KlineData[]) => {
  */
 export const createKlineChartOption = (
   data: KlineData[],
-  title: string
+  title: string,
+  strategyPrices?: {
+    entryPrice?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+  }
 ): EChartsOption => {
   // 判断是否是伦敦市场（需要显示小数）
   const isLondonMarket = title.includes('伦敦');
@@ -349,30 +354,111 @@ export const createKlineChartOption = (
             borderWidth: 2,
           },
         },
-        // 添加交易时段分割线（仅国内1分钟K线）
-        markLine: sessionBreaks.length > 0 ? {
-          silent: true,
-          symbol: 'none',
-          label: {
-            show: false,
-          },
-          lineStyle: {
-            color: CHART_THEMES.BLUE,
-            width: 2,
-            type: 'solid',
-            opacity: 0.6,
-          },
-          data: sessionBreaks.map(index => ({
-            xAxis: index, // category轴使用索引
-            label: {
-              show: true,
-              position: 'end',
-              formatter: '交易时段',
-              color: CHART_THEMES.BLUE,
-              fontSize: 10,
-            },
-          })),
-        } : undefined,
+        // 添加标记线（交易时段分割线 + 策略价格线）
+        markLine: (() => {
+          const markLineData: any[] = [];
+          
+          // 添加交易时段分割线（仅国内1分钟K线）
+          if (sessionBreaks.length > 0) {
+            markLineData.push(...sessionBreaks.map(index => ({
+              xAxis: index,
+              label: {
+                show: true,
+                position: 'end',
+                formatter: '交易时段',
+                color: CHART_THEMES.BLUE,
+                fontSize: 10,
+              },
+              lineStyle: {
+                color: CHART_THEMES.BLUE,
+                width: 2,
+                type: 'solid',
+                opacity: 0.6,
+              },
+            })));
+          }
+          
+          // 添加策略价格线（仅国内1分钟K线且有策略价格）
+          if (!isLondonMarket && !isDailyKline && !title.includes('15分钟') && strategyPrices) {
+            // 入场价 - 黄色虚线（标签显示在左侧）
+            if (strategyPrices.entryPrice) {
+              markLineData.push({
+                yAxis: strategyPrices.entryPrice,
+                label: {
+                  show: true,
+                  position: 'start',
+                  formatter: `${Math.round(strategyPrices.entryPrice)}`,
+                  color: '#fbbf24',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  backgroundColor: 'rgba(251, 191, 36, 0.3)',
+                  padding: [3, 6],
+                  borderRadius: 4,
+                },
+                lineStyle: {
+                  color: '#fbbf24',
+                  width: 2,
+                  type: 'dashed',
+                  opacity: 0.8,
+                },
+              });
+            }
+            
+            // 止损价 - 绿色虚线
+            if (strategyPrices.stopLoss) {
+              markLineData.push({
+                yAxis: strategyPrices.stopLoss,
+                label: {
+                  show: true,
+                  position: 'end',
+                  formatter: `${Math.round(strategyPrices.stopLoss)}`,
+                  color: '#22c55e',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  backgroundColor: 'rgba(34, 197, 94, 0.3)',
+                  padding: [3, 6],
+                  borderRadius: 4,
+                },
+                lineStyle: {
+                  color: '#22c55e',
+                  width: 2,
+                  type: 'dashed',
+                  opacity: 0.8,
+                },
+              });
+            }
+            
+            // 止盈价 - 红色虚线
+            if (strategyPrices.takeProfit) {
+              markLineData.push({
+                yAxis: strategyPrices.takeProfit,
+                label: {
+                  show: true,
+                  position: 'end',
+                  formatter: `${Math.round(strategyPrices.takeProfit)}`,
+                  color: '#ef4444',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                  padding: [3, 6],
+                  borderRadius: 4,
+                },
+                lineStyle: {
+                  color: '#ef4444',
+                  width: 2,
+                  type: 'dashed',
+                  opacity: 0.8,
+                },
+              });
+            }
+          }
+          
+          return markLineData.length > 0 ? {
+            silent: true,
+            symbol: 'none',
+            data: markLineData,
+          } : undefined;
+        })(),
       },
       {
         name: '布林上轨',

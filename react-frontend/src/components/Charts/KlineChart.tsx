@@ -16,9 +16,14 @@ interface KlineChartProps {
   status?: 'connected' | 'connecting' | 'error' | 'closed';
   height?: number;
   isLoading?: boolean;
+  strategyPrices?: {
+    entryPrice?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+  };
 }
 
-export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, status, height = 600, isLoading = false }) => {
+export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, status, height = 600, isLoading = false, strategyPrices }) => {
     // 判断是否是伦敦市场
     const isLondonMarket = title.includes('伦敦');
     
@@ -47,8 +52,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
       if (!data || data.length === 0) {
         return {};
       }
-      return createKlineChartOption(data, title);
-    }, [data, title]);
+      return createKlineChartOption(data, title, strategyPrices);
+    }, [data, title, strategyPrices]);
 
     // 智能更新图表：只在必要时更新，保持 dataZoom 状态
     useEffect(() => {
@@ -130,7 +135,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({ title, data, tradeTick, 
         <div className="chart-header">
           <h2>
             {title}
-            <StatusDot status={displayStatus} />
             {tradeTick && (
               <span className={`title-price ${priceInfo ? (priceInfo.isPositive ? 'positive' : 'negative') : ''}`}>
                 {isLondonMarket 

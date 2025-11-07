@@ -2,12 +2,15 @@
   background: #13172b;
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid #1e2548;
+  border: none;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 100%;
+  height: 600px;
   overflow: hidden;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .strategy-header {
@@ -33,6 +36,9 @@
   position: relative;
   width: 100%;
   max-width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   overflow-wrap: break-word;
   word-wrap: break-word;
   word-break: break-word;
@@ -243,18 +249,20 @@
   background: linear-gradient(135deg, rgba(74, 222, 128, 0.05) 0%, rgba(19, 23, 43, 0.6) 100%);
 }
 
-.advice-header {
+.advice-action-center {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .advice-action {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 700;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 12px 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  letter-spacing: 3px;
 }
 
 .advice-action.buy {
@@ -275,55 +283,41 @@
   border: 2px solid #fbbf24;
 }
 
-.risk-badge {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
+/* 信心度和风险进度条 */
+.confidence-risk-bar-container {
+  margin-top: 8px;
 }
 
-.risk-badge.risk-高 {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-.risk-badge.risk-中 {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.4);
-}
-
-.risk-badge.risk-低 {
-  background: rgba(74, 222, 128, 0.2);
-  color: #4ade80;
-  border: 1px solid rgba(74, 222, 128, 0.4);
-}
-
-.confidence-bar-container {
-  margin-top: 12px;
-}
-
-.confidence-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: #9ca3af;
-}
-
-.confidence-value {
-  font-weight: 700;
-  font-size: 16px;
-  color: #ffffff;
-}
-
-.confidence-bar {
-  height: 8px;
+.confidence-risk-bar {
+  height: 40px;
   background: #0f1425;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.confidence-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s ease, background-color 0.3s ease;
+  opacity: 0.3;
+}
+
+.confidence-text {
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .confidence-fill {
@@ -419,6 +413,16 @@
   font-weight: 700;
   font-family: 'Monaco', 'Courier New', monospace;
   color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: color 0.3s ease;
+}
+
+.prediction-arrow {
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .no-data {

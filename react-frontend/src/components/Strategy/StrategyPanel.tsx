@@ -10,10 +10,12 @@ interface StrategyPanelProps {
   selectedModel: ModelType;
   onModelChange: (model: ModelType) => void;
   isLoading?: boolean;
+  londonCurrentPrice?: number;
+  domesticCurrentPrice?: number;
 }
 
 export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
-  ({ strategy, selectedModel, onModelChange, isLoading }) => {
+  ({ strategy, selectedModel, onModelChange, isLoading, londonCurrentPrice, domesticCurrentPrice }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const selectedModelLabel = MODEL_OPTIONS.find(
@@ -92,7 +94,8 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
             <div className="analysis-result">
               {/* 交易建议卡片 */}
               <div className="analysis-section trading-advice-card">
-                <div className="advice-header">
+                {/* 操作建议 - 居中显示 */}
+                <div className="advice-action-center">
                   <span 
                     className={`advice-action ${
                       strategy.tradingAdvice.action === '买多' ? 'buy' :
@@ -101,16 +104,12 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                   >
                     {strategy.tradingAdvice.action}
                   </span>
-                  <span className={`risk-badge risk-${strategy.tradingAdvice.riskLevel}`}>
-                    风险: {strategy.tradingAdvice.riskLevel}
-                  </span>
                 </div>
-                <div className="confidence-bar-container">
-                  <div className="confidence-label">
-                    <span>信心度</span>
-                    <span className="confidence-value">{strategy.tradingAdvice.confidence}%</span>
-                  </div>
-                  <div className="confidence-bar">
+                
+                {/* 信心度进度条 */}
+                <div className="confidence-risk-bar-container">
+                  <div className="confidence-risk-bar">
+                    {/* 信心度填充（颜色体现风险） */}
                     <div
                       className="confidence-fill"
                       style={{
@@ -123,6 +122,10 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                             : '#ef4444',
                       }}
                     />
+                    {/* 信心度文字 - 居中 */}
+                    <div className="confidence-text">
+                      信心度 {strategy.tradingAdvice.confidence}%
+                    </div>
                   </div>
                 </div>
               </div>
@@ -164,13 +167,27 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                 <div className="prediction-grid">
                   <div className="prediction-item">
                     <div className="prediction-label">伦敦白银</div>
-                    <div className="prediction-value">
+                    <div 
+                      className="prediction-value"
+                      style={{
+                        color: londonCurrentPrice 
+                          ? (strategy.tradingAdvice.londonPricePrediction15min > londonCurrentPrice ? '#ef4444' : '#22c55e')
+                          : '#e0e0e0'
+                      }}
+                    >
                       ${strategy.tradingAdvice.londonPricePrediction15min.toFixed(2)}
                     </div>
                   </div>
                   <div className="prediction-item">
                     <div className="prediction-label">国内白银</div>
-                    <div className="prediction-value">
+                    <div 
+                      className="prediction-value"
+                      style={{
+                        color: domesticCurrentPrice 
+                          ? (strategy.tradingAdvice.pricePrediction15min > domesticCurrentPrice ? '#ef4444' : '#22c55e')
+                          : '#e0e0e0'
+                      }}
+                    >
                       ¥{strategy.tradingAdvice.pricePrediction15min.toFixed(0)}
                     </div>
                   </div>

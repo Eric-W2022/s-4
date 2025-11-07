@@ -375,6 +375,11 @@ function AppContent() {
             status={domesticConnectionStatus}
             height={600}
             isLoading={domesticRealtimeKline.length === 0}
+            strategyPrices={strategy && strategy.tradingAdvice ? {
+              entryPrice: strategy.tradingAdvice.entryPrice,
+              stopLoss: strategy.tradingAdvice.stopLoss,
+              takeProfit: strategy.tradingAdvice.takeProfit,
+            } : undefined}
           />
           <KlineChart
             title="国内白银主力（15分钟K线）"
@@ -410,6 +415,8 @@ function AppContent() {
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             isLoading={!!(strategy && (strategy as any).isLoading === true)}
+            londonCurrentPrice={londonTradeTickQuery.data?.price ? Number(londonTradeTickQuery.data.price) : undefined}
+            domesticCurrentPrice={domesticTradeTickQuery.data?.price ? Number(domesticTradeTickQuery.data.price) : undefined}
           />
         </div>
       </div>
