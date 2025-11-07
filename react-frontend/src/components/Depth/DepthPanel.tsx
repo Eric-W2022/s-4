@@ -179,8 +179,8 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                   <div className="extended-value">{data.volume ? formatVolume(data.volume) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
-                  <div className="extended-label">持仓量</div>
-                  <div className="extended-value">{data.open_interest ? formatVolume(data.open_interest) : '--'}</div>
+                  <div className="extended-label">昨持仓</div>
+                  <div className="extended-value">{data.pre_open_interest ? formatVolume(data.pre_open_interest) : '--'}</div>
                 </div>
               </div>
               <div className="extended-data-row">
@@ -197,12 +197,21 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                   <div className="extended-value low-price">{data.lowest ? formatPrice(data.lowest) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
-                  <div className="extended-label">涨停</div>
-                  <div className="extended-value">{data.upper_limit ? formatPrice(data.upper_limit) : '--'}</div>
+                  <div className="extended-label">持仓量</div>
+                  <div className="extended-value">{data.open_interest ? formatVolume(data.open_interest) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
-                  <div className="extended-label">跌停</div>
-                  <div className="extended-value">{data.lower_limit ? formatPrice(data.lower_limit) : '--'}</div>
+                  <div className="extended-label">持仓变化</div>
+                  <div className={`extended-value ${
+                    data.open_interest && data.pre_open_interest 
+                      ? (parseFloat(data.open_interest) - parseFloat(data.pre_open_interest) >= 0 ? 'price-up' : 'price-down')
+                      : ''
+                  }`}>
+                    {data.open_interest && data.pre_open_interest 
+                      ? ((parseFloat(data.open_interest) - parseFloat(data.pre_open_interest)) >= 0 ? '+' : '') + 
+                        formatVolume((parseFloat(data.open_interest) - parseFloat(data.pre_open_interest)).toString())
+                      : '--'}
+                  </div>
                 </div>
               </div>
             </div>

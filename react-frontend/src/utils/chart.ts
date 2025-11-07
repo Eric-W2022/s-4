@@ -196,13 +196,13 @@ export const createKlineChartOption = (
     grid: [
       {
         left: '5%',
-        right: '3%',  // 标签在线上，不需要额外空间
+        right: '10%',  // 增加右侧空间以完整显示布林带标签
         top: '10%',
         height: '60%',
       },
       {
         left: '5%',
-        right: '3%',
+        right: '10%',
         top: '75%',
         height: '15%',
       },
@@ -353,9 +353,8 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
-        label: {
+        endLabel: {
           show: true,
-          position: 'end',
           formatter: () => {
             const lastValue = bollingerBands.upper[bollingerBands.upper.length - 1];
             if (lastValue === null) return '';
@@ -365,7 +364,7 @@ export const createKlineChartOption = (
           fontSize: 11,
           fontWeight: 'bold',
           fontFamily: 'Monaco, monospace',
-          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          backgroundColor: 'rgba(19, 23, 43, 0.95)',
           padding: [3, 6],
           borderColor: CHART_THEMES.PURPLE,
           borderWidth: 1,
@@ -386,9 +385,8 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
-        label: {
+        endLabel: {
           show: true,
-          position: 'end',
           formatter: () => {
             const lastValue = bollingerBands.middle[bollingerBands.middle.length - 1];
             if (lastValue === null) return '';
@@ -398,7 +396,7 @@ export const createKlineChartOption = (
           fontSize: 11,
           fontWeight: 'bold',
           fontFamily: 'Monaco, monospace',
-          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          backgroundColor: 'rgba(19, 23, 43, 0.95)',
           padding: [3, 6],
           borderColor: CHART_THEMES.YELLOW,
           borderWidth: 1,
@@ -419,9 +417,8 @@ export const createKlineChartOption = (
           opacity: 0.8,
         },
         showSymbol: false,
-        label: {
+        endLabel: {
           show: true,
-          position: 'end',
           formatter: () => {
             const lastValue = bollingerBands.lower[bollingerBands.lower.length - 1];
             if (lastValue === null) return '';
@@ -431,7 +428,7 @@ export const createKlineChartOption = (
           fontSize: 11,
           fontWeight: 'bold',
           fontFamily: 'Monaco, monospace',
-          backgroundColor: 'rgba(19, 23, 43, 0.9)',
+          backgroundColor: 'rgba(19, 23, 43, 0.95)',
           padding: [3, 6],
           borderColor: CHART_THEMES.PURPLE,
           borderWidth: 1,
