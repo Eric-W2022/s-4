@@ -159,7 +159,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # 获取项目根目录和前端目录
 BASE_DIR = Path(__file__).parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
-LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR = Path(__file__).parent / "logs"  # backend/logs
 
 # 创建logs目录
 LOGS_DIR.mkdir(exist_ok=True)
@@ -172,14 +172,58 @@ for log_file in LOGS_DIR.glob("*.log"):
     except Exception as e:
         print(f"删除日志文件失败 {log_file.name}: {e}")
 
+# 配置日志 - 使用自定义Handler限制行数
+from logging.handlers import RotatingFileHandler
+
+class LineCountRotatingFileHandler(RotatingFileHandler):
+    """基于行数的日志轮转处理器"""
+    def __init__(self, filename, maxLines=1000, backupCount=5, encoding=None):
+        # 使用一个较大的maxBytes值作为占位，实际通过行数控制
+        super().__init__(filename, maxBytes=10*1024*1024, backupCount=backupCount, encoding=encoding)
+        self.maxLines = maxLines
+        self.currentLines = 0
+        
+    def emit(self, record):
+        """重写emit方法，在每次写入时检查行数"""
+        try:
+            # 检查文件是否需要轮转
+            if self.shouldRollover(record):
+                self.doRollover()
+                self.currentLines = 0
+            
+            # 写入日志
+            super().emit(record)
+            self.currentLines += 1
+        except Exception:
+            self.handleError(record)
+    
+    def shouldRollover(self, record):
+        """基于行数判断是否需要轮转"""
+        if self.stream is None:
+            self.stream = self._open()
+        
+        # 如果行数超过限制，进行轮转
+        if self.currentLines >= self.maxLines:
+            return True
+        
+        return False
+
 # 配置日志
+log_file = LOGS_DIR / f"app_{datetime.now().strftime('%Y%m%d')}.log"
+file_handler = LineCountRotatingFileHandler(
+    str(log_file),
+    maxLines=3000,  # 最多3000行
+    backupCount=3,  # 保留3个备份
+    encoding='utf-8'
+)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOGS_DIR / f"app_{datetime.now().strftime('%Y%m%d')}.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[file_handler, stream_handler]
 )
 logger = logging.getLogger(__name__)
 

@@ -96,23 +96,18 @@ function AppContent() {
   // 选中的策略索引（用于在K线图上显示对应策略的价格线）
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
 
-  // 定期清理超过90分钟的策略
+  // 定期清理超过300条的策略
   useEffect(() => {
     const cleanupOldStrategies = () => {
-      const now = Date.now();
-      const ninetyMinutes = 90 * 60 * 1000;
       const currentStrategies = useAppStore.getState().strategies;
       
-      // 过滤掉90分钟以前的策略
-      const recentStrategies = currentStrategies.filter(s => {
-        const age = now - (s.timestamp || 0);
-        return age <= ninetyMinutes;
-      });
+      // 只保留最近的300条
+      const recentStrategies = currentStrategies.slice(0, 300);
       
       // 如果有策略被清理，更新状态
       if (recentStrategies.length < currentStrategies.length) {
         const removedCount = currentStrategies.length - recentStrategies.length;
-        console.log(`[策略清理] 清理了${removedCount}条超过90分钟的策略`);
+        console.log(`[策略清理] 清理了${removedCount}条超出限制的策略，保留最新的300条`);
         
         // 直接更新localStorage和状态
         try {
@@ -566,7 +561,7 @@ function AppContent() {
           initialIsWin = initialProfitLossPoints > 0;
         }
 
-        addStrategy({
+        const newStrategy = {
           ...result,
           timestamp: Date.now(),
           model: selectedModel,
@@ -577,6 +572,14 @@ function AppContent() {
             isWin: initialIsWin,
             status: 'pending'
           }
+        };
+        
+        addStrategy(newStrategy);
+        
+        // 保存预测数据到后端
+        const { marketDataApi } = await import('./api/marketData');
+        marketDataApi.savePrediction(newStrategy).catch(err => {
+          console.error('[保存预测] 保存到后端失败:', err);
         });
         
         // 自动选中最新策略

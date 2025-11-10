@@ -64,17 +64,12 @@ const loadStrategies = (): StrategyAnalysis[] => {
     const saved = localStorage.getItem('strategies');
     if (saved) {
       const strategies = JSON.parse(saved);
-      // 过滤掉90分钟以前的策略
-      const now = Date.now();
-      const ninetyMinutes = 90 * 60 * 1000;
-      const recentStrategies = strategies.filter((s: StrategyAnalysis) => {
-        const age = now - (s.timestamp || 0);
-        return age <= ninetyMinutes;
-      });
-      console.log('[Store] 从localStorage加载策略历史，共', strategies.length, '条，过滤后', recentStrategies.length, '条');
+      // 只保留最近的300条
+      const recentStrategies = strategies.slice(0, 300);
+      console.log('[Store] 从localStorage加载策略历史，共', strategies.length, '条，保留', recentStrategies.length, '条');
       
-      // 如果过滤后数量变化，更新localStorage
-      if (recentStrategies.length !== strategies.length) {
+      // 如果数量超过300，更新localStorage
+      if (strategies.length > 300) {
         try {
           localStorage.setItem('strategies', JSON.stringify(recentStrategies));
         } catch (error) {
@@ -129,17 +124,9 @@ export const useAppStore = create<AppState>()(
       setDomesticTradeTick: (data) => set({ domesticTradeTick: data }),
       setDomesticDepth: (data) => set({ domesticDepth: data }),
       addStrategy: (data) => set((state) => {
-        // 过滤掉90分钟以前的策略
-        const now = Date.now();
-        const ninetyMinutes = 90 * 60 * 1000;
-        const recentStrategies = state.strategies.filter(s => {
-          const age = now - (s.timestamp || 0);
-          return age <= ninetyMinutes;
-        });
-        
-        // 新策略添加到开头
-        const newStrategies = [data, ...recentStrategies];
-        console.log('[Store] 添加新策略，当前保留', newStrategies.length, '条（90分钟内）');
+        // 新策略添加到开头，保留最多300条
+        const newStrategies = [data, ...state.strategies].slice(0, 300);
+        console.log('[Store] 添加新策略，当前保留', newStrategies.length, '条（最多300条）');
         
         // 保存到localStorage
         try {

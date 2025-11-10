@@ -18,8 +18,12 @@ ENV/
 
 # Logs
 *.log
-logs/
-!logs/.gitkeep
+backend/logs/
+!backend/logs/.gitkeep
+
+# Predictions
+predictions/
+!predictions/.gitkeep
 
 # OS
 .DS_Store
