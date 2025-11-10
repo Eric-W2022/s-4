@@ -271,12 +271,7 @@
   position: relative;
 }
 
-.strategy-item:hover {
-  background: rgba(102, 126, 234, 0.05);
-}
-
 .strategy-item.selected {
-  background: rgba(102, 126, 234, 0.1);
   border-left: 3px solid #667eea;
   padding-left: 12px;
   margin-left: -12px;
@@ -390,7 +385,6 @@
 .analysis-section {
   margin-bottom: 15px;
   padding: 15px;
-  background: rgba(19, 23, 43, 0.6);
   border-radius: 8px;
   width: 100%;
   max-width: 100%;
@@ -411,11 +405,6 @@
   line-height: 1.6;
   color: #e0e0e0;
   margin: 0;
-}
-
-/* 交易建议卡片 */
-.trading-advice-card {
-  background: linear-gradient(135deg, rgba(74, 222, 128, 0.05) 0%, rgba(19, 23, 43, 0.6) 100%);
 }
 
 .advice-action.buy {
@@ -482,7 +471,7 @@
   margin-top: 6px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 6px;
 }
 
 .price-item {
@@ -558,10 +547,6 @@
 }
 
 /* 图形分析 */
-.chart-analysis {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(19, 23, 43, 0.6) 100%);
-}
-
 .chart-analysis-grid {
   display: flex;
   flex-direction: column;

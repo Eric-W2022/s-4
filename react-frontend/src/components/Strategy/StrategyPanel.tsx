@@ -106,14 +106,20 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         </div>
 
         {/* 胜率统计区域 */}
-        {winRateStats && (
+        {strategies.length > 0 && (
           <div className="win-rate-section">
             <div className="win-rate-stats">
-              <span className="win-rate-label">胜率:</span>
-              <span className={`win-rate-value ${winRateStats.winRate >= 60 ? 'high' : winRateStats.winRate >= 40 ? 'medium' : 'low'}`}>
-                {winRateStats.winRate.toFixed(1)}%
-              </span>
-              <span className="win-rate-detail">({winRateStats.winCount}胜/{winRateStats.loseCount}负)</span>
+              {winRateStats ? (
+                <>
+                  <span className="win-rate-label">胜率:</span>
+                  <span className={`win-rate-value ${winRateStats.winRate >= 60 ? 'high' : winRateStats.winRate >= 40 ? 'medium' : 'low'}`}>
+                    {winRateStats.winRate.toFixed(1)}%
+                  </span>
+                  <span className="win-rate-detail">({winRateStats.winCount}胜/{winRateStats.loseCount}负)</span>
+                </>
+              ) : (
+                <span className="win-rate-label">暂无胜率数据</span>
+              )}
             </div>
             <button
               className="clear-strategies-btn"
