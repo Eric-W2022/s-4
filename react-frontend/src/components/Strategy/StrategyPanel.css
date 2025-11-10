@@ -370,6 +370,7 @@
   margin-bottom: 12px;
   padding: 0 5px 8px 5px;
   border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+  position: relative;
 }
 
 .strategy-item:first-child .strategy-item-header {
@@ -397,6 +398,40 @@
 
 .strategy-item:first-child .strategy-model {
   font-weight: 600;
+}
+
+/* 删除策略按钮 */
+.delete-strategy-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  line-height: 1;
+}
+
+.strategy-item-header:hover .delete-strategy-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
+.delete-strategy-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateX(-50%) scale(1.1);
+}
+
+.delete-strategy-btn:active {
+  transform: translateX(-50%) scale(1);
 }
 
 /* 分析结果 */

@@ -45,6 +45,7 @@ function AppContent() {
     addStrategy,
     updateStrategyProfitLoss,
     clearStrategies,
+    deleteStrategy,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -530,6 +531,9 @@ function AppContent() {
         
         const { analyzeStrategy } = await import('./services/strategyService');
         
+        // 获取当前的历史策略用于分析参考
+        const currentStrategies = useAppStore.getState().strategies;
+        
         const result = await analyzeStrategy(
           selectedModel,
           londonData,
@@ -538,7 +542,8 @@ function AppContent() {
           domesticData,
           domesticKline15mQuery.data,
           domesticKlineDailyQuery.data,
-          domesticDepthQuery.data || null
+          domesticDepthQuery.data || null,
+          currentStrategies
         );
         
         // 添加新策略到历史记录（立即计算盈亏）
@@ -700,6 +705,16 @@ function AppContent() {
             onClearStrategies={() => {
               clearStrategies();
               setSelectedStrategyIndex(0);
+            }}
+            onDeleteStrategy={(index) => {
+              deleteStrategy(index);
+              // 如果删除的是当前选中的策略，重置选中索引
+              if (selectedStrategyIndex === index) {
+                setSelectedStrategyIndex(0);
+              } else if (selectedStrategyIndex > index) {
+                // 如果删除的策略在当前选中之前，索引需要减1
+                setSelectedStrategyIndex(selectedStrategyIndex - 1);
+              }
             }}
           />
         </div>

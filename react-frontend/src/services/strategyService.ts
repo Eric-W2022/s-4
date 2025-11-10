@@ -34,7 +34,8 @@ export async function analyzeStrategy(
   domesticKline1m: KlineData[],
   domesticKline15m: KlineData[],
   domesticKlineDaily: KlineData[],
-  domesticDepth: DepthData | null
+  domesticDepth: DepthData | null,
+  historicalStrategies: any[] = []
 ): Promise<StrategyAnalysisResult> {
   try {
     console.log('[策略分析] 开始分析，模型:', model);
@@ -46,8 +47,9 @@ export async function analyzeStrategy(
     console.log('  - 国内15分钟:', domesticKline15m.length, '条');
     console.log('  - 国内90日:', domesticKlineDaily.length, '条');
     console.log('  - 国内盘口:', domesticDepth ? '有' : '无');
+    console.log('  - 历史策略:', historicalStrategies.length, '条');
     
-    // 创建请求数据（包含systemPrompt和messages）
+    // 创建请求数据（包含systemPrompt、messages和历史策略）
     const request = createStrategyAnalysisRequest(
       model,
       londonKline1m,
@@ -56,7 +58,8 @@ export async function analyzeStrategy(
       domesticKline1m,
       domesticKline15m,
       domesticKlineDaily,
-      domesticDepth
+      domesticDepth,
+      historicalStrategies
     );
     
     // 构建发送给AI的消息（与旧版script.js格式一致）

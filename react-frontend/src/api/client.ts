@@ -1,5 +1,5 @@
 // API 客户端配置
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import axios, { AxiosError } from 'axios';
 import { API_BASE_URL } from '../constants';
 
 export const apiClient = axios.create({
@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
-    const config = error.config as AxiosRequestConfig & { retryCount?: number };
+    const config = error.config as any;
     
     if (!config) {
       return Promise.reject(error);

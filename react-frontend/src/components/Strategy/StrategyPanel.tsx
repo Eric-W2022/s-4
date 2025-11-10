@@ -15,10 +15,11 @@ interface StrategyPanelProps {
   selectedStrategyIndex?: number;
   onStrategySelect?: (index: number) => void;
   onClearStrategies?: () => void;
+  onDeleteStrategy?: (index: number) => void;
 }
 
 export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
-  ({ strategies, selectedModel, onModelChange, isLoading, londonCurrentPrice, domesticCurrentPrice, selectedStrategyIndex = 0, onStrategySelect, onClearStrategies }) => {
+  ({ strategies, selectedModel, onModelChange, isLoading, londonCurrentPrice, domesticCurrentPrice, selectedStrategyIndex = 0, onStrategySelect, onClearStrategies, onDeleteStrategy }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const selectedModelLabel = MODEL_OPTIONS.find(
@@ -49,32 +50,35 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
 
     // 计算总体胜率和盈亏
     const calculateWinRate = () => {
-      // 只统计有盈亏数据且不是观望的策略
+      const now = Date.now();
+      const thirtyMinutes = 30 * 60 * 1000;
+      
+      // 只统计最近30分钟内、有盈亏数据且不是观望的策略
       const tradingStrategies = strategies.filter(
-        s => s.profitLoss?.profitLossPoints !== undefined && s.profitLoss?.isWin !== undefined
+        s => {
+          const strategyAge = now - (s.timestamp || 0);
+          return strategyAge <= thirtyMinutes &&
+                 s.tradingAdvice?.action !== '观望' && 
+                 s.profitLoss?.profitLossPoints !== undefined && 
+                 s.profitLoss?.isWin !== undefined;
+        }
       );
       if (tradingStrategies.length === 0) return null;
       
       const winCount = tradingStrategies.filter(s => s.profitLoss?.isWin).length;
       const winRate = (winCount / tradingStrategies.length) * 100;
       
-      // 计算总盈亏点数
+      // 计算总盈亏点数（30分钟内的已统计在tradingStrategies中）
       const totalProfitLoss = tradingStrategies.reduce((sum, s) => {
         return sum + (s.profitLoss?.profitLossPoints || 0);
       }, 0);
       
-      // 计算15分钟内的总手数
-      const now = Date.now();
-      const fifteenMinutes = 15 * 60 * 1000;
-      const recentStrategies = strategies.filter(s => {
-        const strategyAge = now - (s.timestamp || 0);
-        return strategyAge <= fifteenMinutes && s.tradingAdvice?.lots;
-      });
-      const totalLots = recentStrategies.reduce((sum, s) => {
+      // 计算30分钟内的总手数（排除观望，使用同样的tradingStrategies）
+      const totalLots = tradingStrategies.reduce((sum, s) => {
         return sum + (s.tradingAdvice?.lots || 0);
       }, 0);
       
-      // 计算每手盈亏
+      // 计算每手盈亏（基于30分钟内的数据）
       const profitLossPerLot = totalLots > 0 ? totalProfitLoss / totalLots : 0;
       
       return {
@@ -84,8 +88,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         winRate,
         totalProfitLoss,
         totalLots,
-        profitLossPerLot,
-        recentStrategiesCount: recentStrategies.length
+        profitLossPerLot
       };
     };
 
@@ -176,7 +179,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     <div className="stats-card-value lots-value">
                       {winRateStats.totalLots}
                     </div>
-                    <div className="stats-card-detail">15分钟内</div>
+                    <div className="stats-card-detail">30分钟内</div>
                   </div>
                   
                   {/* 每手盈亏卡片 */}
@@ -224,6 +227,16 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
               {/* 策略头部信息 */}
               <div className="strategy-item-header">
                 <span className="strategy-timestamp">{formatTime(strategy.timestamp)}</span>
+                <button
+                  className="delete-strategy-btn"
+                  onClick={(e) => {
+                    e.stopPropagation(); // 阻止事件冒泡，避免触发策略选择
+                    onDeleteStrategy?.(index);
+                  }}
+                  title="删除此策略"
+                >
+                  ✕
+                </button>
                 <span className="strategy-model">{getModelLabel(strategy.model)}</span>
               </div>
 

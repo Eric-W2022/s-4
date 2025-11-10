@@ -35,6 +35,7 @@ interface AppState {
   addStrategy: (data: StrategyAnalysis) => void;
   updateStrategyProfitLoss: (index: number, profitLoss: StrategyAnalysis['profitLoss']) => void;
   clearStrategies: () => void;
+  deleteStrategy: (index: number) => void;
 
   // 连接状态
   londonConnectionStatus: 'connected' | 'connecting' | 'error' | 'closed';
@@ -172,6 +173,17 @@ export const useAppStore = create<AppState>()(
         }
         return set({ strategies: [] });
       },
+      deleteStrategy: (index) => set((state) => {
+        const newStrategies = state.strategies.filter((_, i) => i !== index);
+        console.log('[Store] 删除策略，索引:', index, '，剩余:', newStrategies.length);
+        // 保存到localStorage
+        try {
+          localStorage.setItem('strategies', JSON.stringify(newStrategies));
+        } catch (error) {
+          console.error('[Store] 保存策略历史失败:', error);
+        }
+        return { strategies: newStrategies };
+      }),
       setLondonConnectionStatus: (status) => set({ londonConnectionStatus: status }),
       setDomesticConnectionStatus: (status) => set({ domesticConnectionStatus: status }),
     }),
