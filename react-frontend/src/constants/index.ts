@@ -20,6 +20,7 @@ export const MODEL_OPTIONS = [
   { label: 'GLM', value: 'glm-4.6' },
   { label: 'MiniMax', value: 'MiniMax-M2' },
   { label: 'Kimi', value: 'kimi-k2-turbo-preview' },
+  { label: '百度', value: 'ernie-x1.1-preview' },
   { label: 'GPT', value: 'gpt-5' },
   { label: 'Claude', value: 'claude-sonnet-4-5' },
   { label: 'Gemini', value: 'google-ai-studio/gemini-2.5-pro' },

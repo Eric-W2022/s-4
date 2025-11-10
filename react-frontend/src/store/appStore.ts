@@ -30,9 +30,10 @@ interface AppState {
   setDomesticTradeTick: (data: TradeTickData | null) => void;
   setDomesticDepth: (data: DepthData | null) => void;
 
-  // 交易策略
-  strategy: StrategyAnalysis | null;
-  setStrategy: (data: StrategyAnalysis | null) => void;
+  // 交易策略（保留历史记录）
+  strategies: StrategyAnalysis[];
+  addStrategy: (data: StrategyAnalysis) => void;
+  clearStrategies: () => void;
 
   // 连接状态
   londonConnectionStatus: 'connected' | 'connecting' | 'error' | 'closed';
@@ -69,7 +70,7 @@ export const useAppStore = create<AppState>()(
       domesticKlineDaily: [],
       domesticTradeTick: null,
       domesticDepth: null,
-      strategy: null,
+      strategies: [],
       londonConnectionStatus: 'connecting',
       domesticConnectionStatus: 'connecting',
 
@@ -93,7 +94,10 @@ export const useAppStore = create<AppState>()(
       setDomesticKlineDaily: (data) => set({ domesticKlineDaily: data }),
       setDomesticTradeTick: (data) => set({ domesticTradeTick: data }),
       setDomesticDepth: (data) => set({ domesticDepth: data }),
-      setStrategy: (data) => set({ strategy: data }),
+      addStrategy: (data) => set((state) => ({ 
+        strategies: [data, ...state.strategies].slice(0, 10) // 新策略添加到开头，最多保留10条
+      })),
+      clearStrategies: () => set({ strategies: [] }),
       setLondonConnectionStatus: (status) => set({ londonConnectionStatus: status }),
       setDomesticConnectionStatus: (status) => set({ domesticConnectionStatus: status }),
     }),

@@ -41,8 +41,8 @@ function AppContent() {
     setDomesticConnectionStatus,
     londonConnectionStatus,
     domesticConnectionStatus,
-    strategy,
-    setStrategy,
+    strategies,
+    addStrategy,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -53,14 +53,17 @@ function AppContent() {
   const [londonRealtimeKline, setLondonRealtimeKline] = useState<KlineData[]>([]);
   const [isLondonWebSocketActive, setIsLondonWebSocketActive] = useState(false);
 
-  // 防止自动分析无限循环的标记
-  const hasAttemptedAnalysisRef = useRef(false);
-  
   // 记录上次使用的模型
   const lastAnalyzedModelRef = useRef<ModelType | null>(null);
   
   // 记录上次分析时间
   const lastAnalysisTimeRef = useRef<number>(0);
+  
+  // 当前是否正在加载策略
+  const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
+  
+  // 选中的策略索引（用于在K线图上显示对应策略的价格线）
+  const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
 
   // 国内白银 WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
@@ -314,7 +317,7 @@ function AppContent() {
       }
       
       // 如果正在加载中，不重复触发
-      if (strategy && (strategy as any).isLoading) {
+      if (isLoadingStrategy) {
         console.log('[自动分析] 正在分析中，跳过');
         return;
       }
@@ -326,7 +329,7 @@ function AppContent() {
       lastAnalysisTimeRef.current = now;
       
       try {
-        setStrategy({ isLoading: true } as any); // 设置加载状态
+        setIsLoadingStrategy(true);
         
         const { analyzeStrategy } = await import('./services/strategyService');
         
@@ -341,21 +344,27 @@ function AppContent() {
           domesticDepthQuery.data || null
         );
         
-        setStrategy({
+        // 添加新策略到历史记录
+        addStrategy({
           ...result,
           timestamp: Date.now(),
           model: selectedModel
-        } as any);
+        });
         
-        console.log('[自动分析] ✅ 分析完成，已更新策略面板');
+        // 自动选中最新策略
+        setSelectedStrategyIndex(0);
+        
+        console.log('[自动分析] ✅ 分析完成，已添加到策略历史');
       } catch (error: any) {
         console.error('[自动分析] ❌ 分析失败:', error);
-        // 失败时设置一个错误状态，而不是 null，避免触发重新分析
-        setStrategy({ 
-          isLoading: false, 
+        // 失败时也添加到历史，标记为错误
+        addStrategy({ 
           error: error.message || '分析失败',
-          timestamp: Date.now() 
+          timestamp: Date.now(),
+          model: selectedModel
         } as any);
+      } finally {
+        setIsLoadingStrategy(false);
       }
     };
     
@@ -379,9 +388,9 @@ function AppContent() {
     domesticKlineDailyQuery.data,
     domesticDepthQuery.data,
     isLondonWebSocketActive,
-    strategy,
+    isLoadingStrategy,
     selectedModel,
-    setStrategy
+    addStrategy
   ]);
 
   return (
@@ -420,10 +429,10 @@ function AppContent() {
             status={domesticConnectionStatus}
             height={600}
             isLoading={domesticRealtimeKline.length === 0}
-            strategyPrices={strategy && strategy.tradingAdvice ? {
-              entryPrice: strategy.tradingAdvice.entryPrice,
-              stopLoss: strategy.tradingAdvice.stopLoss,
-              takeProfit: strategy.tradingAdvice.takeProfit,
+            strategyPrices={strategies.length > 0 && strategies[selectedStrategyIndex]?.tradingAdvice ? {
+              entryPrice: strategies[selectedStrategyIndex].tradingAdvice.entryPrice,
+              stopLoss: strategies[selectedStrategyIndex].tradingAdvice.stopLoss,
+              takeProfit: strategies[selectedStrategyIndex].tradingAdvice.takeProfit,
             } : undefined}
           />
           <KlineChart
@@ -456,12 +465,14 @@ function AppContent() {
         {/* 最右侧：交易策略区域 */}
         <div className="strategy-panel-container">
           <StrategyPanel
-            strategy={strategy}
+            strategies={strategies}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
-            isLoading={!!(strategy && (strategy as any).isLoading === true)}
+            isLoading={isLoadingStrategy}
             londonCurrentPrice={londonTradeTickQuery.data?.price ? Number(londonTradeTickQuery.data.price) : undefined}
             domesticCurrentPrice={domesticTradeTickQuery.data?.price ? Number(domesticTradeTickQuery.data.price) : undefined}
+            selectedStrategyIndex={selectedStrategyIndex}
+            onStrategySelect={setSelectedStrategyIndex}
           />
         </div>
       </div>

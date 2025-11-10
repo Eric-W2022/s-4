@@ -6,16 +6,18 @@ import type { StrategyAnalysis, ModelType } from '../../types';
 import './StrategyPanel.css';
 
 interface StrategyPanelProps {
-  strategy: StrategyAnalysis | null;
+  strategies: StrategyAnalysis[];
   selectedModel: ModelType;
   onModelChange: (model: ModelType) => void;
   isLoading?: boolean;
   londonCurrentPrice?: number;
   domesticCurrentPrice?: number;
+  selectedStrategyIndex?: number;
+  onStrategySelect?: (index: number) => void;
 }
 
 export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
-  ({ strategy, selectedModel, onModelChange, isLoading, londonCurrentPrice, domesticCurrentPrice }) => {
+  ({ strategies, selectedModel, onModelChange, isLoading, londonCurrentPrice, domesticCurrentPrice, selectedStrategyIndex = 0, onStrategySelect }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const selectedModelLabel = MODEL_OPTIONS.find(
@@ -25,6 +27,23 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
     const handleModelSelect = (model: ModelType) => {
       onModelChange(model);
       setIsDropdownOpen(false);
+    };
+
+    // 格式化时间戳
+    const formatTime = (timestamp?: number) => {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const seconds = date.getSeconds().toString().padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    };
+
+    // 获取模型简称
+    const getModelLabel = (modelValue?: string) => {
+      if (!modelValue) return '';
+      const model = MODEL_OPTIONS.find(m => m.value === modelValue);
+      return model?.label || modelValue;
     };
 
     return (
@@ -66,7 +85,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         </div>
 
         <div className="strategy-content">
-          {isLoading && (
+          {isLoading && strategies.length === 0 && (
             <div className="strategy-content-loading-overlay">
               <div className="loading-dots">
                 <span></span>
@@ -76,19 +95,34 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
             </div>
           )}
 
-          {!isLoading && !strategy && (
+          {!isLoading && strategies.length === 0 && (
             <div className="no-data">
               <div>等待市场数据...</div>
             </div>
           )}
 
-          {!isLoading && strategy && (strategy as any).error && (
-            <div className="no-data">
-              <div style={{ color: '#ef4444' }}>分析失败: {(strategy as any).error}</div>
-            </div>
-          )}
+          {strategies.length > 0 && strategies.map((strategy, index) => (
+            <div 
+              key={strategy.timestamp || index} 
+              className={`strategy-item ${selectedStrategyIndex === index ? 'selected' : ''}`}
+              onClick={() => onStrategySelect?.(index)}
+              style={{ cursor: 'pointer' }}
+            >
+              {/* 策略头部信息 */}
+              <div className="strategy-item-header">
+                <span className="strategy-timestamp">{formatTime(strategy.timestamp)}</span>
+                <span className="strategy-model">{getModelLabel(strategy.model)}</span>
+              </div>
 
-          {!isLoading && strategy && strategy.tradingAdvice && (
+              {/* 错误信息 */}
+              {(strategy as any).error && (
+                <div className="no-data">
+                  <div style={{ color: '#ef4444' }}>分析失败: {(strategy as any).error}</div>
+                </div>
+              )}
+
+              {/* 策略内容 */}
+              {strategy.tradingAdvice && (
             <div className="analysis-result">
               {/* 交易建议卡片 */}
               <div className="analysis-section trading-advice-card">
@@ -232,14 +266,10 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                   </div>
                 </div>
               )}
-
-              {/* 分析理由 */}
-              <div className="analysis-section analysis-reason">
-                <h3>分析理由</h3>
-                <p className="analysis-text">{strategy.analysisReason}</p>
-              </div>
             </div>
-          )}
+              )}
+            </div>
+          ))}
         </div>
       </div>
     );
