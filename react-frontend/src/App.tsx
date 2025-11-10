@@ -607,6 +607,10 @@ function AppContent() {
             domesticCurrentPrice={domesticTradeTickQuery.data?.price ? Number(domesticTradeTickQuery.data.price) : undefined}
             selectedStrategyIndex={selectedStrategyIndex}
             onStrategySelect={setSelectedStrategyIndex}
+            onClearStrategies={() => {
+              clearStrategies();
+              setSelectedStrategyIndex(0);
+            }}
           />
         </div>
       </div>

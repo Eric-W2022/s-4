@@ -166,26 +166,36 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                 </div>
               )}
 
-              {/* 策略内容 - 左右分栏布局 */}
+              {/* 策略内容 */}
               {strategy.tradingAdvice && (
-            <div className="analysis-result">
-              <div className="strategy-layout">
-                {/* 左侧：操作信号 */}
-                <div className="strategy-left">
-                  <div className="signal-section">
-                    <span
-                      className={`signal-action ${
-                        strategy.tradingAdvice.action === '买多' ? 'buy' :
-                        strategy.tradingAdvice.action === '卖空' ? 'sell' : 'hold'
-                      }`}
-                    >
-                      {strategy.tradingAdvice.action}
-                    </span>
-                  </div>
-                </div>
+                <div className="analysis-result">
+                      {/* 第一行：交易信号（左）+ 盈亏（右）*/}
+                  <div className="signal-profit-row">
+                    {/* 左侧：操作信号 */}
+                    <div className="signal-section">
+                      <span
+                        className={`signal-action ${
+                          strategy.tradingAdvice.action === '买多' ? 'buy' :
+                          strategy.tradingAdvice.action === '卖空' ? 'sell' : 'hold'
+                        }`}
+                      >
+                        {strategy.tradingAdvice.action}
+                      </span>
+                    </div>
 
-                {/* 右侧：策略详情 */}
-                <div className="strategy-right">
+                    {/* 右侧：盈亏情况 */}
+                    <div className="profit-section">
+                      {strategy.profitLoss && strategy.profitLoss.profitLossPoints !== undefined && (
+                        <span className={`profit-loss-value ${
+                          strategy.profitLoss.profitLossPoints > 0 ? 'profit' :
+                          strategy.profitLoss.profitLossPoints < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          {strategy.profitLoss.profitLossPoints > 0 ? '+' : ''}{strategy.profitLoss.profitLossPoints.toFixed(0)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   {/* 信心度、风险、伦敦预测、国内预测 */}
                   <div className="info-cards-row">
                     {/* 信心度 */}
@@ -281,47 +291,32 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     </div>
                   </div>
 
-                  {/* 盈亏情况 */}
-                  {strategy.profitLoss && strategy.profitLoss.profitLossPoints !== undefined && (
-                    <div className="profit-loss-row">
-                      <span className={`profit-loss-value ${
-                        strategy.profitLoss.profitLossPoints > 0 ? 'profit' :
-                        strategy.profitLoss.profitLossPoints < 0 ? 'loss' : 'neutral'
-                      }`}>
-                        {strategy.profitLoss.profitLossPoints > 0 ? '+' : ''}{strategy.profitLoss.profitLossPoints.toFixed(0)}
-                      </span>
+                  {/* 图形分析 */}
+                  {strategy.chartAnalysis && (
+                    <div className="analysis-section chart-analysis">
+                      <div className="chart-analysis-grid">
+                        <div className="chart-analysis-item">
+                          <div className="chart-analysis-label">
+                            <span>过去图形</span>
+                          </div>
+                          <p className="chart-analysis-text">{strategy.chartAnalysis.pastChart}</p>
+                        </div>
+                        <div className="chart-analysis-item">
+                          <div className="chart-analysis-label">
+                            <span>当前图形</span>
+                          </div>
+                          <p className="chart-analysis-text">{strategy.chartAnalysis.currentChart}</p>
+                        </div>
+                        <div className="chart-analysis-item">
+                          <div className="chart-analysis-label">
+                            <span>未来预测</span>
+                          </div>
+                          <p className="chart-analysis-text">{strategy.chartAnalysis.futureChart}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-              </div>
-
-              {/* 图形分析 */}
-              {strategy.chartAnalysis && (
-                <div className="analysis-section chart-analysis">
-                  <div className="chart-analysis-grid">
-                    <div className="chart-analysis-item">
-                      <div className="chart-analysis-label">
-                        <span>过去图形</span>
-                      </div>
-                      <p className="chart-analysis-text">{strategy.chartAnalysis.pastChart}</p>
-                    </div>
-                    <div className="chart-analysis-item">
-                      <div className="chart-analysis-label">
-                        <span>当前图形</span>
-                      </div>
-                      <p className="chart-analysis-text">{strategy.chartAnalysis.currentChart}</p>
-                    </div>
-                    <div className="chart-analysis-item">
-                      <div className="chart-analysis-label">
-                        <span>未来预测</span>
-                      </div>
-                      <p className="chart-analysis-text">{strategy.chartAnalysis.futureChart}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
               )}
             </div>
           ))}
