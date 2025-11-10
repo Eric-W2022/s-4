@@ -380,12 +380,9 @@
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
 }
 
-/* 价格建议 */
-.price-suggestions {
-  border-left-color: #667eea;
-}
-
+/* 价格网格 */
 .price-grid {
+  margin-top: 6px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;

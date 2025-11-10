@@ -204,11 +204,8 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* 价格建议 */}
-              <div className="analysis-section price-suggestions">
-                <h3>价格建议</h3>
+                
+                {/* 价格建议 - 第二行 */}
                 <div className="price-grid">
                   <div className="price-item">
                     <div className="price-label">入场价</div>
