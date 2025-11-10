@@ -60,12 +60,24 @@ export const useLondonWebSocket = ({
   const lastUpdateTimeRef = useRef<number>(0);
 
   const MAX_RECONNECT_ATTEMPTS = 5;
-  const HEARTBEAT_INTERVAL = 10000; // 10秒心跳
-  const RECONNECT_DELAY = 3000; // 3秒后重连
+  const HEARTBEAT_INTERVAL = 30000; // 30秒心跳（减少频率，避免过度订阅）
+  const RECONNECT_DELAY = 5000; // 5秒后重连（增加延迟，避免频繁重连）
   const MIN_UPDATE_INTERVAL = 200; // 最小更新间隔200ms（每秒最多5次）
 
-  // 订阅K线
-  const subscribeKline = (ws: WebSocket) => {
+  // 订阅K线（带状态检查，避免重复订阅）
+  const lastSubscribeTimeRef = useRef<number>(0);
+  const SUBSCRIBE_THROTTLE = 5000; // 5秒内不重复订阅
+  
+  const subscribeKline = (ws: WebSocket, force: boolean = false) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    
+    // 节流：避免短时间内重复订阅
+    const now = Date.now();
+    if (!force && now - lastSubscribeTimeRef.current < SUBSCRIBE_THROTTLE) {
+      console.log('[AllTick] 跳过重复订阅K线（节流中）');
+      return;
+    }
+    
     const seqId = seqIdRef.current++;
     const trace = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -83,14 +95,22 @@ export const useLondonWebSocket = ({
       },
     };
 
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(subscribeMsg));
-      console.log('[AllTick] 已订阅K线:', symbol);
-    }
+    ws.send(JSON.stringify(subscribeMsg));
+    lastSubscribeTimeRef.current = now;
+    console.log('[AllTick] 已订阅K线:', symbol);
   };
 
-  // 订阅实时价格
-  const subscribeTradeTick = (ws: WebSocket) => {
+  // 订阅实时价格（带状态检查，避免重复订阅）
+  const subscribeTradeTick = (ws: WebSocket, force: boolean = false) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    
+    // 节流：避免短时间内重复订阅
+    const now = Date.now();
+    if (!force && now - lastSubscribeTimeRef.current < SUBSCRIBE_THROTTLE) {
+      console.log('[AllTick] 跳过重复订阅实时价格（节流中）');
+      return;
+    }
+    
     const seqId = seqIdRef.current++;
     const trace = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -107,18 +127,16 @@ export const useLondonWebSocket = ({
       },
     };
 
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(subscribeMsg));
-      console.log('[AllTick] 已订阅实时价格:', symbol);
-    }
+    ws.send(JSON.stringify(subscribeMsg));
+    console.log('[AllTick] 已订阅实时价格:', symbol);
   };
 
-  // 发送心跳
+  // 发送心跳（心跳不触发节流检查）
   const sendHeartbeat = (ws: WebSocket) => {
     if (ws.readyState === WebSocket.OPEN) {
-      // AllTick的心跳是重新发送订阅请求
-      subscribeKline(ws);
-      subscribeTradeTick(ws);
+      // AllTick的心跳是重新发送订阅请求（强制发送，跳过节流）
+      subscribeKline(ws, true);
+      subscribeTradeTick(ws, true);
     }
   };
 
@@ -221,9 +239,9 @@ export const useLondonWebSocket = ({
         reconnectAttemptsRef.current = 0;
         onStatusChange?.('connected');
 
-        // 订阅数据
-        subscribeKline(ws);
-        subscribeTradeTick(ws);
+        // 订阅数据（首次连接，强制发送）
+        subscribeKline(ws, true);
+        subscribeTradeTick(ws, true);
 
         // 启动心跳
         startHeartbeat(ws);

@@ -47,21 +47,45 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
       return model?.label || modelValue;
     };
 
-    // 计算总体胜率
+    // 计算总体胜率和盈亏
     const calculateWinRate = () => {
-      const completedStrategies = strategies.filter(
-        s => s.profitLoss?.status === 'completed' && s.profitLoss?.isWin !== undefined
+      // 只统计有盈亏数据且不是观望的策略
+      const tradingStrategies = strategies.filter(
+        s => s.profitLoss?.profitLossPoints !== undefined && s.profitLoss?.isWin !== undefined
       );
-      if (completedStrategies.length === 0) return null;
+      if (tradingStrategies.length === 0) return null;
       
-      const winCount = completedStrategies.filter(s => s.profitLoss?.isWin).length;
-      const winRate = (winCount / completedStrategies.length) * 100;
+      const winCount = tradingStrategies.filter(s => s.profitLoss?.isWin).length;
+      const winRate = (winCount / tradingStrategies.length) * 100;
+      
+      // 计算总盈亏点数
+      const totalProfitLoss = tradingStrategies.reduce((sum, s) => {
+        return sum + (s.profitLoss?.profitLossPoints || 0);
+      }, 0);
+      
+      // 计算15分钟内的总手数
+      const now = Date.now();
+      const fifteenMinutes = 15 * 60 * 1000;
+      const recentStrategies = strategies.filter(s => {
+        const strategyAge = now - (s.timestamp || 0);
+        return strategyAge <= fifteenMinutes && s.tradingAdvice?.lots;
+      });
+      const totalLots = recentStrategies.reduce((sum, s) => {
+        return sum + (s.tradingAdvice?.lots || 0);
+      }, 0);
+      
+      // 计算每手盈亏
+      const profitLossPerLot = totalLots > 0 ? totalProfitLoss / totalLots : 0;
       
       return {
-        total: completedStrategies.length,
+        total: tradingStrategies.length,
         winCount,
-        loseCount: completedStrategies.length - winCount,
-        winRate
+        loseCount: tradingStrategies.length - winCount,
+        winRate,
+        totalProfitLoss,
+        totalLots,
+        profitLossPerLot,
+        recentStrategiesCount: recentStrategies.length
       };
     };
 
@@ -70,7 +94,22 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
     return (
       <div className="strategy-panel">
         <div className="strategy-header">
-          <h2>实时交易策略</h2>
+          <div className="strategy-title-section">
+            <h2>实时交易策略</h2>
+            {strategies.length > 0 && (
+              <button
+                className="clear-strategies-btn"
+                onClick={() => {
+                  if (confirm('确定要清空所有策略历史吗？')) {
+                    onClearStrategies?.();
+                  }
+                }}
+                title="清空策略历史"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <div 
             className="model-selector-container"
             onMouseEnter={() => setIsDropdownOpen(true)}
@@ -108,30 +147,53 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
         {/* 胜率统计区域 */}
         {strategies.length > 0 && (
           <div className="win-rate-section">
-            <div className="win-rate-stats">
+            <div className="win-rate-cards">
               {winRateStats ? (
                 <>
-                  <span className="win-rate-label">胜率:</span>
-                  <span className={`win-rate-value ${winRateStats.winRate >= 60 ? 'high' : winRateStats.winRate >= 40 ? 'medium' : 'low'}`}>
-                    {winRateStats.winRate.toFixed(1)}%
-                  </span>
-                  <span className="win-rate-detail">({winRateStats.winCount}胜/{winRateStats.loseCount}负)</span>
+                  {/* 胜率卡片 */}
+                  <div className="stats-card win-rate-card">
+                    <div className="stats-card-label">胜率</div>
+                    <div className={`stats-card-value ${winRateStats.winRate >= 60 ? 'high' : winRateStats.winRate >= 40 ? 'medium' : 'low'}`}>
+                      {winRateStats.winRate.toFixed(1)}%
+                    </div>
+                    <div className="stats-card-detail">
+                      {winRateStats.winCount}胜/{winRateStats.loseCount}负
+                    </div>
+                  </div>
+                  
+                  {/* 总盈亏卡片 */}
+                  <div className="stats-card profit-loss-card">
+                    <div className="stats-card-label">总盈亏</div>
+                    <div className={`stats-card-value ${winRateStats.totalProfitLoss > 0 ? 'profit' : winRateStats.totalProfitLoss < 0 ? 'loss' : 'neutral'}`}>
+                      {winRateStats.totalProfitLoss > 0 ? '+' : ''}{winRateStats.totalProfitLoss.toFixed(0)}
+                    </div>
+                    <div className="stats-card-detail">点</div>
+                  </div>
+                  
+                  {/* 手数卡片 */}
+                  <div className="stats-card lots-card">
+                    <div className="stats-card-label">手数</div>
+                    <div className="stats-card-value lots-value">
+                      {winRateStats.totalLots}
+                    </div>
+                    <div className="stats-card-detail">15分钟内</div>
+                  </div>
+                  
+                  {/* 每手盈亏卡片 */}
+                  <div className="stats-card per-lot-card">
+                    <div className="stats-card-label">每手盈亏</div>
+                    <div className={`stats-card-value ${winRateStats.profitLossPerLot > 0 ? 'profit' : winRateStats.profitLossPerLot < 0 ? 'loss' : 'neutral'}`}>
+                      {winRateStats.profitLossPerLot > 0 ? '+' : ''}{winRateStats.profitLossPerLot.toFixed(1)}
+                    </div>
+                    <div className="stats-card-detail">点/手</div>
+                  </div>
                 </>
               ) : (
-                <span className="win-rate-label">暂无胜率数据</span>
+                <div className="stats-card no-data-card">
+                  <div className="stats-card-label">暂无数据</div>
+                </div>
               )}
             </div>
-            <button
-              className="clear-strategies-btn"
-              onClick={() => {
-                if (confirm('确定要清空所有策略历史吗？')) {
-                  onClearStrategies?.();
-                }
-              }}
-              title="清空策略历史"
-            >
-              ✕
-            </button>
           </div>
         )}
 
@@ -189,7 +251,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                       </span>
                     </div>
 
-                    {/* 右侧：盈亏情况 */}
+                      {/* 右侧：盈亏情况 */}
                     <div className="profit-section">
                       {strategy.profitLoss && strategy.profitLoss.profitLossPoints !== undefined && (
                         <span className={`profit-loss-value ${
@@ -201,6 +263,30 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                       )}
                     </div>
                   </div>
+
+                  {/* 止盈信息显示 */}
+                  {strategy.profitLoss?.takeProfitReached && (
+                    <div className="take-profit-info">
+                      <div className="take-profit-badge">✓ 已触达止盈</div>
+                      <div className="take-profit-details">
+                        <span className="take-profit-label">止盈价:</span>
+                        <span className="take-profit-price">{strategy.tradingAdvice.takeProfit.toFixed(0)}</span>
+                        <span className="take-profit-separator">|</span>
+                        <span className="take-profit-label">盈利:</span>
+                        <span className="take-profit-points profit">
+                          +{strategy.profitLoss.profitLossPoints?.toFixed(0)}点
+                        </span>
+                        <span className="take-profit-separator">|</span>
+                        <span className="take-profit-label">耗时:</span>
+                        <span className="take-profit-time">{strategy.profitLoss.takeProfitMinutes}分钟</span>
+                        <span className="take-profit-separator">|</span>
+                        <span className="take-profit-label">时间:</span>
+                        <span className="take-profit-timestamp">
+                          {strategy.profitLoss.takeProfitTime ? formatTime(strategy.profitLoss.takeProfitTime) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 信心度、风险、伦敦预测、国内预测 */}
                   <div className="info-cards-row">

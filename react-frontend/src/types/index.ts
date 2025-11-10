@@ -111,6 +111,11 @@ export interface StrategyAnalysis {
     profitLossPercent?: number;   // 盈亏百分比
     isWin?: boolean;              // 是否盈利
     status: 'pending' | 'checking' | 'completed';  // 状态
+    // 止盈相关
+    takeProfitReached?: boolean;  // 是否触达止盈价
+    takeProfitPrice?: number;     // 触达止盈时的价格
+    takeProfitTime?: number;      // 触达止盈的时间戳
+    takeProfitMinutes?: number;   // 多少分钟触达止盈
   };
 }
 

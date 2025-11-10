@@ -129,7 +129,7 @@ async def get_kline(
         # 注意：query参数需要JSON字符串，httpx会自动URL编码
         query_json = json.dumps(query_data, ensure_ascii=False)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:  # 增加到60秒
             response = await client.post(
                 f"{ALLTICK_BASE_URL}/kline",
                 params={"token": ALLTICK_TOKEN, "query": query_json},
@@ -268,7 +268,7 @@ async def get_trade_tick(
         
         query_json = json.dumps(query_data, ensure_ascii=False)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:  # 增加到60秒
             url = f"{ALLTICK_BASE_URL}/trade-tick?token={ALLTICK_TOKEN}&query={urllib.parse.quote(query_json)}"
             response = await client.post(
                 url,
@@ -485,7 +485,7 @@ async def get_depth_tick(
         # httpx会自动对params进行URL编码，所以我们直接传JSON字符串，不需要手动编码
         # 但为了避免双重编码问题，我们使用data参数而不是params
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:  # 增加到60秒
             # 使用POST请求，query参数放在URL中，data为空
             url = f"{ALLTICK_BASE_URL}/depth-tick?token={ALLTICK_TOKEN}&query={urllib.parse.quote(query_json)}"
             response = await client.post(

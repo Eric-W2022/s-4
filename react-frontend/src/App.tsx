@@ -95,6 +95,50 @@ function AppContent() {
   // 选中的策略索引（用于在K线图上显示对应策略的价格线）
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
 
+  // 定期清理超过90分钟的策略
+  useEffect(() => {
+    const cleanupOldStrategies = () => {
+      const now = Date.now();
+      const ninetyMinutes = 90 * 60 * 1000;
+      const currentStrategies = useAppStore.getState().strategies;
+      
+      // 过滤掉90分钟以前的策略
+      const recentStrategies = currentStrategies.filter(s => {
+        const age = now - (s.timestamp || 0);
+        return age <= ninetyMinutes;
+      });
+      
+      // 如果有策略被清理，更新状态
+      if (recentStrategies.length < currentStrategies.length) {
+        const removedCount = currentStrategies.length - recentStrategies.length;
+        console.log(`[策略清理] 清理了${removedCount}条超过90分钟的策略`);
+        
+        // 直接更新localStorage和状态
+        try {
+          localStorage.setItem('strategies', JSON.stringify(recentStrategies));
+        } catch (error) {
+          console.error('[策略清理] 保存策略失败:', error);
+        }
+        
+        // 更新状态
+        useAppStore.setState({ strategies: recentStrategies });
+        
+        // 如果当前选中的策略被清理，重置选中索引
+        if (selectedStrategyIndex >= recentStrategies.length) {
+          setSelectedStrategyIndex(0);
+        }
+      }
+    };
+    
+    // 每分钟检查一次
+    const timer = setInterval(cleanupOldStrategies, 60000);
+    
+    // 立即执行一次清理
+    cleanupOldStrategies();
+    
+    return () => clearInterval(timer);
+  }, [selectedStrategyIndex]);
+
   // 国内白银 WebSocket 回调
   const handleKlineUpdate = useCallback((kline: KlineData) => {
     setDomesticRealtimeKline(prev => {
@@ -260,8 +304,54 @@ function AppContent() {
 
       // 计算交易策略的盈亏
       const entryPrice = strategy.tradingAdvice.entryPrice;
+      const takeProfit = strategy.tradingAdvice.takeProfit;
       const action = strategy.tradingAdvice.action;
 
+      // 如果已经触达止盈，不再更新价格，保持锁定状态
+      if (strategy.profitLoss?.takeProfitReached) {
+        // 仅在超过15分钟时更新状态
+        if (strategyAge >= fifteenMinutes && strategy.profitLoss.status === 'pending') {
+          updateStrategyProfitLoss(index, {
+            ...strategy.profitLoss,
+            status: 'completed'
+          });
+        }
+        return;
+      }
+
+      // 检查是否触达止盈价
+      let takeProfitReached = false;
+      if (action === '买多') {
+        // 买多：当前价格 >= 止盈价
+        takeProfitReached = currentPrice >= takeProfit;
+      } else if (action === '卖空') {
+        // 卖空：当前价格 <= 止盈价
+        takeProfitReached = currentPrice <= takeProfit;
+      }
+
+      // 如果触达止盈，锁定价格并记录时间
+      if (takeProfitReached) {
+        const takeProfitMinutes = Math.round(strategyAge / 60000); // 转换为分钟
+        const takeProfitPoints = action === '买多' 
+          ? takeProfit - entryPrice 
+          : entryPrice - takeProfit;
+        
+        updateStrategyProfitLoss(index, {
+          actualPrice15min: takeProfit,  // 锁定在止盈价
+          profitLossPoints: takeProfitPoints,
+          profitLossPercent: (takeProfitPoints / entryPrice) * 100,
+          isWin: true,  // 触达止盈必然盈利
+          status: 'completed',  // 立即标记为完成
+          takeProfitReached: true,
+          takeProfitPrice: currentPrice,  // 触达止盈时的实际价格
+          takeProfitTime: now,
+          takeProfitMinutes
+        });
+        console.log(`[盈亏跟踪] 策略 #${index} 在${takeProfitMinutes}分钟后触达止盈价 ${takeProfit}`);
+        return;
+      }
+
+      // 未触达止盈，正常计算盈亏
       let profitLossPoints = 0;
       if (action === '买多') {
         profitLossPoints = currentPrice - entryPrice;

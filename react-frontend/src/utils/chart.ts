@@ -163,11 +163,20 @@ export const createKlineChartOption = (
             result += `<span style="color: ${CHART_THEMES.TEXT_SECONDARY};">最低：</span><span style="color: ${CHART_THEMES.GREEN}; font-weight: bold;">${formatValue(lowest)}</span>`;
             result += `</div>`;
           } else if (item.seriesName === '布林上轨') {
-            upperValue = item.value;
+            // 只有当值不为null时才赋值
+            if (item.value !== null && item.value !== undefined) {
+              upperValue = item.value;
+            }
           } else if (item.seriesName === '布林中轨') {
-            middleValue = item.value;
+            // 只有当值不为null时才赋值
+            if (item.value !== null && item.value !== undefined) {
+              middleValue = item.value;
+            }
           } else if (item.seriesName === '布林下轨') {
-            lowerValue = item.value;
+            // 只有当值不为null时才赋值
+            if (item.value !== null && item.value !== undefined) {
+              lowerValue = item.value;
+            }
           } else if (item.seriesName === '成交量') {
             const volumeValue = item.value;
             result += `<div style="margin-top: 8px;">`;
