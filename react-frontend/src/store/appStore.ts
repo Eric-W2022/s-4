@@ -33,6 +33,7 @@ interface AppState {
   // 交易策略（保留历史记录）
   strategies: StrategyAnalysis[];
   addStrategy: (data: StrategyAnalysis) => void;
+  updateStrategyProfitLoss: (index: number, profitLoss: StrategyAnalysis['profitLoss']) => void;
   clearStrategies: () => void;
 
   // 连接状态
@@ -56,6 +57,21 @@ const loadSelectedModel = (): ModelType => {
   return 'deepseek-chat'; // 默认模型
 };
 
+// 从localStorage加载保存的策略历史
+const loadStrategies = (): StrategyAnalysis[] => {
+  try {
+    const saved = localStorage.getItem('strategies');
+    if (saved) {
+      const strategies = JSON.parse(saved);
+      console.log('[Store] 从localStorage加载策略历史，共', strategies.length, '条');
+      return strategies;
+    }
+  } catch (error) {
+    console.error('[Store] 加载策略历史失败:', error);
+  }
+  return [];
+};
+
 export const useAppStore = create<AppState>()(
   devtools(
     (set) => ({
@@ -70,7 +86,7 @@ export const useAppStore = create<AppState>()(
       domesticKlineDaily: [],
       domesticTradeTick: null,
       domesticDepth: null,
-      strategies: [],
+      strategies: loadStrategies(),
       londonConnectionStatus: 'connecting',
       domesticConnectionStatus: 'connecting',
 
@@ -94,10 +110,40 @@ export const useAppStore = create<AppState>()(
       setDomesticKlineDaily: (data) => set({ domesticKlineDaily: data }),
       setDomesticTradeTick: (data) => set({ domesticTradeTick: data }),
       setDomesticDepth: (data) => set({ domesticDepth: data }),
-      addStrategy: (data) => set((state) => ({ 
-        strategies: [data, ...state.strategies].slice(0, 10) // 新策略添加到开头，最多保留10条
-      })),
-      clearStrategies: () => set({ strategies: [] }),
+      addStrategy: (data) => set((state) => {
+        const newStrategies = [data, ...state.strategies].slice(0, 30); // 新策略添加到开头，最多保留30条
+        // 保存到localStorage
+        try {
+          localStorage.setItem('strategies', JSON.stringify(newStrategies));
+        } catch (error) {
+          console.error('[Store] 保存策略历史失败:', error);
+        }
+        return { strategies: newStrategies };
+      }),
+      updateStrategyProfitLoss: (index, profitLoss) => set((state) => {
+        const newStrategies = [...state.strategies];
+        if (newStrategies[index]) {
+          newStrategies[index] = {
+            ...newStrategies[index],
+            profitLoss
+          };
+          // 保存到localStorage
+          try {
+            localStorage.setItem('strategies', JSON.stringify(newStrategies));
+          } catch (error) {
+            console.error('[Store] 保存策略历史失败:', error);
+          }
+        }
+        return { strategies: newStrategies };
+      }),
+      clearStrategies: () => {
+        try {
+          localStorage.removeItem('strategies');
+        } catch (error) {
+          console.error('[Store] 清除策略历史失败:', error);
+        }
+        return set({ strategies: [] });
+      },
       setLondonConnectionStatus: (status) => set({ londonConnectionStatus: status }),
       setDomesticConnectionStatus: (status) => set({ domesticConnectionStatus: status }),
     }),

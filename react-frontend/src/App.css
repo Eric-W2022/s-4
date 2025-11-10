@@ -33,7 +33,9 @@
   min-width: 320px;
   max-width: 320px;
   overflow-x: hidden;
-  height: calc(100vh - 20px);
+  /* 约等于三个K线图总高度：(600+125) + (400+125) + (400+125) ≈ 1775px */
+  /* 125px = padding(40) + header(60) + border(2) + margin(20) */
+  height: 1775px;
 }
 
 /* 响应式设计 */

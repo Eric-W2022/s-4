@@ -104,5 +104,13 @@ export interface StrategyAnalysis {
   };
   timestamp?: number;
   model?: string;
+  // 盈亏跟踪
+  profitLoss?: {
+    actualPrice15min?: number;    // 15分钟后的实际价格
+    profitLossPoints?: number;    // 盈亏点数
+    profitLossPercent?: number;   // 盈亏百分比
+    isWin?: boolean;              // 是否盈利
+    status: 'pending' | 'checking' | 'completed';  // 状态
+  };
 }
 
