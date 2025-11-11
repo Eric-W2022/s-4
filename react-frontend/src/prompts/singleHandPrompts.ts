@@ -220,7 +220,6 @@ export function buildSingleHandMessages(params: SingleHandPromptParams): Array<{
 - ✓ 布林带反转：价格触及下轨反弹做多，触及上轨回调做空
 - ✓ 关键位置突破：整数关口、前高前低突破时跟进
 - ✓ K线形态确认：吞没、锤子线等反转形态
-- ✗ 震荡行情避免开仓（布林带窄幅震荡）
 - ✗ 趋势不明时观望（价格在布林中轨附近反复）
 - ✗ 布林带极端位置谨慎追高杀低
 
