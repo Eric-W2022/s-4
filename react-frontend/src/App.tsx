@@ -661,6 +661,7 @@ function AppContent() {
         action: decision.action,
         price: currentPrice,
         reason: decision.reason,
+        reflection: decision.reflection, // AI的反思
         commission: 8, // 开仓手续费
         profitLossPoints: 0, // 开仓时盈亏为0
         profitLossMoney: 0,
@@ -689,6 +690,7 @@ function AppContent() {
         action: '平仓',
         price: currentPrice,
         reason: decision.reason,
+        reflection: decision.reflection, // AI的反思
         profitLossPoints,
         profitLossMoney,
         commission, // 本次手续费（平仓8元）
@@ -728,6 +730,7 @@ function AppContent() {
         action: '持有',
         price: currentPrice,
         reason: decision.reason,
+        reflection: decision.reflection, // AI的反思
         profitLossPoints: singleHandPosition.profitLossPoints,
         profitLossMoney: singleHandPosition.profitLossMoney,
         duration, // 持仓时长（分钟）
@@ -758,6 +761,7 @@ function AppContent() {
         action: '观望',
         price: currentPrice,
         reason: decision.reason,
+        reflection: decision.reflection, // AI的反思
         model: selectedModel, // 记录使用的模型
       };
       addSingleHandOperation(newOperation);

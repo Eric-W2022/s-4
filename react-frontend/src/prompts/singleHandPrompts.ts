@@ -120,19 +120,44 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 回撤比例: ${position.drawdownPercent?.toFixed(1)}% (从最高点回撤)`;
   };
 
-  // 格式化操作历史
+  // 格式化操作历史并分析绩效
   const formatOperations = (operations: SingleHandOperation[]) => {
     if (operations.length === 0) {
       return '暂无历史操作记录';
     }
     
-    return operations.map((op, idx) => {
+    // 统计绩效
+    const closedOps = operations.filter(op => op.action === '平仓' && op.netProfit !== undefined);
+    const winOps = closedOps.filter(op => (op.netProfit || 0) > 0);
+    const lossOps = closedOps.filter(op => (op.netProfit || 0) < 0);
+    const winRate = closedOps.length > 0 ? (winOps.length / closedOps.length * 100).toFixed(0) : '0';
+    const totalProfit = closedOps.reduce((sum, op) => sum + (op.netProfit || 0), 0);
+    
+    // 最近3次操作的趋势
+    const recent3 = operations.slice(0, 3);
+    const recent3Loss = recent3.filter(op => 
+      op.action === '平仓' && op.netProfit !== undefined && op.netProfit < 0
+    ).length;
+    
+    const performanceSummary = `
+【绩效统计】
+- 胜率: ${winRate}% (${winOps.length}胜/${lossOps.length}败，共${closedOps.length}次平仓)
+- 累计净利润: ${totalProfit > 0 ? '+' : ''}${totalProfit.toFixed(0)}元
+- 最近3次操作: ${recent3Loss >= 2 ? '⚠️ 连续亏损！需要反思策略！' : recent3Loss === 1 ? '有亏损，需警惕' : '表现正常'}
+`;
+    
+    const opsList = operations.map((op, idx) => {
       const time = new Date(op.timestamp).toLocaleTimeString('zh-CN');
       const profitInfo = op.profitLossPoints !== undefined 
         ? ` | 盈亏: ${op.profitLossPoints.toFixed(0)}点 (${op.profitLossMoney?.toFixed(0)}元)`
         : '';
-      return `${idx+1}. [${time}] ${op.action} @ ${op.price.toFixed(0)}${profitInfo}\n   原因: ${op.reason}`;
+      const netProfitInfo = op.netProfit !== undefined 
+        ? ` | 净利润: ${op.netProfit > 0 ? '+' : ''}${op.netProfit.toFixed(0)}元`
+        : '';
+      return `${idx+1}. [${time}] ${op.action} @ ${op.price.toFixed(0)}${profitInfo}${netProfitInfo}\n   原因: ${op.reason}`;
     }).join('\n\n');
+    
+    return `${performanceSummary}\n【操作记录】\n${opsList}`;
   };
 
   // 格式化布林带数据
@@ -198,11 +223,21 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 
 请基于以上市场数据和持仓状态，给出你的交易决策。
 
+**⚠️ 首要任务：反思历史绩效**：
+1. **查看绩效统计**：胜率<50%说明策略有问题，必须反思！
+2. **连续亏损警示**：最近3次操作如果有2次以上亏损，说明方向判断错误！
+   - **立即停止重复错误**：不要再用相同的逻辑做相同方向！
+   - **考虑反向操作**：市场可能在告诉你反向才对
+   - **降低频率**：连续亏损时要更谨慎，等待更明确的信号
+3. **累计亏损警示**：净利润为负说明整体策略失败，必须调整！
+
 **重要提醒**：
-1. **趋势反转是最好的开仓机会**：
-   - 上涨转下跌：大阴线吞没、跌破支撑→果断开空，不要犹豫！
-   - 下跌转上涨：大阳线吞没、突破阻力→果断开多，不要犹豫！
+1. **趋势反转是最好的开仓机会**（尤其是连续亏损后更要重视！）：
+   - **下跌转上涨**：大阳线吞没、突破阻力、连续阳线→**果断开多，不要再做空！**
+   - **上涨转下跌**：大阴线吞没、跌破支撑、连续阴线→**果断开空，不要再做多！**
+   - **逆势操作是亏损主因**：如果一直做空却亏损，说明趋势可能向上，必须反手！
    - 不要因为之前做多就不敢做空，反转信号出现就要反手！
+   - **看K线趋势，不要固执己见**：连续3根阳线说明上涨，连续3根阴线说明下跌
 2. **识别行情类型**：判断当前是单边、震荡、突破还是反转，不同行情用不同策略
 3. **震荡行情**：
    - 开仓：在支撑位做多、阻力位做空（高抛低吸）
@@ -417,6 +452,7 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 {
   "action": "开多/开空/平仓/持有/观望",
   "reason": "详细的决策理由，必须包括：1)行情类型识别（单边/震荡/突破）2)图形形态分析 3)趋势判断 4)支撑阻力位 5)盘口情况 6)持仓评估(如有，含回撤分析) 7)操作依据",
+  "reflection": "对历史绩效的反思：如果胜率<50%或连续亏损，必须分析原因（逆势操作？止损不及时？贪心不平仓？）并说明本次如何改进。如果绩效良好，总结成功经验。",
   "confidence": 85,
   "targetPrice": 8650
 }
@@ -424,19 +460,28 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 字段说明：
 - action: 必须是"开多"、"开空"、"平仓"、"持有"或"观望"之一
 - reason: 详细说明分析逻辑（200字以内），**必须先说明行情类型**（单边/震荡/突破），然后再说明具体分析和操作依据
+- **reflection**: ⚠️ 反思字段（100字以内）：
+  * 胜率<50%：必须说明为什么一直亏损，本次操作如何避免重复错误
+  * 连续亏损：分析是否逆势操作，本次是否需要反向思考
+  * 累计亏损：反思整体策略问题，是否过于激进或过于保守
+  * 绩效良好：总结成功经验，继续保持
 - confidence: 信心度（0-100），基于技术指标一致性
 - targetPrice: 目标价格（开仓时必填，平仓、持有和观望时可不填）
 
 约束条件：
 1. 如果当前有持仓，不能再开新仓，只能选择"平仓"或"持有"
 2. 如果当前无持仓，不能选择"平仓"或"持有"，只能选择"开多"、"开空"或"观望"
-3. **开仓要积极**：
+3. **开仓要积极但要吸取教训**：
    - confidence≥50%即可开仓，不要过于保守
    - 趋势反转信号明确时，confidence≥60%就果断开反向仓
+   - **⚠️ 但如果最近连续亏损，必须反思：是否一直逆势？如果是，本次必须顺势！**
    - 不要因为之前的持仓方向而不敢开反向仓
 4. **必须先识别行情类型**（单边/震荡/突破/反转），然后根据类型选择对应策略
 5. 震荡行情：目标10-20点，快进快出；单边行情：目标20-50点；反转行情：抓住机会
-6. 参考历史操作记录，总结成功经验，避免重复失误`
+6. **⚠️ 参考历史操作记录**，总结成功经验，**避免重复失误**：
+   - 如果一直做空却亏损，说明可能需要做多
+   - 如果一直做多却亏损，说明可能需要做空
+   - 看K线实际走势，不要固执己见`
   };
 
   // 返回所有消息（10个数据message + 1个分析要求message）

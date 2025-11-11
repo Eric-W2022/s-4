@@ -575,3 +575,42 @@
   box-shadow: 0 2px 8px rgba(129, 140, 248, 0.2);
 }
 
+/* AI反思区域 */
+.operation-reflection-header {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.operation-reflection-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a855f7;
+}
+
+.operation-reflection {
+  font-size: 12px;
+  color: #d8b4fe;
+  line-height: 1.4;
+  margin-top: 6px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+.operation-reason-container:hover .operation-reflection {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 6px;
+}
+
+.operation-reason-container:hover .operation-reflection-header {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+}
+

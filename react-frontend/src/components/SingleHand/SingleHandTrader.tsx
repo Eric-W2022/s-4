@@ -578,13 +578,21 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                     )}
                     </div>
                   
-                  {/* 原因说明（默认折叠，hover展开）*/}
+                  {/* 原因说明和反思（默认折叠，hover展开）*/}
                   <div className="operation-reason-container">
                     <div className="operation-reason-header">
                       <span className="operation-reason-title">💡 决策理由</span>
                       <span className="operation-reason-hint">（移动鼠标展开）</span>
                     </div>
-                  <div className="operation-reason">{op.reason}</div>
+                    <div className="operation-reason">{op.reason}</div>
+                    {op.reflection && (
+                      <>
+                        <div className="operation-reflection-header">
+                          <span className="operation-reflection-title">🤔 AI反思</span>
+                        </div>
+                        <div className="operation-reflection">{op.reflection}</div>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

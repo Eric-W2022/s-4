@@ -133,6 +133,7 @@ export interface SingleHandOperation {
   action: '开多' | '开空' | '平仓' | '持有' | '观望';
   price: number;
   reason: string;
+  reflection?: string;        // 反思：对历史绩效的反思和改进
   profitLossPoints?: number;  // 平仓时的盈亏点数
   profitLossMoney?: number;   // 平仓时的盈亏金额（元）
   commission?: number;        // 手续费（元），开仓和平仓时各8元
@@ -165,6 +166,7 @@ export interface SingleHandPosition {
 export interface SingleHandDecision {
   action: '开多' | '开空' | '平仓' | '持有' | '观望';
   reason: string;
+  reflection: string;         // 反思：对历史绩效的反思和改进
   confidence: number;
   targetPrice?: number;       // 目标价格（开仓时）
   timestamp: number;
