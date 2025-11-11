@@ -14,10 +14,11 @@ interface SingleHandTraderProps {
   onRefresh?: () => void;
   onClearOperations?: () => void;
   onDeleteOperation?: (operationId: string) => void;
+  onManualTrigger?: () => void;
 }
 
 export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
-  ({ position, operations, isLoading, selectedModel, onModelChange, onRefresh, onClearOperations, onDeleteOperation }) => {
+  ({ position, operations, isLoading, selectedModel, onModelChange, onRefresh, onClearOperations, onDeleteOperation, onManualTrigger }) => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const selectedModelLabel = MODEL_OPTIONS.find(
@@ -55,7 +56,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
         <div className="single-hand-header">
           <div className="single-hand-title-section">
             <h2>单手交易策略</h2>
-            {(operations.length > 0 || position.hasPosition) && (
+            {(operations.length > 0 || position.hasPosition) ? (
               <button
                 className="clear-operations-btn"
                 onClick={() => {
@@ -66,6 +67,17 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                 title="清空单手交易数据"
               >
                 ✕
+              </button>
+            ) : (
+              <button
+                className="play-strategy-btn"
+                onClick={() => {
+                  onManualTrigger?.();
+                }}
+                disabled={isLoading}
+                title="生成交易策略"
+              >
+                ▶
               </button>
             )}
           </div>
@@ -228,7 +240,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
         <div className="daily-stats-section">
           <div className="daily-stats-cards">
             <div className="daily-stat-card">
-              <div className="daily-stat-label">今日总点数</div>
+              <div className="daily-stat-label">总点数</div>
               <div className={`daily-stat-value ${
                 operations.filter(op => op.profitLossPoints !== undefined)
                   .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0) > 0 ? 'profit' : 
@@ -243,11 +255,21 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               </div>
             </div>
             <div className="daily-stat-card">
-              <div className="daily-stat-label">操作次数</div>
+              <div className="daily-stat-label">操作数</div>
               <div className="daily-stat-value neutral">
                 {operations.filter(op => 
                   op.action === '开多' || op.action === '开空' || op.action === '平仓'
                 ).length}
+              </div>
+            </div>
+            <div className="daily-stat-card">
+              <div className="daily-stat-label">手续费</div>
+              <div className="daily-stat-value loss">
+                {(() => {
+                  const totalCommission = operations.filter(op => op.commission !== undefined)
+                    .reduce((sum, op) => sum + (op.commission || 0), 0);
+                  return '-' + totalCommission.toFixed(0) + '元';
+                })()}
               </div>
             </div>
             <div className="daily-stat-card">
@@ -285,24 +307,22 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                 <div key={op.id} className="operation-item">
                   <div className="operation-header">
                     <div className="operation-header-left">
-                      <span className="operation-time">{formatTime(op.timestamp)}</span>
-                      <span className={`operation-action ${
-                        op.action === '开多' ? 'open-long' :
-                        op.action === '开空' ? 'open-short' :
+                    <span className="operation-time">{formatTime(op.timestamp)}</span>
+                    <span className={`operation-action ${
+                      op.action === '开多' ? 'open-long' :
+                      op.action === '开空' ? 'open-short' :
                         op.action === '平仓' ? 'close' :
                         op.action === '观望' ? 'watch' : 'hold'
-                      }`}>
-                        {op.action}
-                      </span>
-                      <span className="operation-price">@ {op.price.toFixed(0)}</span>
+                    }`}>
+                      {op.action}
+                    </span>
+                    <span className="operation-price">@ {op.price.toFixed(0)}</span>
                     </div>
                     {onDeleteOperation && (
                       <button
                         className="delete-operation-btn"
                         onClick={() => {
-                          if (confirm('确定要删除这条操作记录吗？')) {
-                            onDeleteOperation(op.id);
-                          }
+                          onDeleteOperation(op.id);
                         }}
                         title="删除此记录"
                       >
@@ -311,38 +331,67 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                     )}
                   </div>
                   
-                  {/* 开仓/平仓时显示手续费 */}
-                  {(op.action === '开多' || op.action === '开空') && (
-                    <div className="operation-commission">
-                      <span className="operation-commission-label">手续费:</span>
-                      <span className="operation-commission-value">-8元</span>
-                    </div>
-                  )}
-                  
-                  {/* 平仓时显示盈亏和手续费 */}
-                  {op.action === '平仓' && op.profitLossPoints !== undefined && (
-                    <div className="operation-profit-loss">
-                      <span className={`operation-pl-points ${
-                        op.profitLossPoints > 0 ? 'profit' : 
-                        op.profitLossPoints < 0 ? 'loss' : 'neutral'
-                      }`}>
-                        {op.profitLossPoints > 0 ? '+' : ''}{op.profitLossPoints.toFixed(0)}点
-                      </span>
-                      <span className={`operation-pl-money ${
-                        (op.profitLossMoney || 0) > 0 ? 'profit' : 
-                        (op.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
-                      }`}>
-                        {(op.profitLossMoney || 0) > 0 ? '+' : ''}{op.profitLossMoney?.toFixed(0)}元
-                      </span>
-                      <span className="operation-commission-value">手续费-8元</span>
-                      <span className={`operation-net-profit ${
-                        (op.netProfit || 0) > 0 ? 'profit' : 
-                        (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
-                      }`}>
-                        净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}元
-                      </span>
-                    </div>
-                  )}
+                  {/* 财务信息：盈亏和手续费 */}
+                  <div className="operation-financial-info">
+                    {/* 开仓操作 */}
+                    {(op.action === '开多' || op.action === '开空') && (
+                      <>
+                        <span className="operation-pl-points neutral">0点</span>
+                        <span className="operation-pl-money neutral">0元</span>
+                        <span className="operation-commission-value">手续费-8元</span>
+                      </>
+                    )}
+                    
+                    {/* 平仓操作 */}
+                    {op.action === '平仓' && op.profitLossPoints !== undefined && (
+                      <>
+                        <span className={`operation-pl-points ${
+                          op.profitLossPoints > 0 ? 'profit' : 
+                          op.profitLossPoints < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          {op.profitLossPoints > 0 ? '+' : ''}{op.profitLossPoints.toFixed(0)}点
+                        </span>
+                        <span className={`operation-pl-money ${
+                          (op.profitLossMoney || 0) > 0 ? 'profit' : 
+                          (op.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          {(op.profitLossMoney || 0) > 0 ? '+' : ''}{op.profitLossMoney?.toFixed(0)}元
+                        </span>
+                        <span className="operation-commission-value">手续费-8元</span>
+                        <span className={`operation-net-profit ${
+                          (op.netProfit || 0) > 0 ? 'profit' : 
+                          (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}元
+                        </span>
+                      </>
+                    )}
+                    
+                    {/* 持有操作：显示当时的盈亏（如果有） */}
+                    {op.action === '持有' && position.hasPosition && (
+                      <>
+                        <span className={`operation-pl-points ${
+                          (position.profitLossPoints || 0) > 0 ? 'profit' : 
+                          (position.profitLossPoints || 0) < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          {(position.profitLossPoints || 0) > 0 ? '+' : ''}{(position.profitLossPoints || 0).toFixed(0)}点
+                        </span>
+                        <span className={`operation-pl-money ${
+                          (position.profitLossMoney || 0) > 0 ? 'profit' : 
+                          (position.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
+                        }`}>
+                          {(position.profitLossMoney || 0) > 0 ? '+' : ''}{(position.profitLossMoney || 0).toFixed(0)}元
+                        </span>
+                      </>
+                    )}
+                    
+                    {/* 观望操作：无持仓 */}
+                    {op.action === '观望' && (
+                      <>
+                        <span className="operation-pl-points neutral">无持仓</span>
+                      </>
+                    )}
+                  </div>
                   
                   {/* 原因说明（默认折叠，hover展开）*/}
                   <div className="operation-reason-container">
@@ -350,7 +399,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                       <span className="operation-reason-title">💡 决策理由</span>
                       <span className="operation-reason-hint">（移动鼠标展开）</span>
                     </div>
-                    <div className="operation-reason">{op.reason}</div>
+                  <div className="operation-reason">{op.reason}</div>
                   </div>
                 </div>
               ))}

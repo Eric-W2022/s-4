@@ -601,6 +601,15 @@ function AppContent() {
       
       console.log(`[单手交易] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点 (${profitLossMoney.toFixed(0)}元)`);
     } else if (decision.action === '持有') {
+      // 如果新操作是持有，并且前2条也都是持有，删除最前面的一条
+      const currentOperations = useAppStore.getState().singleHandOperations;
+      if (currentOperations.length >= 2 &&
+          currentOperations[0]?.action === '持有' &&
+          currentOperations[1]?.action === '持有') {
+        console.log('[操作优化] 连续3条持有操作，删除最前面的一条');
+        useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
+      }
+      
       // 持有决策也记录下来
       const newOperation: SingleHandOperation = {
         id: operationId,
@@ -619,6 +628,15 @@ function AppContent() {
       
       console.log(`[单手交易] 持有 @ ${currentPrice}, 原因: ${decision.reason}`);
     } else if (decision.action === '观望') {
+      // 如果新操作是观望，并且前2条也都是观望，删除最前面的一条
+      const currentOperations = useAppStore.getState().singleHandOperations;
+      if (currentOperations.length >= 2 &&
+          currentOperations[0]?.action === '观望' &&
+          currentOperations[1]?.action === '观望') {
+        console.log('[操作优化] 连续3条观望操作，删除最前面的一条');
+        useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
+      }
+      
       // 观望决策也记录下来
       const newOperation: SingleHandOperation = {
         id: operationId,
@@ -869,6 +887,17 @@ function AppContent() {
           }
         };
         
+        // 如果新策略是观望，并且前2条也都是观望，删除最前面的一条
+        if (result.tradingAdvice.action === '观望') {
+          const currentStrategies = useAppStore.getState().strategies;
+          if (currentStrategies.length >= 2 &&
+              currentStrategies[0]?.tradingAdvice?.action === '观望' &&
+              currentStrategies[1]?.tradingAdvice?.action === '观望') {
+            console.log('[策略优化] 连续3条观望策略，删除最前面的一条（索引0）');
+            deleteStrategy(0); // 删除最前面的第1条（索引0）
+          }
+        }
+        
         addStrategy(newStrategy);
         
         // 保存预测数据到后端（包含新预测和15分钟内的历史数据）
@@ -961,6 +990,72 @@ function AppContent() {
             }}
             onDeleteOperation={(operationId) => {
               deleteSingleHandOperation(operationId);
+            }}
+            onManualTrigger={async () => {
+              if (!domesticTradeTickQuery.data?.price) {
+                console.log('[单手交易] 手动触发：等待价格数据...');
+                return;
+              }
+              
+              // 检查所有必需的数据是否就绪
+              const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
+                ? londonRealtimeKline 
+                : londonKline1mQuery.data;
+              
+              const domesticData = domesticRealtimeKline.length > 0 
+                ? domesticRealtimeKline 
+                : domesticKline1mQuery.data;
+              
+              if (!londonData || !londonKline15mQuery.data || !londonKlineDailyQuery.data || 
+                  !domesticData || !domesticKline15mQuery.data || !domesticKlineDailyQuery.data) {
+                console.log('[单手交易] 手动触发：等待所有数据加载...');
+                return;
+              }
+              
+              if (isLoadingSingleHand) {
+                console.log('[单手交易] 手动触发：正在分析中，跳过');
+                return;
+              }
+              
+              try {
+                setIsLoadingSingleHand(true);
+                
+                const currentPrice = Number(domesticTradeTickQuery.data.price);
+                
+                // 更新当前持仓价格
+                const updatedPosition: SingleHandPosition = singleHandPosition.hasPosition
+                  ? { ...singleHandPosition, currentPrice }
+                  : singleHandPosition;
+                
+                // 使用前端服务直接调用AI
+                const { analyzeSingleHandStrategy } = await import('./services/singleHandService');
+                
+                const decision = await analyzeSingleHandStrategy(
+                  selectedModel,
+                  londonData,
+                  londonKline15mQuery.data,
+                  londonKlineDailyQuery.data,
+                  domesticData,
+                  domesticKline15mQuery.data,
+                  domesticKlineDailyQuery.data,
+                  domesticDepthQuery.data || null,
+                  updatedPosition,
+                  singleHandOperations,
+                  currentPrice
+                );
+                
+                console.log(`[单手交易] 手动触发AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
+                
+                // 执行决策
+                executeSingleHandDecision(decision, currentPrice);
+                
+                // 更新最后分析时间
+                lastSingleHandAnalysisRef.current = Date.now();
+              } catch (error: any) {
+                console.error('[单手交易] 手动触发分析失败:', error);
+              } finally {
+                setIsLoadingSingleHand(false);
+              }
             }}
           />
         </div>
