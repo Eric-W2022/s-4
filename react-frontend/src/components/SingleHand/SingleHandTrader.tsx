@@ -183,6 +183,32 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                     {formatDuration(position.entryTime)}
                   </div>
                 </div>
+
+                {/* 第三行：最高盈利、回撤百分比 */}
+                <div className="position-card">
+                  <div className="position-card-label">最高盈利</div>
+                  <div className="position-card-value profit">
+                    {position.maxProfitPoints !== undefined && position.maxProfitPoints > 0 ? '+' : ''}
+                    {position.maxProfitPoints?.toFixed(0) || 0}点
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">回撤</div>
+                  <div className={`position-card-value ${
+                    (position.drawdownPercent || 0) > 30 ? 'loss' : 
+                    (position.drawdownPercent || 0) > 10 ? 'neutral' : 'profit'
+                  }`}>
+                    {position.drawdownPercent?.toFixed(1) || 0}%
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">-</div>
+                  <div className="position-card-value neutral">
+                    -
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -242,14 +268,23 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
             <div className="daily-stat-card">
               <div className="daily-stat-label">总点数</div>
               <div className={`daily-stat-value ${
-                operations.filter(op => op.profitLossPoints !== undefined)
-                  .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0) > 0 ? 'profit' : 
-                operations.filter(op => op.profitLossPoints !== undefined)
-                  .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0) < 0 ? 'loss' : 'neutral'
+                (() => {
+                  // 已平仓的点数
+                  const closedPoints = operations.filter(op => op.profitLossPoints !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0);
+                  // 当前持仓的浮动盈亏点数
+                  const currentPoints = position.hasPosition ? (position.profitLossPoints || 0) : 0;
+                  const total = closedPoints + currentPoints;
+                  return total > 0 ? 'profit' : total < 0 ? 'loss' : 'neutral';
+                })()
               }`}>
                 {(() => {
-                  const total = operations.filter(op => op.profitLossPoints !== undefined)
+                  // 已平仓的点数
+                  const closedPoints = operations.filter(op => op.profitLossPoints !== undefined)
                     .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0);
+                  // 当前持仓的浮动盈亏点数
+                  const currentPoints = position.hasPosition ? (position.profitLossPoints || 0) : 0;
+                  const total = closedPoints + currentPoints;
                   return (total > 0 ? '+' : '') + total.toFixed(0);
                 })()}
               </div>
@@ -275,14 +310,23 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
             <div className="daily-stat-card">
               <div className="daily-stat-label">净利润</div>
               <div className={`daily-stat-value ${
-                operations.filter(op => op.netProfit !== undefined)
-                  .reduce((sum, op) => sum + (op.netProfit || 0), 0) > 0 ? 'profit' : 
-                operations.filter(op => op.netProfit !== undefined)
-                  .reduce((sum, op) => sum + (op.netProfit || 0), 0) < 0 ? 'loss' : 'neutral'
+                (() => {
+                  // 已平仓的净利润
+                  const closedProfit = operations.filter(op => op.netProfit !== undefined)
+                    .reduce((sum, op) => sum + (op.netProfit || 0), 0);
+                  // 当前持仓的浮动盈亏（扣除开仓手续费8元）
+                  const currentProfit = position.hasPosition ? ((position.profitLossMoney || 0) - 8) : 0;
+                  const total = closedProfit + currentProfit;
+                  return total > 0 ? 'profit' : total < 0 ? 'loss' : 'neutral';
+                })()
               }`}>
                 {(() => {
-                  const total = operations.filter(op => op.netProfit !== undefined)
+                  // 已平仓的净利润
+                  const closedProfit = operations.filter(op => op.netProfit !== undefined)
                     .reduce((sum, op) => sum + (op.netProfit || 0), 0);
+                  // 当前持仓的浮动盈亏（扣除开仓手续费8元）
+                  const currentProfit = position.hasPosition ? ((position.profitLossMoney || 0) - 8) : 0;
+                  const total = closedProfit + currentProfit;
                   return (total > 0 ? '+' : '') + total.toFixed(0) + '元';
                 })()}
               </div>
@@ -336,52 +380,88 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                     {/* 开仓操作 */}
                     {(op.action === '开多' || op.action === '开空') && (
                       <>
-                        <span className="operation-pl-points neutral">0点</span>
-                        <span className="operation-pl-money neutral">0元</span>
+                        {(() => {
+                          // 判断是否是当前持仓期间的开仓
+                          const isCurrentPosition = position.hasPosition && position.entryTime && op.timestamp >= position.entryTime;
+                          // 使用实时盈亏（当前持仓）或记录的盈亏（历史持仓）
+                          const points = isCurrentPosition ? (position.profitLossPoints || 0) : (op.profitLossPoints || 0);
+                          const money = isCurrentPosition ? (position.profitLossMoney || 0) : (op.profitLossMoney || 0);
+                          
+                          return (
+                            <>
+                              <span className={`operation-pl-points ${
+                                points > 0 ? 'profit' : points < 0 ? 'loss' : 'neutral'
+                              }`}>
+                                {points > 0 ? '+' : ''}{points.toFixed(0)}点
+                              </span>
+                              <span className={`operation-pl-money ${
+                                money > 0 ? 'profit' : money < 0 ? 'loss' : 'neutral'
+                              }`}>
+                                {money > 0 ? '+' : ''}{money.toFixed(0)}元
+                              </span>
+                            </>
+                          );
+                        })()}
                         <span className="operation-commission-value">手续费-8元</span>
                       </>
                     )}
-                    
+                  
                     {/* 平仓操作 */}
-                    {op.action === '平仓' && op.profitLossPoints !== undefined && (
+                  {op.action === '平仓' && op.profitLossPoints !== undefined && (
                       <>
-                        <span className={`operation-pl-points ${
-                          op.profitLossPoints > 0 ? 'profit' : 
-                          op.profitLossPoints < 0 ? 'loss' : 'neutral'
-                        }`}>
-                          {op.profitLossPoints > 0 ? '+' : ''}{op.profitLossPoints.toFixed(0)}点
-                        </span>
-                        <span className={`operation-pl-money ${
-                          (op.profitLossMoney || 0) > 0 ? 'profit' : 
-                          (op.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
-                        }`}>
-                          {(op.profitLossMoney || 0) > 0 ? '+' : ''}{op.profitLossMoney?.toFixed(0)}元
-                        </span>
-                        <span className="operation-commission-value">手续费-8元</span>
-                        <span className={`operation-net-profit ${
-                          (op.netProfit || 0) > 0 ? 'profit' : 
-                          (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
-                        }`}>
-                          净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}元
-                        </span>
+                      <span className={`operation-pl-points ${
+                        op.profitLossPoints > 0 ? 'profit' : 
+                        op.profitLossPoints < 0 ? 'loss' : 'neutral'
+                      }`}>
+                        {op.profitLossPoints > 0 ? '+' : ''}{op.profitLossPoints.toFixed(0)}点
+                      </span>
+                      <span className={`operation-pl-money ${
+                        (op.profitLossMoney || 0) > 0 ? 'profit' : 
+                        (op.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
+                      }`}>
+                        {(op.profitLossMoney || 0) > 0 ? '+' : ''}{op.profitLossMoney?.toFixed(0)}元
+                      </span>
+                      <span className="operation-commission-value">手续费-8元</span>
+                      <span className={`operation-net-profit ${
+                        (op.netProfit || 0) > 0 ? 'profit' : 
+                        (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
+                      }`}>
+                        净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}
+                      </span>
                       </>
                     )}
                     
-                    {/* 持有操作：显示当时的盈亏（如果有） */}
-                    {op.action === '持有' && position.hasPosition && (
+                    {/* 持有操作 */}
+                    {op.action === '持有' && (
                       <>
-                        <span className={`operation-pl-points ${
-                          (position.profitLossPoints || 0) > 0 ? 'profit' : 
-                          (position.profitLossPoints || 0) < 0 ? 'loss' : 'neutral'
-                        }`}>
-                          {(position.profitLossPoints || 0) > 0 ? '+' : ''}{(position.profitLossPoints || 0).toFixed(0)}点
-                        </span>
-                        <span className={`operation-pl-money ${
-                          (position.profitLossMoney || 0) > 0 ? 'profit' : 
-                          (position.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
-                        }`}>
-                          {(position.profitLossMoney || 0) > 0 ? '+' : ''}{(position.profitLossMoney || 0).toFixed(0)}元
-                        </span>
+                        {(() => {
+                          // 判断是否是当前持仓期间的持有
+                          const isCurrentPosition = position.hasPosition && position.entryTime && op.timestamp >= position.entryTime;
+                          // 使用实时盈亏（当前持仓）或记录的盈亏（历史持仓）
+                          const points = isCurrentPosition ? (position.profitLossPoints || 0) : (op.profitLossPoints || 0);
+                          const money = isCurrentPosition ? (position.profitLossMoney || 0) : (op.profitLossMoney || 0);
+                          const duration = isCurrentPosition 
+                            ? (position.entryTime ? Math.round((Date.now() - position.entryTime) / 60000) : 0)
+                            : (op.duration || 0);
+                          
+                          return (
+                            <>
+                              <span className={`operation-pl-points ${
+                                points > 0 ? 'profit' : points < 0 ? 'loss' : 'neutral'
+                              }`}>
+                                {points > 0 ? '+' : ''}{points.toFixed(0)}点
+                              </span>
+                              <span className={`operation-pl-money ${
+                                money > 0 ? 'profit' : money < 0 ? 'loss' : 'neutral'
+                              }`}>
+                                {money > 0 ? '+' : ''}{money.toFixed(0)}元
+                              </span>
+                              <span className="operation-duration">
+                                持仓{duration}分钟
+                              </span>
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                     
@@ -391,7 +471,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                         <span className="operation-pl-points neutral">无持仓</span>
                       </>
                     )}
-                  </div>
+                    </div>
                   
                   {/* 原因说明（默认折叠，hover展开）*/}
                   <div className="operation-reason-container">

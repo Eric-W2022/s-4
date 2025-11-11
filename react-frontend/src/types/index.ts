@@ -137,6 +137,7 @@ export interface SingleHandOperation {
   profitLossMoney?: number;   // 平仓时的盈亏金额（元）
   commission?: number;        // 手续费（元），开仓和平仓时各8元
   netProfit?: number;         // 净利润（元），平仓时的盈亏金额减去手续费
+  duration?: number;          // 持仓时长（分钟），持有操作时记录
 }
 
 /**
@@ -150,6 +151,11 @@ export interface SingleHandPosition {
   currentPrice?: number;      // 当前价格
   profitLossPoints?: number;  // 当前盈亏点数
   profitLossMoney?: number;   // 当前盈亏金额（元）
+  maxPrice?: number;          // 持仓期间的最高价（多单用）
+  minPrice?: number;          // 持仓期间的最低价（空单用）
+  maxProfitPoints?: number;   // 最高盈利点数
+  maxProfitMoney?: number;    // 最高盈利金额（元）
+  drawdownPercent?: number;   // 回撤百分比（从最高点回撤的比例）
 }
 
 /**

@@ -483,6 +483,12 @@
   font-size: 12px;
 }
 
+.operation-duration {
+  color: #818cf8;
+  font-weight: 600;
+  font-size: 12px;
+}
+
 .operation-pl-points.profit,
 .operation-pl-money.profit,
 .operation-net-profit.profit {

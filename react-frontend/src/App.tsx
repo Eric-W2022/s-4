@@ -500,23 +500,51 @@ function AppContent() {
       const entryPrice = singleHandPosition.entryPrice || 0;
       const direction = singleHandPosition.direction;
       
+      // 更新持仓期间的最高价和最低价
+      const maxPrice = Math.max(singleHandPosition.maxPrice || currentPrice, currentPrice);
+      const minPrice = Math.min(singleHandPosition.minPrice || currentPrice, currentPrice);
+      
+      // 计算当前盈亏
       let profitLossPoints = 0;
       if (direction === '多') {
         profitLossPoints = currentPrice - entryPrice;
       } else if (direction === '空') {
         profitLossPoints = entryPrice - currentPrice;
       }
-      
       const profitLossMoney = profitLossPoints * 15; // 每点15元
+      
+      // 根据持仓方向计算最高盈利（基于最高价/最低价）
+      let maxProfitPoints = 0;
+      if (direction === '多') {
+        // 多单：最高价 - 入场价
+        maxProfitPoints = maxPrice - entryPrice;
+      } else if (direction === '空') {
+        // 空单：入场价 - 最低价
+        maxProfitPoints = entryPrice - minPrice;
+      }
+      const maxProfitMoney = maxProfitPoints * 15;
+      
+      // 计算回撤百分比
+      let drawdownPercent = 0;
+      if (maxProfitPoints > 0) {
+        drawdownPercent = ((maxProfitPoints - profitLossPoints) / maxProfitPoints) * 100;
+      }
       
       // 检查是否有变化，避免无限循环
       if (singleHandPosition.currentPrice !== currentPrice ||
-          singleHandPosition.profitLossPoints !== profitLossPoints) {
+          singleHandPosition.profitLossPoints !== profitLossPoints ||
+          singleHandPosition.maxPrice !== maxPrice ||
+          singleHandPosition.minPrice !== minPrice) {
         setSingleHandPosition({
           ...singleHandPosition,
           currentPrice,
           profitLossPoints,
           profitLossMoney,
+          maxPrice,
+          minPrice,
+          maxProfitPoints,
+          maxProfitMoney,
+          drawdownPercent,
         });
       }
     } else {
@@ -528,6 +556,11 @@ function AppContent() {
           currentPrice,
           profitLossPoints: 0,
           profitLossMoney: 0,
+          maxPrice: 0,
+          minPrice: 0,
+          maxProfitPoints: 0,
+          maxProfitMoney: 0,
+          drawdownPercent: 0,
         });
       }
     }
@@ -548,6 +581,11 @@ function AppContent() {
         currentPrice,
         profitLossPoints: 0,
         profitLossMoney: 0,
+        maxPrice: currentPrice,  // 初始化最高价为开仓价
+        minPrice: currentPrice,  // 初始化最低价为开仓价
+        maxProfitPoints: 0,
+        maxProfitMoney: 0,
+        drawdownPercent: 0,
       });
       
       // 添加操作记录（使用store），开仓手续费8元
@@ -558,6 +596,8 @@ function AppContent() {
         price: currentPrice,
         reason: decision.reason,
         commission: 8, // 开仓手续费
+        profitLossPoints: 0, // 开仓时盈亏为0
+        profitLossMoney: 0,
       };
       addSingleHandOperation(newOperation);
       
@@ -601,22 +641,28 @@ function AppContent() {
       
       console.log(`[单手交易] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点 (${profitLossMoney.toFixed(0)}元)`);
     } else if (decision.action === '持有') {
-      // 如果新操作是持有，并且前2条也都是持有，删除最前面的一条
+      // 如果新操作是持有，并且前1条也是持有，删除前面的一条
       const currentOperations = useAppStore.getState().singleHandOperations;
-      if (currentOperations.length >= 2 &&
-          currentOperations[0]?.action === '持有' &&
-          currentOperations[1]?.action === '持有') {
-        console.log('[操作优化] 连续3条持有操作，删除最前面的一条');
+      if (currentOperations.length >= 1 &&
+          currentOperations[0]?.action === '持有') {
+        console.log('[操作优化] 连续持有操作，删除旧的持有记录');
         useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
       }
       
-      // 持有决策也记录下来
+      // 持有决策也记录下来，保存当时的盈亏和持仓时长
+      const duration = singleHandPosition.entryTime 
+        ? Math.round((Date.now() - singleHandPosition.entryTime) / 60000) 
+        : 0;
+      
       const newOperation: SingleHandOperation = {
         id: operationId,
         timestamp: Date.now(),
         action: '持有',
         price: currentPrice,
         reason: decision.reason,
+        profitLossPoints: singleHandPosition.profitLossPoints,
+        profitLossMoney: singleHandPosition.profitLossMoney,
+        duration, // 持仓时长（分钟）
       };
       addSingleHandOperation(newOperation);
       
@@ -628,12 +674,11 @@ function AppContent() {
       
       console.log(`[单手交易] 持有 @ ${currentPrice}, 原因: ${decision.reason}`);
     } else if (decision.action === '观望') {
-      // 如果新操作是观望，并且前2条也都是观望，删除最前面的一条
+      // 如果新操作是观望，并且前1条也是观望，删除前面的一条
       const currentOperations = useAppStore.getState().singleHandOperations;
-      if (currentOperations.length >= 2 &&
-          currentOperations[0]?.action === '观望' &&
-          currentOperations[1]?.action === '观望') {
-        console.log('[操作优化] 连续3条观望操作，删除最前面的一条');
+      if (currentOperations.length >= 1 &&
+          currentOperations[0]?.action === '观望') {
+        console.log('[操作优化] 连续观望操作，删除旧的观望记录');
         useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
       }
       
@@ -887,14 +932,13 @@ function AppContent() {
           }
         };
         
-        // 如果新策略是观望，并且前2条也都是观望，删除最前面的一条
+        // 如果新策略是观望，并且前1条也是观望，删除前面的一条
         if (result.tradingAdvice.action === '观望') {
           const currentStrategies = useAppStore.getState().strategies;
-          if (currentStrategies.length >= 2 &&
-              currentStrategies[0]?.tradingAdvice?.action === '观望' &&
-              currentStrategies[1]?.tradingAdvice?.action === '观望') {
-            console.log('[策略优化] 连续3条观望策略，删除最前面的一条（索引0）');
-            deleteStrategy(0); // 删除最前面的第1条（索引0）
+          if (currentStrategies.length >= 1 &&
+              currentStrategies[0]?.tradingAdvice?.action === '观望') {
+            console.log('[策略优化] 连续观望策略，删除旧的观望记录');
+            deleteStrategy(0); // 删除前面的一条（索引0）
           }
         }
         
