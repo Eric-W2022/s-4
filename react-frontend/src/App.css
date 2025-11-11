@@ -1,6 +1,6 @@
 .main-content {
   display: grid;
-  grid-template-columns: 1fr 1fr 350px 320px;
+  grid-template-columns: 1fr 1fr 420px;
   grid-template-rows: auto auto 1fr;
   gap: 10px;
   padding: 10px;
@@ -34,13 +34,14 @@
   overflow-x: hidden;
 }
 
-.kline-row .strategy-panel-container {
+/* 【已隐藏】策略面板 */
+/* .kline-row .strategy-panel-container {
   grid-column: 4;
   grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-}
+} */
 
 /* 第二行：盘口数据横排（只占前两列） */
 .depth-row {
@@ -71,13 +72,13 @@
 /* 响应式设计 */
 @media (max-width: 1600px) {
   .main-content {
-    grid-template-columns: 1fr 1fr 320px 300px;
+    grid-template-columns: 1fr 1fr 380px;
   }
 }
 
 @media (max-width: 1400px) {
   .main-content {
-    grid-template-columns: 1fr 1fr 300px 280px;
+    grid-template-columns: 1fr 1fr 350px;
   }
 }
 
@@ -95,8 +96,7 @@
   
   .kline-row .left-panel,
   .kline-row .middle-panel,
-  .kline-row .right-panel,
-  .kline-row .strategy-panel-container {
+  .kline-row .right-panel {
     width: 100%;
   }
   

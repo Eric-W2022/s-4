@@ -74,6 +74,9 @@ function AppContent() {
   const [isLoadingSingleHand, setIsLoadingSingleHand] = useState(false);
   const lastSingleHandAnalysisRef = useRef<number>(0);
 
+  // Wake Lock 引用
+  const wakeLockRef = useRef<any>(null);
+
   // 检查是否为白银期货交易时间
   const isSilverTradingHours = useCallback(() => {
     const now = new Date();
@@ -91,22 +94,85 @@ function AppContent() {
     const afternoonStart = 13 * 60 + 30;  // 13:30
     const afternoonEnd = 15 * 60;         // 15:00
 
-    // 夜盘：21:00-次日1:00（周一到周五）
+    // 夜盘：21:00-次日2:30（周一到周五）
     const nightStart = 21 * 60;           // 21:00
-    const nightEnd = 25 * 60;             // 次日1:00（25:00表示次日1:00）
+    const nightEnd = 26 * 60 + 30;        // 次日2:30（26:30表示次日2:30）
 
     const isDayTrading = (currentMinutes >= morningStart1 && currentMinutes <= morningEnd1) ||
                         (currentMinutes >= morningStart2 && currentMinutes <= morningEnd2) ||
                         (currentMinutes >= afternoonStart && currentMinutes <= afternoonEnd);
 
     const isNightTrading = (dayOfWeek >= 1 && dayOfWeek <= 5) && // 周一到周五
-                          ((currentMinutes >= nightStart) || (currentMinutes <= (nightEnd - 24 * 60))); // 21:00到次日1:00
+                          ((currentMinutes >= nightStart) || (currentMinutes <= (nightEnd - 24 * 60))); // 21:00到次日2:30
 
     return isDayTrading || isNightTrading;
   }, []);
   
   // 选中的策略索引（用于在K线图上显示对应策略的价格线）
   const [selectedStrategyIndex, setSelectedStrategyIndex] = useState(0);
+
+  // 交易时间防熄屏，非交易时间自动熄屏
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && isSilverTradingHours()) {
+          const wakeLock = await (navigator as any).wakeLock.request('screen');
+          wakeLockRef.current = wakeLock;
+          console.log('[屏幕保持] Wake Lock 已激活，交易时间屏幕不会熄灭');
+          
+          // 监听 wake lock 释放
+          wakeLock.addEventListener('release', () => {
+            console.log('[屏幕保持] Wake Lock 已释放');
+          });
+        }
+      } catch (err: any) {
+        console.error('[屏幕保持] Wake Lock 请求失败:', err);
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+          console.log('[屏幕保持] Wake Lock 已手动释放，非交易时间允许自动熄屏');
+        } catch (err) {
+          console.error('[屏幕保持] Wake Lock 释放失败:', err);
+        }
+      }
+    };
+
+    // 在交易时间请求 wake lock，非交易时间释放
+    if (isSilverTradingHours()) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // 每分钟检查一次交易时间状态
+    const checkInterval = setInterval(() => {
+      if (isSilverTradingHours() && !wakeLockRef.current) {
+        requestWakeLock();
+      } else if (!isSilverTradingHours() && wakeLockRef.current) {
+        releaseWakeLock();
+      }
+    }, 60000); // 每分钟检查
+
+    // 监听页面可见性变化，重新请求 wake lock
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isSilverTradingHours() && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 清理
+    return () => {
+      clearInterval(checkInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [isSilverTradingHours]);
 
   // 定期清理超过300条的策略
   useEffect(() => {
@@ -598,6 +664,7 @@ function AppContent() {
         commission: 8, // 开仓手续费
         profitLossPoints: 0, // 开仓时盈亏为0
         profitLossMoney: 0,
+        model: selectedModel, // 记录使用的模型
       };
       addSingleHandOperation(newOperation);
       
@@ -626,6 +693,7 @@ function AppContent() {
         profitLossMoney,
         commission, // 本次手续费（平仓8元）
         netProfit, // 净利润（扣除开仓和平仓手续费）
+        model: selectedModel, // 记录使用的模型
       };
       addSingleHandOperation(newOperation);
       
@@ -663,6 +731,7 @@ function AppContent() {
         profitLossPoints: singleHandPosition.profitLossPoints,
         profitLossMoney: singleHandPosition.profitLossMoney,
         duration, // 持仓时长（分钟）
+        model: selectedModel, // 记录使用的模型
       };
       addSingleHandOperation(newOperation);
       
@@ -689,6 +758,7 @@ function AppContent() {
         action: '观望',
         price: currentPrice,
         reason: decision.reason,
+        model: selectedModel, // 记录使用的模型
       };
       addSingleHandOperation(newOperation);
       
@@ -702,9 +772,15 @@ function AppContent() {
     }
   }, [singleHandPosition, addSingleHandOperation]);
 
-  // 单手交易：自动触发AI决策（每分钟）
+  // 单手交易：自动触发AI决策（每分钟，仅交易时间）
   useEffect(() => {
     const triggerSingleHandAnalysis = async () => {
+      // 检查是否在交易时间
+      if (!isSilverTradingHours()) {
+        console.log('[单手交易] 非交易时间，跳过分析');
+        return;
+      }
+      
       if (!domesticTradeTickQuery.data?.price) {
         console.log('[单手交易] 等待价格数据...');
         return;
@@ -800,194 +876,195 @@ function AppContent() {
     domesticKline15mQuery.data,
     domesticDepthQuery.data,
     isLondonWebSocketActive,
+    isSilverTradingHours,
   ]);
 
-  // 自动触发AI策略分析（数据就绪后立即触发，无延迟）
-  useEffect(() => {
-    const triggerAnalysis = async () => {
-      // 使用WebSocket数据优先，否则使用轮询数据
-      const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
-        ? londonRealtimeKline 
-        : londonKline1mQuery.data;
+  // 【已禁用】自动触发AI策略分析
+  // useEffect(() => {
+  //   const triggerAnalysis = async () => {
+  //     // 使用WebSocket数据优先，否则使用轮询数据
+  //     const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
+  //       ? londonRealtimeKline 
+  //       : londonKline1mQuery.data;
       
-      const domesticData = domesticRealtimeKline.length > 0 
-        ? domesticRealtimeKline 
-        : domesticKline1mQuery.data;
+  //     const domesticData = domesticRealtimeKline.length > 0 
+  //       ? domesticRealtimeKline 
+  //       : domesticKline1mQuery.data;
       
-      // 检查所有数据是否已加载
-      const hasAllData = 
-        londonData && londonData.length > 0 &&
-        londonKline15mQuery.data && londonKline15mQuery.data.length > 0 &&
-        londonKlineDailyQuery.data && londonKlineDailyQuery.data.length > 0 &&
-        domesticData && domesticData.length > 0 &&
-        domesticKline15mQuery.data && domesticKline15mQuery.data.length > 0 &&
-        domesticKlineDailyQuery.data && domesticKlineDailyQuery.data.length > 0;
+  //     // 检查所有数据是否已加载
+  //     const hasAllData = 
+  //       londonData && londonData.length > 0 &&
+  //       londonKline15mQuery.data && londonKline15mQuery.data.length > 0 &&
+  //       londonKlineDailyQuery.data && londonKlineDailyQuery.data.length > 0 &&
+  //       domesticData && domesticData.length > 0 &&
+  //       domesticKline15mQuery.data && domesticKline15mQuery.data.length > 0 &&
+  //       domesticKlineDailyQuery.data && domesticKlineDailyQuery.data.length > 0;
       
-      if (!hasAllData) {
-        console.log('[自动分析] 等待数据加载完成...');
-        return;
-      }
+  //     if (!hasAllData) {
+  //       console.log('[自动分析] 等待数据加载完成...');
+  //       return;
+  //     }
       
-      // 检查模型是否变化
-      const modelChanged = lastAnalyzedModelRef.current !== null && 
-                          lastAnalyzedModelRef.current !== selectedModel;
+  //     // 检查模型是否变化
+  //     const modelChanged = lastAnalyzedModelRef.current !== null && 
+  //                         lastAnalyzedModelRef.current !== selectedModel;
       
-      // 检查是否已经分析过（避免首次重复）
-      const hasAnalyzed = lastAnalysisTimeRef.current > 0;
+  //     // 检查是否已经分析过（避免首次重复）
+  //     const hasAnalyzed = lastAnalysisTimeRef.current > 0;
       
-      // 检查距离上次分析的时间间隔
-      const now = Date.now();
-      const timeSinceLastAnalysis = now - lastAnalysisTimeRef.current;
-      const isTradingHours = isSilverTradingHours();
-      const intervalMinutes = isTradingHours ? 1 : 10; // 交易时间1分钟，非交易时间10分钟
-      const intervalMs = intervalMinutes * 60 * 1000;
+  //     // 检查距离上次分析的时间间隔
+  //     const now = Date.now();
+  //     const timeSinceLastAnalysis = now - lastAnalysisTimeRef.current;
+  //     const isTradingHours = isSilverTradingHours();
+  //     const intervalMinutes = isTradingHours ? 1 : 10; // 交易时间1分钟，非交易时间10分钟
+  //     const intervalMs = intervalMinutes * 60 * 1000;
 
-      // 决定是否需要分析
-      let shouldAnalyze = false;
-      let reason = '';
+  //     // 决定是否需要分析
+  //     let shouldAnalyze = false;
+  //     let reason = '';
 
-      if (modelChanged) {
-        // 模型变化，立即分析
-        shouldAnalyze = true;
-        reason = '模型切换';
-        console.log('[自动分析] 🔄 模型已切换:', lastAnalyzedModelRef.current, '->', selectedModel);
-      } else if (!hasAnalyzed) {
-        // 首次分析
-        shouldAnalyze = true;
-        reason = '首次加载';
-        console.log('[自动分析] ✅ 所有数据已就绪，首次分析...');
-      } else if (timeSinceLastAnalysis >= intervalMs) {
-        // 根据交易时间调整间隔
-        shouldAnalyze = true;
-        reason = isTradingHours ? '交易时间更新' : '非交易时间更新';
-        console.log(`[自动分析] 🔄 距离上次分析已过${intervalMinutes}分钟，${reason}...`);
-      }
+  //     if (modelChanged) {
+  //       // 模型变化，立即分析
+  //       shouldAnalyze = true;
+  //       reason = '模型切换';
+  //       console.log('[自动分析] 🔄 模型已切换:', lastAnalyzedModelRef.current, '->', selectedModel);
+  //     } else if (!hasAnalyzed) {
+  //       // 首次分析
+  //       shouldAnalyze = true;
+  //       reason = '首次加载';
+  //       console.log('[自动分析] ✅ 所有数据已就绪，首次分析...');
+  //     } else if (timeSinceLastAnalysis >= intervalMs) {
+  //       // 根据交易时间调整间隔
+  //       shouldAnalyze = true;
+  //       reason = isTradingHours ? '交易时间更新' : '非交易时间更新';
+  //       console.log(`[自动分析] 🔄 距离上次分析已过${intervalMinutes}分钟，${reason}...`);
+  //     }
       
-      if (!shouldAnalyze) {
-        return;
-      }
+  //     if (!shouldAnalyze) {
+  //       return;
+  //     }
       
-      // 如果正在加载中，不重复触发
-      if (isLoadingStrategy) {
-        console.log('[自动分析] 正在分析中，跳过');
-        return;
-      }
+  //     // 如果正在加载中，不重复触发
+  //     if (isLoadingStrategy) {
+  //       console.log('[自动分析] 正在分析中，跳过');
+  //       return;
+  //     }
       
-      console.log(`[自动分析] 开始分析，原因: ${reason}`);
+  //     console.log(`[自动分析] 开始分析，原因: ${reason}`);
       
-      // 更新记录
-      lastAnalyzedModelRef.current = selectedModel;
-      lastAnalysisTimeRef.current = now;
+  //     // 更新记录
+  //     lastAnalyzedModelRef.current = selectedModel;
+  //     lastAnalysisTimeRef.current = now;
       
-      try {
-        setIsLoadingStrategy(true);
+  //     try {
+  //       setIsLoadingStrategy(true);
         
-        const { analyzeStrategy } = await import('./services/strategyService');
+  //       const { analyzeStrategy } = await import('./services/strategyService');
         
-        // 获取当前的历史策略用于分析参考
-        const currentStrategies = useAppStore.getState().strategies;
+  //       // 获取当前的历史策略用于分析参考
+  //       const currentStrategies = useAppStore.getState().strategies;
         
-        const result = await analyzeStrategy(
-          selectedModel,
-          londonData,
-          londonKline15mQuery.data,
-          londonKlineDailyQuery.data,
-          domesticData,
-          domesticKline15mQuery.data,
-          domesticKlineDailyQuery.data,
-          domesticDepthQuery.data || null,
-          currentStrategies
-        );
+  //       const result = await analyzeStrategy(
+  //         selectedModel,
+  //         londonData,
+  //         londonKline15mQuery.data,
+  //         londonKlineDailyQuery.data,
+  //         domesticData,
+  //         domesticKline15mQuery.data,
+  //         domesticKlineDailyQuery.data,
+  //         domesticDepthQuery.data || null,
+  //         currentStrategies
+  //       );
         
-        // 添加新策略到历史记录（立即计算盈亏）
-        const currentPrice = domesticTradeTickQuery.data?.price
-          ? Number(domesticTradeTickQuery.data.price)
-          : result.tradingAdvice.entryPrice;
+  //       // 添加新策略到历史记录（立即计算盈亏）
+  //       const currentPrice = domesticTradeTickQuery.data?.price
+  //         ? Number(domesticTradeTickQuery.data.price)
+  //         : result.tradingAdvice.entryPrice;
 
-        // 立即计算盈亏
-        let initialProfitLossPoints = 0;
-        let initialProfitLossPercent = 0;
-        let initialIsWin: boolean | undefined = undefined;
+  //       // 立即计算盈亏
+  //       let initialProfitLossPoints = 0;
+  //       let initialProfitLossPercent = 0;
+  //       let initialIsWin: boolean | undefined = undefined;
 
-        if (result.tradingAdvice.action !== '观望') {
-          if (result.tradingAdvice.action === '买多') {
-            initialProfitLossPoints = currentPrice - result.tradingAdvice.entryPrice;
-          } else if (result.tradingAdvice.action === '卖空') {
-            initialProfitLossPoints = result.tradingAdvice.entryPrice - currentPrice;
-          }
-          initialProfitLossPercent = (initialProfitLossPoints / result.tradingAdvice.entryPrice) * 100;
-          initialIsWin = initialProfitLossPoints > 0;
-        }
+  //       if (result.tradingAdvice.action !== '观望') {
+  //         if (result.tradingAdvice.action === '买多') {
+  //           initialProfitLossPoints = currentPrice - result.tradingAdvice.entryPrice;
+  //         } else if (result.tradingAdvice.action === '卖空') {
+  //           initialProfitLossPoints = result.tradingAdvice.entryPrice - currentPrice;
+  //         }
+  //         initialProfitLossPercent = (initialProfitLossPoints / result.tradingAdvice.entryPrice) * 100;
+  //         initialIsWin = initialProfitLossPoints > 0;
+  //       }
 
-        const newStrategy = {
-          ...result,
-          timestamp: Date.now(),
-          model: selectedModel,
-          profitLoss: {
-            actualPrice15min: currentPrice,
-            profitLossPoints: initialProfitLossPoints,
-            profitLossPercent: initialProfitLossPercent,
-            isWin: initialIsWin,
-            status: 'pending'
-          }
-        };
+  //       const newStrategy = {
+  //         ...result,
+  //         timestamp: Date.now(),
+  //         model: selectedModel,
+  //         profitLoss: {
+  //           actualPrice15min: currentPrice,
+  //           profitLossPoints: initialProfitLossPoints,
+  //           profitLossPercent: initialProfitLossPercent,
+  //           isWin: initialIsWin,
+  //           status: 'pending'
+  //         }
+  //       };
         
-        // 如果新策略是观望，并且前1条也是观望，删除前面的一条
-        if (result.tradingAdvice.action === '观望') {
-          const currentStrategies = useAppStore.getState().strategies;
-          if (currentStrategies.length >= 1 &&
-              currentStrategies[0]?.tradingAdvice?.action === '观望') {
-            console.log('[策略优化] 连续观望策略，删除旧的观望记录');
-            deleteStrategy(0); // 删除前面的一条（索引0）
-          }
-        }
+  //       // 如果新策略是观望，并且前1条也是观望，删除前面的一条
+  //       if (result.tradingAdvice.action === '观望') {
+  //         const currentStrategies = useAppStore.getState().strategies;
+  //         if (currentStrategies.length >= 1 &&
+  //             currentStrategies[0]?.tradingAdvice?.action === '观望') {
+  //           console.log('[策略优化] 连续观望策略，删除旧的观望记录');
+  //           deleteStrategy(0); // 删除前面的一条（索引0）
+  //         }
+  //       }
         
-        addStrategy(newStrategy);
+  //       addStrategy(newStrategy);
         
-        // 保存预测数据到后端（包含新预测和15分钟内的历史数据）
-        const { marketDataApi } = await import('./api/marketData');
-        const allStrategies = useAppStore.getState().strategies;
-        marketDataApi.savePrediction(newStrategy, allStrategies).catch(err => {
-          console.error('[保存预测] 保存到后端失败:', err);
-        });
+  //       // 保存预测数据到后端（包含新预测和15分钟内的历史数据）
+  //       const { marketDataApi } = await import('./api/marketData');
+  //       const allStrategies = useAppStore.getState().strategies;
+  //       marketDataApi.savePrediction(newStrategy, allStrategies).catch(err => {
+  //         console.error('[保存预测] 保存到后端失败:', err);
+  //       });
         
-        // 自动选中最新策略
-        setSelectedStrategyIndex(0);
+  //       // 自动选中最新策略
+  //       setSelectedStrategyIndex(0);
         
-        console.log('[自动分析] ✅ 分析完成，已添加到策略历史，将实时跟踪15分钟盈亏');
-      } catch (error: any) {
-        console.error('[自动分析] ❌ 分析失败:', error);
-        // 分析失败时不保存到历史记录
-      } finally {
-        setIsLoadingStrategy(false);
-      }
-    };
+  //       console.log('[自动分析] ✅ 分析完成，已添加到策略历史，将实时跟踪15分钟盈亏');
+  //     } catch (error: any) {
+  //       console.error('[自动分析] ❌ 分析失败:', error);
+  //       // 分析失败时不保存到历史记录
+  //     } finally {
+  //       setIsLoadingStrategy(false);
+  //     }
+  //   };
     
-    // 数据就绪后立即触发，无延迟
-    triggerAnalysis();
+  //   // 数据就绪后立即触发，无延迟
+  //   triggerAnalysis();
     
-    // 设置定时器，每分钟检查一次是否需要更新
-    const timer = setInterval(() => {
-      triggerAnalysis();
-    }, 30000); // 每30秒检查一次（函数内部会判断是否满足时间间隔）
+  //   // 设置定时器，每分钟检查一次是否需要更新
+  //   const timer = setInterval(() => {
+  //     triggerAnalysis();
+  //   }, 30000); // 每30秒检查一次（函数内部会判断是否满足时间间隔）
     
-    return () => clearInterval(timer);
-  }, [
-    londonRealtimeKline,
-    londonKline1mQuery.data,
-    londonKline15mQuery.data,
-    londonKlineDailyQuery.data,
-    domesticRealtimeKline,
-    domesticKline1mQuery.data,
-    domesticKline15mQuery.data,
-    domesticKlineDailyQuery.data,
-    domesticDepthQuery.data,
-    isLondonWebSocketActive,
-    isLoadingStrategy,
-    selectedModel,
-    addStrategy,
-    isSilverTradingHours
-  ]);
+  //   return () => clearInterval(timer);
+  // }, [
+  //   londonRealtimeKline,
+  //   londonKline1mQuery.data,
+  //   londonKline15mQuery.data,
+  //   londonKlineDailyQuery.data,
+  //   domesticRealtimeKline,
+  //   domesticKline1mQuery.data,
+  //   domesticKline15mQuery.data,
+  //   domesticKlineDailyQuery.data,
+  //   domesticDepthQuery.data,
+  //   isLondonWebSocketActive,
+  //   isLoadingStrategy,
+  //   selectedModel,
+  //   addStrategy,
+  //   isSilverTradingHours
+  // ]);
 
   return (
     <div className="container">
@@ -1104,8 +1181,8 @@ function AppContent() {
           />
         </div>
 
-          {/* 交易策略区域 */}
-        <div className="strategy-panel-container">
+          {/* 【已隐藏】交易策略区域 */}
+        {/* <div className="strategy-panel-container">
           <StrategyPanel
             strategies={strategies}
             selectedModel={selectedModel}
@@ -1130,7 +1207,7 @@ function AppContent() {
               }
             }}
           />
-          </div>
+          </div> */}
         </div>
 
         {/* 盘口数据横排 */}

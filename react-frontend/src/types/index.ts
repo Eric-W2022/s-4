@@ -138,6 +138,7 @@ export interface SingleHandOperation {
   commission?: number;        // 手续费（元），开仓和平仓时各8元
   netProfit?: number;         // 净利润（元），平仓时的盈亏金额减去手续费
   duration?: number;          // 持仓时长（分钟），持有操作时记录
+  model?: string;             // 使用的AI模型
 }
 
 /**

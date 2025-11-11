@@ -5,6 +5,13 @@ import { MODEL_OPTIONS } from '../../constants';
 import type { SingleHandPosition, SingleHandOperation, ModelType } from '../../types';
 import './SingleHandTrader.css';
 
+// 获取模型简称
+const getModelLabel = (modelValue?: string) => {
+  if (!modelValue) return '';
+  const model = MODEL_OPTIONS.find(m => m.value === modelValue);
+  return model?.label || modelValue;
+};
+
 interface SingleHandTraderProps {
   position: SingleHandPosition;
   operations: SingleHandOperation[];
@@ -257,6 +264,28 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                     0分钟
                   </div>
                 </div>
+
+                {/* 第三行：最高盈利、回撤百分比 */}
+                <div className="position-card">
+                  <div className="position-card-label">最高盈利</div>
+                  <div className="position-card-value neutral">
+                    0点
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">回撤</div>
+                  <div className="position-card-value neutral">
+                    0%
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">-</div>
+                  <div className="position-card-value neutral">
+                    -
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -264,6 +293,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
 
         {/* 今日统计 */}
         <div className="daily-stats-section">
+          {/* 第一行：总点数、操作数、胜率 */}
           <div className="daily-stats-cards">
             <div className="daily-stat-card">
               <div className="daily-stat-label">总点数</div>
@@ -298,6 +328,60 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               </div>
             </div>
             <div className="daily-stat-card">
+              <div className="daily-stat-label">胜率</div>
+              <div className={`daily-stat-value ${
+                (() => {
+                  // 统计所有平仓操作
+                  const closedOps = operations.filter(op => op.action === '平仓' && op.netProfit !== undefined);
+                  if (closedOps.length === 0) return 'neutral';
+                  // 统计盈利的平仓操作
+                  const winOps = closedOps.filter(op => (op.netProfit || 0) > 0);
+                  const winRate = (winOps.length / closedOps.length) * 100;
+                  return winRate >= 50 ? 'profit' : winRate >= 30 ? 'neutral' : 'loss';
+                })()
+              }`}>
+                {(() => {
+                  // 统计所有平仓操作
+                  const closedOps = operations.filter(op => op.action === '平仓' && op.netProfit !== undefined);
+                  if (closedOps.length === 0) return '0%';
+                  // 统计盈利的平仓操作
+                  const winOps = closedOps.filter(op => (op.netProfit || 0) > 0);
+                  const winRate = (winOps.length / closedOps.length) * 100;
+                  return winRate.toFixed(0) + '%';
+                })()}
+              </div>
+            </div>
+          </div>
+          
+          {/* 第二行：总营收、手续费、净利润 */}
+          <div className="daily-stats-cards">
+            <div className="daily-stat-card">
+              <div className="daily-stat-label">总营收</div>
+              <div className={`daily-stat-value ${
+                (() => {
+                  // 只统计平仓操作的盈亏金额（不包括手续费的纯盈亏）
+                  const closedRevenue = operations
+                    .filter(op => op.action === '平仓' && op.profitLossMoney !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossMoney || 0), 0);
+                  // 当前持仓的浮动盈亏金额
+                  const currentRevenue = position.hasPosition ? (position.profitLossMoney || 0) : 0;
+                  const total = closedRevenue + currentRevenue;
+                  return total > 0 ? 'profit' : total < 0 ? 'loss' : 'neutral';
+                })()
+              }`}>
+                {(() => {
+                  // 只统计平仓操作的盈亏金额（不包括手续费的纯盈亏）
+                  const closedRevenue = operations
+                    .filter(op => op.action === '平仓' && op.profitLossMoney !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossMoney || 0), 0);
+                  // 当前持仓的浮动盈亏金额
+                  const currentRevenue = position.hasPosition ? (position.profitLossMoney || 0) : 0;
+                  const total = closedRevenue + currentRevenue;
+                  return (total > 0 ? '+' : '') + total.toFixed(0) + '元';
+                })()}
+              </div>
+            </div>
+            <div className="daily-stat-card">
               <div className="daily-stat-label">手续费</div>
               <div className="daily-stat-value loss">
                 {(() => {
@@ -311,23 +395,41 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               <div className="daily-stat-label">净利润</div>
               <div className={`daily-stat-value ${
                 (() => {
-                  // 已平仓的净利润
-                  const closedProfit = operations.filter(op => op.netProfit !== undefined)
-                    .reduce((sum, op) => sum + (op.netProfit || 0), 0);
-                  // 当前持仓的浮动盈亏（扣除开仓手续费8元）
-                  const currentProfit = position.hasPosition ? ((position.profitLossMoney || 0) - 8) : 0;
-                  const total = closedProfit + currentProfit;
-                  return total > 0 ? 'profit' : total < 0 ? 'loss' : 'neutral';
+                  // 净利润 = 总营收 - 手续费
+                  // 总营收：只统计平仓操作的盈亏金额
+                  const closedRevenue = operations
+                    .filter(op => op.action === '平仓' && op.profitLossMoney !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossMoney || 0), 0);
+                  // 当前持仓的浮动盈亏金额
+                  const currentRevenue = position.hasPosition ? (position.profitLossMoney || 0) : 0;
+                  const totalRevenue = closedRevenue + currentRevenue;
+                  
+                  // 手续费：所有操作的手续费
+                  const totalCommission = operations.filter(op => op.commission !== undefined)
+                    .reduce((sum, op) => sum + (op.commission || 0), 0);
+                  
+                  // 净利润 = 总营收 - 手续费
+                  const netProfit = totalRevenue - totalCommission;
+                  return netProfit > 0 ? 'profit' : netProfit < 0 ? 'loss' : 'neutral';
                 })()
               }`}>
                 {(() => {
-                  // 已平仓的净利润
-                  const closedProfit = operations.filter(op => op.netProfit !== undefined)
-                    .reduce((sum, op) => sum + (op.netProfit || 0), 0);
-                  // 当前持仓的浮动盈亏（扣除开仓手续费8元）
-                  const currentProfit = position.hasPosition ? ((position.profitLossMoney || 0) - 8) : 0;
-                  const total = closedProfit + currentProfit;
-                  return (total > 0 ? '+' : '') + total.toFixed(0) + '元';
+                  // 净利润 = 总营收 - 手续费
+                  // 总营收：只统计平仓操作的盈亏金额
+                  const closedRevenue = operations
+                    .filter(op => op.action === '平仓' && op.profitLossMoney !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossMoney || 0), 0);
+                  // 当前持仓的浮动盈亏金额
+                  const currentRevenue = position.hasPosition ? (position.profitLossMoney || 0) : 0;
+                  const totalRevenue = closedRevenue + currentRevenue;
+                  
+                  // 手续费：所有操作的手续费
+                  const totalCommission = operations.filter(op => op.commission !== undefined)
+                    .reduce((sum, op) => sum + (op.commission || 0), 0);
+                  
+                  // 净利润 = 总营收 - 手续费
+                  const netProfit = totalRevenue - totalCommission;
+                  return (netProfit > 0 ? '+' : '') + netProfit.toFixed(0) + '元';
                 })()}
               </div>
             </div>
@@ -361,6 +463,9 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                       {op.action}
                     </span>
                     <span className="operation-price">@ {op.price.toFixed(0)}</span>
+                    {op.model && (
+                      <span className="operation-model">{getModelLabel(op.model)}</span>
+                    )}
                     </div>
                     {onDeleteOperation && (
                       <button
@@ -426,7 +531,7 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                         (op.netProfit || 0) > 0 ? 'profit' : 
                         (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
                       }`}>
-                        净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}
+                        净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}元
                       </span>
                       </>
                     )}
