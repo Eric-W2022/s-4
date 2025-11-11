@@ -558,6 +558,8 @@ class PredictionData(BaseModel):
     isWin: Optional[bool] = None
     takeProfitReached: Optional[bool] = None
     takeProfitMinutes: Optional[int] = None
+    stopLossReached: Optional[bool] = None
+    stopLossMinutes: Optional[int] = None
 
 
 class SavePredictionRequest(BaseModel):
@@ -566,22 +568,46 @@ class SavePredictionRequest(BaseModel):
     recentPredictions: list[PredictionData] = []  # 最近15分钟内需要更新的预测
 
 
+# ==================== 单手交易策略 ====================
+
+class SingleHandPosition(BaseModel):
+    """单手交易当前持仓"""
+    hasPosition: bool
+    direction: Optional[str] = None  # '多' 或 '空'
+    entryPrice: Optional[float] = None
+    entryTime: Optional[int] = None
+    currentPrice: Optional[float] = None
+    profitLossPoints: Optional[float] = None
+    profitLossMoney: Optional[float] = None
+
+
+class SingleHandOperation(BaseModel):
+    """单手交易操作记录"""
+    id: str
+    timestamp: int
+    action: str  # '开多', '开空', '平仓', '持有'
+    price: float
+    reason: str
+    profitLossPoints: Optional[float] = None
+    profitLossMoney: Optional[float] = None
+
+
 @router.post("/save-prediction")
 async def save_prediction(request: SavePredictionRequest):
     """
-    保存预测数据到CSV文件，并更新15分钟内的旧数据
+    保存15分钟多手预测数据到CSV文件，并更新15分钟内的旧数据
     """
     try:
         # 获取当前日期作为文件名
         date_str = datetime.now().strftime("%Y%m%d")
-        # predictions目录在项目根目录下
+        # predictions/15min_multi_hand目录在项目根目录下
         from pathlib import Path
         base_dir = Path(__file__).parent.parent.parent
-        predictions_dir = base_dir / "predictions"
+        predictions_dir = base_dir / "predictions" / "15min_multi_hand"
         csv_file = predictions_dir / f"predictions_{date_str}.csv"
         
-        # 确保predictions目录存在
-        predictions_dir.mkdir(exist_ok=True)
+        # 确保predictions/15min_multi_hand目录存在
+        predictions_dir.mkdir(parents=True, exist_ok=True)
         
         # CSV表头
         fieldnames = [
@@ -589,7 +615,8 @@ async def save_prediction(request: SavePredictionRequest):
             '入场价', '止损价', '止盈价', '手数',
             '伦敦预测价', '国内预测价', '分析理由',
             '实际盈亏点数', '实际盈亏百分比', '是否盈利',
-            '是否触达止盈', '触达止盈分钟数'
+            '是否触达止盈', '触达止盈分钟数',
+            '是否触达止损', '触达止损分钟数'
         ]
         
         # 读取现有数据
@@ -621,6 +648,10 @@ async def save_prediction(request: SavePredictionRequest):
                     row['是否触达止盈'] = '是' if pred.takeProfitReached else '否'
                 if pred.takeProfitMinutes is not None:
                     row['触达止盈分钟数'] = pred.takeProfitMinutes
+                if pred.stopLossReached is not None:
+                    row['是否触达止损'] = '是' if pred.stopLossReached else '否'
+                if pred.stopLossMinutes is not None:
+                    row['触达止损分钟数'] = pred.stopLossMinutes
                 updated_count += 1
         
         # 添加新预测（检查是否已存在，避免重复）
@@ -648,7 +679,9 @@ async def save_prediction(request: SavePredictionRequest):
                 '实际盈亏百分比': new_pred.profitLossPercent if new_pred.profitLossPercent is not None else '',
                 '是否盈利': '是' if new_pred.isWin else '否' if new_pred.isWin is not None else '',
                 '是否触达止盈': '是' if new_pred.takeProfitReached else '否' if new_pred.takeProfitReached is not None else '',
-                '触达止盈分钟数': new_pred.takeProfitMinutes if new_pred.takeProfitMinutes else ''
+                '触达止盈分钟数': new_pred.takeProfitMinutes if new_pred.takeProfitMinutes else '',
+                '是否触达止损': '是' if new_pred.stopLossReached else '否' if new_pred.stopLossReached is not None else '',
+                '触达止损分钟数': new_pred.stopLossMinutes if new_pred.stopLossMinutes else ''
             }
             existing_rows.append(new_row)
         else:
@@ -660,16 +693,79 @@ async def save_prediction(request: SavePredictionRequest):
             writer.writeheader()
             writer.writerows(existing_rows)
         
-        logger.info(f"[保存预测] 成功保存新预测并更新{updated_count}条历史数据到 {csv_file}")
+        logger.info(f"[保存15分钟多手预测] 成功保存新预测并更新{updated_count}条历史数据到 {csv_file}")
         
         return {
             "success": True,
-            "message": "预测数据已保存",
+            "message": "15分钟多手预测数据已保存",
             "file": str(csv_file),
             "updated": updated_count
         }
         
     except Exception as e:
-        logger.error(f"[保存预测错误] {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"保存预测数据失败: {str(e)}")
+        logger.error(f"[保存15分钟多手预测错误] {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"保存15分钟多手预测数据失败: {str(e)}")
+
+
+class SaveSingleHandOperationRequest(BaseModel):
+    """保存单手交易操作请求"""
+    operation: SingleHandOperation
+
+
+@router.post("/save-single-hand-operation")
+async def save_single_hand_operation(request: SaveSingleHandOperationRequest):
+    """
+    保存单手交易操作记录到CSV文件
+    """
+    try:
+        # 获取当前日期作为文件名
+        date_str = datetime.now().strftime("%Y%m%d")
+        # predictions/single_hand目录在项目根目录下
+        from pathlib import Path
+        base_dir = Path(__file__).parent.parent.parent
+        predictions_dir = base_dir / "predictions" / "single_hand"
+        csv_file = predictions_dir / f"operations_{date_str}.csv"
+        
+        # 确保predictions/single_hand目录存在
+        predictions_dir.mkdir(parents=True, exist_ok=True)
+        
+        # CSV表头
+        fieldnames = [
+            '时间', '操作', '价格', '理由', '盈亏点数', '盈亏金额'
+        ]
+        
+        # 检查文件是否存在
+        file_exists = csv_file.exists()
+        
+        # 准备操作数据
+        op = request.operation
+        timestamp_str = datetime.fromtimestamp(op.timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        
+        row = {
+            '时间': timestamp_str,
+            '操作': op.action,
+            '价格': op.price,
+            '理由': op.reason,
+            '盈亏点数': op.profitLossPoints if op.profitLossPoints is not None else '',
+            '盈亏金额': op.profitLossMoney if op.profitLossMoney is not None else ''
+        }
+        
+        # 追加写入CSV文件
+        with open(str(csv_file), 'a', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+        
+        logger.info(f"[保存单手交易操作] 成功保存操作记录到 {csv_file}")
+        
+        return {
+            "success": True,
+            "message": "单手交易操作已保存",
+            "file": str(csv_file)
+        }
+        
+    except Exception as e:
+        logger.error(f"[保存单手交易操作错误] {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"保存单手交易操作失败: {str(e)}")
 

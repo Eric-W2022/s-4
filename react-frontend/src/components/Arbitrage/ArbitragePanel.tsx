@@ -1,22 +1,52 @@
 // 套利追踪面板组件
-import React, { useMemo, useState, useEffect } from 'react';
-import { formatPrice } from '../../utils/chart';
-import { formatTime } from '../../utils/time';
+import React, { useMemo } from 'react';
+import { formatTime, formatTimestamp } from '../../utils/time';
+import { formatVolume } from '../../utils/chart';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
-import type { KlineData } from '../../types';
+import type { KlineData, DepthData } from '../../types';
 import './ArbitragePanel.css';
 
 interface ArbitragePanelProps {
   londonData: KlineData[];
   domesticData: KlineData[];
+  depthData: DepthData | null;
   isLoading?: boolean;
 }
 
 export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
-  ({ londonData, domesticData, isLoading }) => {
-    // 控制提示显示状态
-    const [showOpportunity, setShowOpportunity] = useState(false);
-    
+  ({ londonData, domesticData, depthData, isLoading }) => {
+    // 计算买卖盘情绪
+    const emotion = useMemo(() => {
+      if (!depthData) return null;
+      
+      const totalAsk = depthData.ask_volume.reduce((sum, vol) => sum + parseFloat(vol || '0'), 0);
+      const totalBid = depthData.bid_volume.reduce((sum, vol) => sum + parseFloat(vol || '0'), 0);
+      const total = totalAsk + totalBid;
+      
+      if (total === 0) return null;
+      
+      const askPercent = (totalAsk / total) * 100;
+      const bidPercent = (totalBid / total) * 100;
+      
+      // 确保百分比是有效数字
+      if (isNaN(askPercent) || isNaN(bidPercent)) return null;
+      
+      let trend: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+      if (bidPercent > askPercent + 10) {
+        trend = 'bullish'; // 多方优势
+      } else if (askPercent > bidPercent + 10) {
+        trend = 'bearish'; // 空方优势
+      }
+      
+      return {
+        totalAsk,
+        totalBid,
+        askPercent,
+        bidPercent,
+        trend,
+      };
+    }, [depthData]);
+
     // 计算套利指标（只追踪最后一根K线）
     const arbitrageMetrics = useMemo(() => {
       if (!londonData || londonData.length < 2 || !domesticData || domesticData.length < 2) {
@@ -79,31 +109,9 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
       };
     }, [londonData, domesticData]);
 
-    // 控制提示显示逻辑：当有新的套利机会时显示，5秒后自动隐藏
-    useEffect(() => {
-      if (arbitrageMetrics && arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral') {
-        // 显示提示
-        setShowOpportunity(true);
-        
-        // 5秒后自动隐藏
-        const timer = setTimeout(() => {
-          setShowOpportunity(false);
-        }, 5000);
-        
-        // 清理定时器
-        return () => clearTimeout(timer);
-      } else {
-        // 如果条件不满足，立即隐藏
-        setShowOpportunity(false);
-      }
-    }, [arbitrageMetrics?.score, arbitrageMetrics?.direction]);
-
     if (isLoading) {
       return (
         <div className="arbitrage-panel">
-          <div className="arbitrage-header">
-            <h3>套利追踪</h3>
-          </div>
           <LoadingSpinner text="分析中..." size="small" />
         </div>
       );
@@ -112,9 +120,6 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
     if (!arbitrageMetrics) {
       return (
         <div className="arbitrage-panel">
-          <div className="arbitrage-header">
-            <h3>最后1根K线套利</h3>
-          </div>
           <div className="no-data">数据不足，需要至少2根K线</div>
         </div>
       );
@@ -128,16 +133,52 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
 
     return (
       <div className="arbitrage-panel">
-        <div className="arbitrage-header">
-          <h3>最后1根K线套利</h3>
-          <span className="arbitrage-update-time">{formatTime(Date.now())}</span>
-        </div>
-
         <div className="arbitrage-content">
+          {/* 买卖方优势 */}
+          {emotion && (
+            <div className="depth-emotion-bar">
+              <div className="emotion-trend-indicator">
+                <span className={`trend-badge trend-${emotion.trend}`}>
+                  {emotion.trend === 'bullish' ? '多方优势' : 
+                   emotion.trend === 'bearish' ? '空方优势' : '多空平衡'}
+                </span>
+                <span className="trend-time">{depthData?.datetime ? formatTimestamp(depthData.datetime, 'HH:mm:ss') : formatTimestamp(Date.now(), 'HH:mm:ss')}</span>
+              </div>
+              <div className="emotion-bar-labels">
+                <span className="emotion-label-ask">
+                  空方 {emotion.askPercent.toFixed(1)}%
+                  <small> ({formatVolume(emotion.totalAsk.toString())})</small>
+                </span>
+                <span className="emotion-label-bid">
+                  多方 {emotion.bidPercent.toFixed(1)}%
+                  <small> ({formatVolume(emotion.totalBid.toString())})</small>
+                </span>
+              </div>
+              <div className="emotion-bar-container">
+                <div 
+                  className="emotion-bar-ask" 
+                  style={{ width: `${emotion.askPercent}%` }}
+                >
+                  {emotion.askPercent > 15 && (
+                    <span className="emotion-bar-text">{emotion.askPercent.toFixed(0)}%</span>
+                  )}
+                </div>
+                <div 
+                  className="emotion-bar-bid" 
+                  style={{ width: `${emotion.bidPercent}%` }}
+                >
+                  {emotion.bidPercent > 15 && (
+                    <span className="emotion-bar-text">{emotion.bidPercent.toFixed(0)}%</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 套利得分 */}
           <div className="arbitrage-score-section">
             <div className="arbitrage-score-main">
-              <span className="arbitrage-score-label">套利机会指数</span>
+              <span className="arbitrage-score-label">最后1根K线套利机会</span>
               <span 
                 className="arbitrage-score-value"
                 style={{ color: getScoreColor(arbitrageMetrics.score) }}
@@ -173,14 +214,27 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
                 {arbitrageMetrics.amplitudeDiff.toFixed(2)}%
               </div>
             </div>
-            <div className="arbitrage-metric-item">
+            <div 
+              className="arbitrage-metric-item"
+              style={{
+                backgroundColor: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' 
+                  ? (arbitrageMetrics.direction === 'long' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(74, 222, 128, 0.2)')
+                  : '#1a1f3a',
+                border: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral'
+                  ? (arbitrageMetrics.direction === 'long' ? '2px solid #ef4444' : '2px solid #4ade80')
+                  : 'none',
+                transition: 'all 0.3s ease'
+              }}
+            >
               <div className="arbitrage-metric-label">套利方向</div>
               <div 
                 className="arbitrage-metric-value"
                 style={{ 
                   color: arbitrageMetrics.direction === 'long' ? '#ef4444' : 
                          arbitrageMetrics.direction === 'short' ? '#4ade80' : '#9ca3af',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  fontSize: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' ? '18px' : '15px',
+                  transition: 'all 0.3s ease'
                 }}
               >
                 {arbitrageMetrics.direction === 'long' ? '多单' :
@@ -188,25 +242,6 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
               </div>
             </div>
           </div>
-
-          {/* 套利机会提示 */}
-          {showOpportunity && arbitrageMetrics && (
-            <div className="arbitrage-opportunity">
-              <div className="arbitrage-opportunity-text">
-                <span style={{ 
-                  color: '#ffffff',
-                  backgroundColor: arbitrageMetrics.direction === 'long' ? '#ef4444' : '#4ade80',
-                  fontWeight: 'bold',
-                  fontSize: '18px',
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  display: 'inline-block'
-                }}>
-                  {arbitrageMetrics.direction === 'long' ? '买多' : '卖空'}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );

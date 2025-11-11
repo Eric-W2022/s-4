@@ -1,7 +1,15 @@
 // 全局状态管理
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ModelType, KlineData, TradeTickData, DepthData, StrategyAnalysis } from '../types';
+import type { 
+  ModelType, 
+  KlineData, 
+  TradeTickData, 
+  DepthData, 
+  StrategyAnalysis,
+  SingleHandPosition,
+  SingleHandOperation 
+} from '../types';
 
 interface AppState {
   // 选择的模型
@@ -36,6 +44,13 @@ interface AppState {
   updateStrategyProfitLoss: (index: number, profitLoss: StrategyAnalysis['profitLoss']) => void;
   clearStrategies: () => void;
   deleteStrategy: (index: number) => void;
+
+  // 单手交易状态
+  singleHandPosition: SingleHandPosition;
+  singleHandOperations: SingleHandOperation[];
+  setSingleHandPosition: (position: SingleHandPosition) => void;
+  addSingleHandOperation: (operation: SingleHandOperation) => void;
+  clearSingleHandOperations: () => void;
 
   // 连接状态
   londonConnectionStatus: 'connected' | 'connecting' | 'error' | 'closed';
@@ -85,6 +100,48 @@ const loadStrategies = (): StrategyAnalysis[] => {
   return [];
 };
 
+// 从localStorage加载单手交易持仓
+const loadSingleHandPosition = (): SingleHandPosition => {
+  try {
+    const saved = localStorage.getItem('singleHandPosition');
+    if (saved) {
+      const position = JSON.parse(saved);
+      console.log('[Store] 从localStorage加载单手持仓:', position.hasPosition ? '有持仓' : '无持仓');
+      return position;
+    }
+  } catch (error) {
+    console.error('[Store] 加载单手持仓失败:', error);
+  }
+  return { hasPosition: false };
+};
+
+// 从localStorage加载单手交易操作记录
+const loadSingleHandOperations = (): SingleHandOperation[] => {
+  try {
+    const saved = localStorage.getItem('singleHandOperations');
+    if (saved) {
+      const operations = JSON.parse(saved);
+      // 只保留最近的50条
+      const recentOperations = operations.slice(0, 50);
+      console.log('[Store] 从localStorage加载单手操作记录，共', operations.length, '条，保留', recentOperations.length, '条');
+      
+      // 如果数量超过50，更新localStorage
+      if (operations.length > 50) {
+        try {
+          localStorage.setItem('singleHandOperations', JSON.stringify(recentOperations));
+        } catch (error) {
+          console.error('[Store] 更新单手操作记录失败:', error);
+        }
+      }
+      
+      return recentOperations;
+    }
+  } catch (error) {
+    console.error('[Store] 加载单手操作记录失败:', error);
+  }
+  return [];
+};
+
 export const useAppStore = create<AppState>()(
   devtools(
     (set) => ({
@@ -100,6 +157,8 @@ export const useAppStore = create<AppState>()(
       domesticTradeTick: null,
       domesticDepth: null,
       strategies: loadStrategies(),
+      singleHandPosition: loadSingleHandPosition(),
+      singleHandOperations: loadSingleHandOperations(),
       londonConnectionStatus: 'connecting',
       domesticConnectionStatus: 'connecting',
 
@@ -171,6 +230,45 @@ export const useAppStore = create<AppState>()(
         }
         return { strategies: newStrategies };
       }),
+      
+      // 单手交易操作
+      setSingleHandPosition: (position) => {
+        // 保存到localStorage
+        try {
+          localStorage.setItem('singleHandPosition', JSON.stringify(position));
+          console.log('[Store] 保存单手持仓到localStorage:', position.hasPosition ? '有持仓' : '无持仓');
+        } catch (error) {
+          console.error('[Store] 保存单手持仓失败:', error);
+        }
+        set({ singleHandPosition: position });
+      },
+      addSingleHandOperation: (operation) => set((state) => {
+        // 新操作添加到开头，保留最多50条
+        const newOperations = [operation, ...state.singleHandOperations].slice(0, 50);
+        console.log('[Store] 添加单手操作记录，当前保留', newOperations.length, '条（最多50条）');
+        
+        // 保存到localStorage
+        try {
+          localStorage.setItem('singleHandOperations', JSON.stringify(newOperations));
+        } catch (error) {
+          console.error('[Store] 保存单手操作记录失败:', error);
+        }
+        return { singleHandOperations: newOperations };
+      }),
+      clearSingleHandOperations: () => {
+        try {
+          localStorage.removeItem('singleHandOperations');
+          localStorage.removeItem('singleHandPosition');
+          console.log('[Store] 清除单手交易数据');
+        } catch (error) {
+          console.error('[Store] 清除单手交易数据失败:', error);
+        }
+        return set({ 
+          singleHandOperations: [],
+          singleHandPosition: { hasPosition: false }
+        });
+      },
+      
       setLondonConnectionStatus: (status) => set({ londonConnectionStatus: status }),
       setDomesticConnectionStatus: (status) => set({ domesticConnectionStatus: status }),
     }),

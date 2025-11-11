@@ -1,0 +1,395 @@
+/* 单手交易组件样式 */
+
+.single-hand-trader {
+  background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.single-hand-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.3);
+}
+
+.single-hand-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.single-hand-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.clear-operations-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.clear-operations-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.1);
+}
+
+.refresh-btn {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #818cf8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: scale(1.05);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 持仓区域 */
+.position-section {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.position-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.position-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.position-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.position-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.position-card-label {
+  font-size: 11px;
+  color: #909090;
+  margin-bottom: 4px;
+}
+
+.position-card-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.position-card-value.direction {
+  font-size: 18px;
+}
+
+.position-card-value.direction.long {
+  color: #ef4444;
+}
+
+.position-card-value.direction.short {
+  color: #22c55e;
+}
+
+.position-card-value.duration {
+  color: #818cf8;
+}
+
+/* 盈亏显示 */
+.profit-loss-display {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.profit-loss-row {
+  display: flex;
+  justify-content: space-around;
+  gap: 16px;
+}
+
+.profit-loss-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.profit-loss-label {
+  font-size: 11px;
+  color: #909090;
+}
+
+.profit-loss-value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.profit-loss-value.profit {
+  color: #ef4444;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.profit-loss-value.loss {
+  color: #22c55e;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+}
+
+.profit-loss-value.neutral {
+  color: #808080;
+}
+
+/* 无持仓状态 */
+.no-position {
+  text-align: center;
+  padding: 20px;
+  color: #808080;
+}
+
+.no-position-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.no-position-text {
+  font-size: 14px;
+}
+
+.idle-status {
+  font-size: 18px;
+  font-weight: 600;
+  color: #818cf8;
+  margin-bottom: 12px;
+}
+
+.idle-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.idle-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.idle-stat-label {
+  color: #909090;
+}
+
+.idle-stat-value {
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.idle-stat-value.neutral {
+  color: #808080;
+}
+
+/* 操作记录区域 */
+.operations-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.operations-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.operations-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+}
+
+.no-operations {
+  text-align: center;
+  padding: 40px 20px;
+  color: #808080;
+  font-size: 14px;
+}
+
+.operations-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 自定义滚动条 */
+.operations-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.operations-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.operations-list::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 3px;
+}
+
+.operations-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* 操作项 */
+.operation-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.operation-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.operation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.operation-time {
+  font-size: 11px;
+  color: #909090;
+}
+
+.operation-action {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.operation-action.open-long {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.operation-action.open-short {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.operation-action.close {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.operation-action.hold {
+  background: rgba(129, 140, 248, 0.2);
+  color: #818cf8;
+}
+
+.operation-price {
+  font-size: 13px;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+/* 平仓盈亏 */
+.operation-profit-loss {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operation-pl-points.profit,
+.operation-pl-money.profit {
+  color: #ef4444;
+}
+
+.operation-pl-points.loss,
+.operation-pl-money.loss {
+  color: #22c55e;
+}
+
+.operation-pl-points.neutral,
+.operation-pl-money.neutral {
+  color: #808080;
+}
+
+.operation-reason {
+  font-size: 12px;
+  color: #b0b0b0;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+

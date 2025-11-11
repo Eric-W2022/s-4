@@ -116,6 +116,49 @@ export interface StrategyAnalysis {
     takeProfitPrice?: number;     // 触达止盈时的价格
     takeProfitTime?: number;      // 触达止盈的时间戳
     takeProfitMinutes?: number;   // 多少分钟触达止盈
+    // 止损相关
+    stopLossReached?: boolean;    // 是否触达止损价
+    stopLossPrice?: number;       // 触达止损时的价格
+    stopLossTime?: number;        // 触达止损的时间戳
+    stopLossMinutes?: number;     // 多少分钟触达止损
   };
+}
+
+/**
+ * 单手交易操作记录
+ */
+export interface SingleHandOperation {
+  id: string;
+  timestamp: number;
+  action: '开多' | '开空' | '平仓' | '持有';
+  price: number;
+  reason: string;
+  profitLossPoints?: number;  // 平仓时的盈亏点数
+  profitLossMoney?: number;   // 平仓时的盈亏金额（元）
+}
+
+/**
+ * 单手交易当前持仓
+ */
+export interface SingleHandPosition {
+  hasPosition: boolean;       // 是否有持仓
+  direction?: '多' | '空';    // 持仓方向
+  entryPrice?: number;        // 入场价格
+  entryTime?: number;         // 入场时间
+  currentPrice?: number;      // 当前价格
+  profitLossPoints?: number;  // 当前盈亏点数
+  profitLossMoney?: number;   // 当前盈亏金额（元）
+}
+
+/**
+ * 单手交易决策
+ */
+export interface SingleHandDecision {
+  action: '开多' | '开空' | '平仓' | '持有';
+  reason: string;
+  confidence: number;
+  targetPrice?: number;       // 目标价格（开仓时）
+  timestamp: number;
+  model: string;
 }
 

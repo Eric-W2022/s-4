@@ -301,6 +301,30 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     </div>
                   )}
 
+                  {/* 止损信息显示 */}
+                  {strategy.profitLoss?.stopLossReached && (
+                    <div className="stop-loss-info">
+                      <div className="stop-loss-badge">✗ 已触达止损</div>
+                      <div className="stop-loss-details">
+                        <span className="stop-loss-label">止损价:</span>
+                        <span className="stop-loss-price">{strategy.tradingAdvice.stopLoss.toFixed(0)}</span>
+                        <span className="stop-loss-separator">|</span>
+                        <span className="stop-loss-label">亏损:</span>
+                        <span className="stop-loss-points loss">
+                          {strategy.profitLoss.profitLossPoints?.toFixed(0)}点
+                        </span>
+                        <span className="stop-loss-separator">|</span>
+                        <span className="stop-loss-label">耗时:</span>
+                        <span className="stop-loss-time">{strategy.profitLoss.stopLossMinutes}分钟</span>
+                        <span className="stop-loss-separator">|</span>
+                        <span className="stop-loss-label">时间:</span>
+                        <span className="stop-loss-timestamp">
+                          {strategy.profitLoss.stopLossTime ? formatTime(strategy.profitLoss.stopLossTime) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 信心度、风险、伦敦预测、国内预测 */}
                   <div className="info-cards-row">
                     {/* 信心度 */}

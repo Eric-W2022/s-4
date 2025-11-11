@@ -1,6 +1,15 @@
 // 市场数据 API
 import { apiClient } from './client';
-import type { KlineData, TradeTickData, DepthData, StrategyAnalysis } from '../types';
+import type { 
+  KlineData, 
+  TradeTickData, 
+  DepthData, 
+  StrategyAnalysis,
+  SingleHandPosition,
+  SingleHandOperation,
+  SingleHandDecision,
+  ModelType
+} from '../types';
 
 export interface KlineResponse {
   data: KlineData[];
@@ -79,6 +88,8 @@ export const marketDataApi = {
         isWin: newStrategy.profitLoss?.isWin,
         takeProfitReached: newStrategy.profitLoss?.takeProfitReached,
         takeProfitMinutes: newStrategy.profitLoss?.takeProfitMinutes,
+        stopLossReached: newStrategy.profitLoss?.stopLossReached,
+        stopLossMinutes: newStrategy.profitLoss?.stopLossMinutes,
       };
 
       // 获取15分钟内的其他策略用于更新
@@ -107,6 +118,8 @@ export const marketDataApi = {
           isWin: s.profitLoss?.isWin,
           takeProfitReached: s.profitLoss?.takeProfitReached,
           takeProfitMinutes: s.profitLoss?.takeProfitMinutes,
+          stopLossReached: s.profitLoss?.stopLossReached,
+          stopLossMinutes: s.profitLoss?.stopLossMinutes,
         }));
 
       const requestData = {
@@ -118,6 +131,19 @@ export const marketDataApi = {
       console.log('[保存预测] 预测数据已保存到后端，更新了', recentStrategies.length, '条历史数据');
     } catch (error) {
       console.error('[保存预测] 保存失败:', error);
+      // 不抛出错误，避免影响主流程
+    }
+  },
+
+  // 保存单手交易操作
+  saveSingleHandOperation: async (operation: SingleHandOperation): Promise<void> => {
+    try {
+      await apiClient.post('/api/data/save-single-hand-operation', {
+        operation,
+      });
+      console.log('[保存单手交易操作] 操作已保存到后端');
+    } catch (error) {
+      console.error('[保存单手交易操作] 保存失败:', error);
       // 不抛出错误，避免影响主流程
     }
   },

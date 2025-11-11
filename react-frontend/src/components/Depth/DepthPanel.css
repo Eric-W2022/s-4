@@ -286,3 +286,76 @@
   font-size: 14px;
 }
 
+/* 套利机会区域 */
+.arbitrage-section {
+  margin-top: 12px;
+}
+
+.arbitrage-score-section {
+  background: #1a1f3a;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.arbitrage-score-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.arbitrage-score-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.arbitrage-score-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.arbitrage-score-bar {
+  height: 6px;
+  background: #0f1425;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.arbitrage-score-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.arbitrage-metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.arbitrage-metric-item {
+  background: #1a1f3a;
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.arbitrage-metric-label {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.arbitrage-metric-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+

@@ -7,10 +7,10 @@ import { useDomesticWebSocket } from './hooks/useDomesticWebSocket';
 import { useLondonWebSocket } from './hooks/useLondonWebSocket';
 import { KlineChart } from './components/Charts/KlineChart';
 import { DepthPanel } from './components/Depth/DepthPanel';
-import { ArbitragePanel } from './components/Arbitrage/ArbitragePanel';
 import { StrategyPanel } from './components/Strategy/StrategyPanel';
+import { SingleHandTrader } from './components/SingleHand/SingleHandTrader';
 import { SYMBOLS, INTERVALS, UPDATE_INTERVALS, ENABLE_WEBSOCKET, ENABLE_LONDON_WEBSOCKET, ALLTICK_CONFIG } from './constants';
-import type { KlineData } from './types';
+import type { KlineData, SingleHandPosition, SingleHandOperation, SingleHandDecision } from './types';
 import './App.css';
 
 // 创建 React Query 客户端
@@ -46,6 +46,10 @@ function AppContent() {
     updateStrategyProfitLoss,
     clearStrategies,
     deleteStrategy,
+    singleHandPosition,
+    singleHandOperations,
+    setSingleHandPosition,
+    addSingleHandOperation,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -65,6 +69,10 @@ function AppContent() {
   // 当前是否正在加载策略
   const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
 
+  // 单手交易加载状态和分析时间（从store获取持仓和操作记录）
+  const [isLoadingSingleHand, setIsLoadingSingleHand] = useState(false);
+  const lastSingleHandAnalysisRef = useRef<number>(0);
+
   // 检查是否为白银期货交易时间
   const isSilverTradingHours = useCallback(() => {
     const now = new Date();
@@ -74,17 +82,20 @@ function AppContent() {
     const currentMinutes = hours * 60 + minutes;
 
     // 白银期货交易时间
-    // 日盘：9:00-11:30 和 13:30-15:00
-    const morningStart = 9 * 60;         // 9:00
-    const morningEnd = 11 * 60 + 30;     // 11:30
-    const afternoonStart = 13 * 60 + 30; // 13:30
-    const afternoonEnd = 15 * 60;        // 15:00
+    // 日盘：9:00-10:15, 10:30-11:30 和 13:30-15:00
+    const morningStart1 = 9 * 60;         // 9:00
+    const morningEnd1 = 10 * 60 + 15;     // 10:15
+    const morningStart2 = 10 * 60 + 30;   // 10:30
+    const morningEnd2 = 11 * 60 + 30;     // 11:30
+    const afternoonStart = 13 * 60 + 30;  // 13:30
+    const afternoonEnd = 15 * 60;         // 15:00
 
     // 夜盘：21:00-次日1:00（周一到周五）
-    const nightStart = 21 * 60;          // 21:00
-    const nightEnd = 25 * 60;            // 次日1:00（25:00表示次日1:00）
+    const nightStart = 21 * 60;           // 21:00
+    const nightEnd = 25 * 60;             // 次日1:00（25:00表示次日1:00）
 
-    const isDayTrading = (currentMinutes >= morningStart && currentMinutes <= morningEnd) ||
+    const isDayTrading = (currentMinutes >= morningStart1 && currentMinutes <= morningEnd1) ||
+                        (currentMinutes >= morningStart2 && currentMinutes <= morningEnd2) ||
                         (currentMinutes >= afternoonStart && currentMinutes <= afternoonEnd);
 
     const isNightTrading = (dayOfWeek >= 1 && dayOfWeek <= 5) && // 周一到周五
@@ -301,10 +312,11 @@ function AppContent() {
       // 计算交易策略的盈亏
       const entryPrice = strategy.tradingAdvice.entryPrice;
       const takeProfit = strategy.tradingAdvice.takeProfit;
+      const stopLoss = strategy.tradingAdvice.stopLoss;
       const action = strategy.tradingAdvice.action;
 
-      // 如果已经触达止盈，不再更新价格，保持锁定状态
-      if (strategy.profitLoss?.takeProfitReached) {
+      // 如果已经触达止盈或止损，不再更新价格，保持锁定状态
+      if (strategy.profitLoss?.takeProfitReached || strategy.profitLoss?.stopLossReached) {
         // 仅在超过15分钟时更新状态
         if (strategyAge >= fifteenMinutes && strategy.profitLoss.status === 'pending') {
           updateStrategyProfitLoss(index, {
@@ -312,6 +324,38 @@ function AppContent() {
             status: 'completed'
           });
         }
+        return;
+      }
+
+      // 检查是否触达止损价（优先检查止损）
+      let stopLossReached = false;
+      if (action === '买多') {
+        // 买多：当前价格 <= 止损价
+        stopLossReached = currentPrice <= stopLoss;
+      } else if (action === '卖空') {
+        // 卖空：当前价格 >= 止损价
+        stopLossReached = currentPrice >= stopLoss;
+      }
+
+      // 如果触达止损，锁定价格并记录时间
+      if (stopLossReached) {
+        const stopLossMinutes = Math.round(strategyAge / 60000); // 转换为分钟
+        const stopLossPoints = action === '买多' 
+          ? stopLoss - entryPrice 
+          : entryPrice - stopLoss;
+        
+        updateStrategyProfitLoss(index, {
+          actualPrice15min: stopLoss,  // 锁定在止损价
+          profitLossPoints: stopLossPoints,
+          profitLossPercent: (stopLossPoints / entryPrice) * 100,
+          isWin: false,  // 触达止损必然亏损
+          status: 'completed',  // 立即标记为完成
+          stopLossReached: true,
+          stopLossPrice: currentPrice,  // 触达止损时的实际价格
+          stopLossTime: now,
+          stopLossMinutes
+        });
+        console.log(`[盈亏跟踪] 策略 #${index} 在${stopLossMinutes}分钟后触达止损价 ${stopLoss}`);
         return;
       }
 
@@ -443,6 +487,217 @@ function AppContent() {
   useEffect(() => {
     if (domesticDepthQuery.data) setDomesticDepth(domesticDepthQuery.data);
   }, [domesticDepthQuery.data]);
+
+  // 单手交易：更新当前持仓的盈亏
+  useEffect(() => {
+    if (!domesticTradeTickQuery.data?.price) return;
+    
+    const currentPrice = Number(domesticTradeTickQuery.data.price);
+    
+    // 如果有持仓，计算实时盈亏
+    if (singleHandPosition.hasPosition) {
+      const entryPrice = singleHandPosition.entryPrice || 0;
+      const direction = singleHandPosition.direction;
+      
+      let profitLossPoints = 0;
+      if (direction === '多') {
+        profitLossPoints = currentPrice - entryPrice;
+      } else if (direction === '空') {
+        profitLossPoints = entryPrice - currentPrice;
+      }
+      
+      const profitLossMoney = profitLossPoints * 15; // 每点15元
+      
+      // 检查是否有变化，避免无限循环
+      if (singleHandPosition.currentPrice !== currentPrice ||
+          singleHandPosition.profitLossPoints !== profitLossPoints) {
+        setSingleHandPosition({
+          ...singleHandPosition,
+          currentPrice,
+          profitLossPoints,
+          profitLossMoney,
+        });
+      }
+    } else {
+      // 无持仓时，确保显示当前价格和0盈亏
+      if (singleHandPosition.currentPrice !== currentPrice ||
+          singleHandPosition.profitLossPoints !== 0) {
+        setSingleHandPosition({
+          hasPosition: false,
+          currentPrice,
+          profitLossPoints: 0,
+          profitLossMoney: 0,
+        });
+      }
+    }
+  }, [domesticTradeTickQuery.data?.price, singleHandPosition, setSingleHandPosition]);
+
+  // 单手交易：执行AI决策
+  const executeSingleHandDecision = useCallback(async (decision: SingleHandDecision, currentPrice: number) => {
+    const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    if (decision.action === '开多' || decision.action === '开空') {
+      // 开仓
+      const direction = decision.action === '开多' ? '多' : '空';
+      setSingleHandPosition({
+        hasPosition: true,
+        direction,
+        entryPrice: currentPrice,
+        entryTime: Date.now(),
+        currentPrice,
+        profitLossPoints: 0,
+        profitLossMoney: 0,
+      });
+      
+      // 添加操作记录（使用store）
+      const newOperation: SingleHandOperation = {
+        id: operationId,
+        timestamp: Date.now(),
+        action: decision.action,
+        price: currentPrice,
+        reason: decision.reason,
+      };
+      addSingleHandOperation(newOperation);
+      
+      // 保存到后端
+      const { marketDataApi } = await import('./api/marketData');
+      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
+        console.error('[单手交易] 保存操作失败:', err);
+      });
+      
+      console.log(`[单手交易] ${decision.action} @ ${currentPrice}`);
+    } else if (decision.action === '平仓' && singleHandPosition.hasPosition) {
+      // 平仓
+      const profitLossPoints = singleHandPosition.profitLossPoints || 0;
+      const profitLossMoney = singleHandPosition.profitLossMoney || 0;
+      
+      const newOperation: SingleHandOperation = {
+        id: operationId,
+        timestamp: Date.now(),
+        action: '平仓',
+        price: currentPrice,
+        reason: decision.reason,
+        profitLossPoints,
+        profitLossMoney,
+      };
+      addSingleHandOperation(newOperation);
+      
+      setSingleHandPosition({
+        hasPosition: false,
+      });
+      
+      // 保存到后端
+      const { marketDataApi } = await import('./api/marketData');
+      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
+        console.error('[单手交易] 保存操作失败:', err);
+      });
+      
+      console.log(`[单手交易] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点 (${profitLossMoney.toFixed(0)}元)`);
+    } else if (decision.action === '持有') {
+      // 持有（可选择是否记录）
+      console.log(`[单手交易] 持有, 原因: ${decision.reason}`);
+    }
+  }, [singleHandPosition]);
+
+  // 单手交易：自动触发AI决策（每分钟）
+  useEffect(() => {
+    const triggerSingleHandAnalysis = async () => {
+      if (!domesticTradeTickQuery.data?.price) {
+        console.log('[单手交易] 等待价格数据...');
+        return;
+      }
+      
+      // 检查所有必需的数据是否就绪
+      const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
+        ? londonRealtimeKline 
+        : londonKline1mQuery.data;
+      
+      const domesticData = domesticRealtimeKline.length > 0 
+        ? domesticRealtimeKline 
+        : domesticKline1mQuery.data;
+      
+      if (!londonData || !londonKline15mQuery.data || !londonKlineDailyQuery.data || 
+          !domesticData || !domesticKline15mQuery.data || !domesticKlineDailyQuery.data) {
+        console.log('[单手交易] 等待所有数据加载...');
+        return;
+      }
+      
+      const now = Date.now();
+      const timeSinceLastAnalysis = now - lastSingleHandAnalysisRef.current;
+      const oneMinute = 60 * 1000;
+      
+      // 首次或间隔1分钟
+      if (lastSingleHandAnalysisRef.current === 0 || timeSinceLastAnalysis >= oneMinute) {
+        if (isLoadingSingleHand) {
+          console.log('[单手交易] 正在分析中，跳过');
+          return;
+        }
+        
+        try {
+          setIsLoadingSingleHand(true);
+          lastSingleHandAnalysisRef.current = now;
+          
+          const currentPrice = Number(domesticTradeTickQuery.data.price);
+          
+          // 更新当前持仓价格
+          const updatedPosition: SingleHandPosition = singleHandPosition.hasPosition
+            ? { ...singleHandPosition, currentPrice }
+            : singleHandPosition;
+          
+          // 使用前端服务直接调用AI
+          const { analyzeSingleHandStrategy } = await import('./services/singleHandService');
+          
+          const decision = await analyzeSingleHandStrategy(
+            selectedModel,
+            londonData,
+            londonKline15mQuery.data,
+            londonKlineDailyQuery.data,
+            domesticData,
+            domesticKline15mQuery.data,
+            domesticKlineDailyQuery.data,
+            domesticDepthQuery.data || null,
+            updatedPosition,
+            singleHandOperations,
+            currentPrice
+          );
+          
+          console.log(`[单手交易] AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
+          
+          // 执行决策
+          executeSingleHandDecision(decision, currentPrice);
+        } catch (error: any) {
+          console.error('[单手交易] 分析失败:', error);
+        } finally {
+          setIsLoadingSingleHand(false);
+        }
+      }
+    };
+    
+    // 立即触发首次分析
+    triggerSingleHandAnalysis();
+    
+    // 每30秒检查一次
+    const timer = setInterval(() => {
+      triggerSingleHandAnalysis();
+    }, 30000);
+    
+    return () => clearInterval(timer);
+  }, [
+    domesticTradeTickQuery.data?.price,
+    selectedModel,
+    singleHandPosition,
+    singleHandOperations,
+    isLoadingSingleHand,
+    executeSingleHandDecision,
+    londonRealtimeKline,
+    londonKline1mQuery.data,
+    londonKline15mQuery.data,
+    domesticRealtimeKline,
+    domesticKline1mQuery.data,
+    domesticKline15mQuery.data,
+    domesticDepthQuery.data,
+    isLondonWebSocketActive,
+  ]);
 
   // 自动触发AI策略分析（数据就绪后立即触发，无延迟）
   useEffect(() => {
@@ -680,13 +935,18 @@ function AppContent() {
         {/* 右侧：市场数据区域 */}
         <div className="right-panel">
           <DepthPanel 
-            data={domesticDepthQuery.data || null} 
-            isLoading={domesticDepthQuery.isLoading && !domesticDepthQuery.data} 
-          />
-          <ArbitragePanel
+            data={domesticDepthQuery.data || null}
             londonData={londonKline1mQuery.data || []}
             domesticData={domesticRealtimeKline}
-            isLoading={(londonKline1mQuery.isLoading && !londonKline1mQuery.data) || domesticRealtimeKline.length === 0}
+            isLoading={domesticDepthQuery.isLoading && !domesticDepthQuery.data} 
+          />
+          <SingleHandTrader
+            position={singleHandPosition}
+            operations={singleHandOperations}
+            isLoading={isLoadingSingleHand}
+            onClearOperations={() => {
+              useAppStore.getState().clearSingleHandOperations();
+            }}
           />
         </div>
 

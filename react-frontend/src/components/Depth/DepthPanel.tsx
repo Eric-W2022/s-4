@@ -3,15 +3,17 @@ import React, { useMemo } from 'react';
 import { formatPrice, formatVolume } from '../../utils/chart';
 import { formatTime, formatTimestamp } from '../../utils/time';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
-import type { DepthData } from '../../types';
+import type { DepthData, KlineData } from '../../types';
 import './DepthPanel.css';
 
 interface DepthPanelProps {
   data: DepthData | null;
+  londonData: KlineData[];
+  domesticData: KlineData[];
   isLoading?: boolean;
 }
 
-export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoading }) => {
+export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonData, domesticData, isLoading }) => {
   // 计算买卖盘情绪
   const emotion = useMemo(() => {
     if (!data) return null;
@@ -43,6 +45,59 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
       trend,
     };
   }, [data]);
+
+  // 计算套利指标（只追踪最后一根K线）
+  const arbitrageMetrics = useMemo(() => {
+    if (!londonData || londonData.length < 2 || !domesticData || domesticData.length < 2) {
+      return null;
+    }
+
+    // 只取最后一根K线和前一根K线（用于计算变化率）
+    const londonLatest = londonData[londonData.length - 1];
+    const londonPrevious = londonData[londonData.length - 2];
+    const domesticLatest = domesticData[domesticData.length - 1];
+    const domesticPrevious = domesticData[domesticData.length - 2];
+
+    // 计算相关性（基于最后一根K线的变化方向）
+    const londonChange = ((londonLatest.c - londonPrevious.c) / londonPrevious.c) * 100;
+    const domesticChange = ((domesticLatest.c - domesticPrevious.c) / domesticPrevious.c) * 100;
+    
+    // 简化的相关性：同向为正，反向为负
+    const correlation = londonChange * domesticChange > 0 
+      ? Math.min(Math.abs(londonChange), Math.abs(domesticChange)) / Math.max(Math.abs(londonChange), Math.abs(domesticChange))
+      : -Math.min(Math.abs(londonChange), Math.abs(domesticChange)) / Math.max(Math.abs(londonChange), Math.abs(domesticChange));
+
+    // 计算最后一根K线的振幅
+    const londonAmplitude = ((londonLatest.h - londonLatest.l) / londonLatest.l) * 100;
+    const domesticAmplitude = ((domesticLatest.h - domesticLatest.l) / domesticLatest.l) * 100;
+    const amplitudeDiff = Math.abs(domesticAmplitude - londonAmplitude);
+
+    // 计算套利得分 (0-100)
+    const correlationScore = Math.abs(correlation) * 50; // 相关性贡献50分
+    const amplitudeScore = Math.min(amplitudeDiff * 10, 50); // 振幅差贡献50分
+    const score = Math.min(correlationScore + amplitudeScore, 100);
+
+    // 判断套利方向
+    const domesticStrength = domesticChange - londonChange;
+    let direction: 'long' | 'short' | 'neutral';
+    if (Math.abs(domesticStrength) < 0.01) {
+      direction = 'neutral';
+    } else if (domesticStrength > 0) {
+      direction = 'short';
+    } else {
+      direction = 'long';
+    }
+
+    return {
+      score: isNaN(score) ? 0 : Math.round(score),
+      correlation: isNaN(correlation) ? 0 : Number(correlation.toFixed(3)),
+      londonAmplitude: isNaN(londonAmplitude) ? 0 : Number(londonAmplitude.toFixed(3)),
+      domesticAmplitude: isNaN(domesticAmplitude) ? 0 : Number(domesticAmplitude.toFixed(3)),
+      amplitudeDiff: isNaN(amplitudeDiff) ? 0 : Number(amplitudeDiff.toFixed(3)),
+      direction,
+      domesticStrength: isNaN(domesticStrength) ? 0 : Number(domesticStrength.toFixed(3)),
+    };
+  }, [londonData, domesticData]);
 
   if (isLoading) {
     return (
@@ -214,6 +269,79 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, isLoadi
                         formatVolume((parseFloat(data.open_interest) - parseFloat(data.pre_open_interest)).toString())
                       : '--'}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 套利机会指标 */}
+        {arbitrageMetrics && (
+          <div className="arbitrage-section">
+            {/* 套利得分 */}
+            <div className="arbitrage-score-section">
+              <div className="arbitrage-score-main">
+                <span className="arbitrage-score-label">最后1根K线套利机会</span>
+                <span 
+                  className="arbitrage-score-value"
+                  style={{ color: arbitrageMetrics.score >= 70 ? '#ef4444' : '#4ade80' }}
+                >
+                  {arbitrageMetrics.score}
+                </span>
+              </div>
+              <div className="arbitrage-score-bar">
+                <div
+                  className="arbitrage-score-fill"
+                  style={{
+                    width: `${arbitrageMetrics.score}%`,
+                    backgroundColor: arbitrageMetrics.score >= 70 ? '#ef4444' : '#4ade80',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* 关键指标 */}
+            <div className="arbitrage-metrics-row">
+              <div className="arbitrage-metric-item">
+                <div className="arbitrage-metric-label">相关性</div>
+                <div 
+                  className="arbitrage-metric-value"
+                  style={{ color: Math.abs(arbitrageMetrics.correlation) > 0.7 ? '#4ade80' : '#fbbf24' }}
+                >
+                  {arbitrageMetrics.correlation.toFixed(2)}
+                </div>
+              </div>
+              <div className="arbitrage-metric-item">
+                <div className="arbitrage-metric-label">振幅差</div>
+                <div className="arbitrage-metric-value">
+                  {arbitrageMetrics.amplitudeDiff.toFixed(2)}%
+                </div>
+              </div>
+              <div 
+                className="arbitrage-metric-item"
+                style={{
+                  backgroundColor: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' 
+                    ? (arbitrageMetrics.direction === 'long' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(74, 222, 128, 0.2)')
+                    : '#1a1f3a',
+                  border: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral'
+                    ? (arbitrageMetrics.direction === 'long' ? '2px solid #ef4444' : '2px solid #4ade80')
+                    : 'none',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <div className="arbitrage-metric-label">套利方向</div>
+                <div 
+                  className="arbitrage-metric-value"
+                  style={{ 
+                    color: arbitrageMetrics.direction === 'long' ? '#ef4444' : 
+                           arbitrageMetrics.direction === 'short' ? '#4ade80' : '#9ca3af',
+                    fontWeight: 'bold',
+                    fontSize: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' ? '18px' : '15px',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {arbitrageMetrics.direction === 'long' ? '多单' :
+                   arbitrageMetrics.direction === 'short' ? '空单' : '观望'}
                 </div>
               </div>
             </div>
