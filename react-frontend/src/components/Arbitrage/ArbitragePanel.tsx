@@ -46,7 +46,7 @@ export const ArbitragePanel: React.FC<ArbitragePanelProps> = React.memo(
         trend,
       };
     }, [depthData]);
-
+    
     // 计算套利指标（只追踪最后一根K线）
     const arbitrageMetrics = useMemo(() => {
       if (!londonData || londonData.length < 2 || !domesticData || domesticData.length < 2) {
