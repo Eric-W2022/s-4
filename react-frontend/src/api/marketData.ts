@@ -57,31 +57,65 @@ export const marketDataApi = {
     return null;
   },
 
-  // 保存预测数据
-  savePrediction: async (strategy: StrategyAnalysis): Promise<void> => {
+  // 保存预测数据（包含新预测和需要更新的历史数据）
+  savePrediction: async (newStrategy: StrategyAnalysis, allStrategies: StrategyAnalysis[]): Promise<void> => {
     try {
-      const predictionData = {
-        timestamp: strategy.timestamp || Date.now(),
-        model: strategy.model || 'unknown',
-        action: strategy.tradingAdvice.action,
-        confidence: strategy.tradingAdvice.confidence,
-        riskLevel: strategy.tradingAdvice.riskLevel,
-        entryPrice: strategy.tradingAdvice.entryPrice,
-        stopLoss: strategy.tradingAdvice.stopLoss,
-        takeProfit: strategy.tradingAdvice.takeProfit,
-        lots: strategy.tradingAdvice.lots,
-        londonPricePrediction15min: strategy.tradingAdvice.londonPricePrediction15min,
-        pricePrediction15min: strategy.tradingAdvice.pricePrediction15min,
-        analysisReason: strategy.analysisReason,
-        profitLossPoints: strategy.profitLoss?.profitLossPoints,
-        profitLossPercent: strategy.profitLoss?.profitLossPercent,
-        isWin: strategy.profitLoss?.isWin,
-        takeProfitReached: strategy.profitLoss?.takeProfitReached,
-        takeProfitMinutes: strategy.profitLoss?.takeProfitMinutes,
+      // 转换新预测数据
+      const newPredictionData = {
+        timestamp: newStrategy.timestamp || Date.now(),
+        model: newStrategy.model || 'unknown',
+        action: newStrategy.tradingAdvice.action,
+        confidence: newStrategy.tradingAdvice.confidence,
+        riskLevel: newStrategy.tradingAdvice.riskLevel,
+        entryPrice: newStrategy.tradingAdvice.entryPrice,
+        stopLoss: newStrategy.tradingAdvice.stopLoss,
+        takeProfit: newStrategy.tradingAdvice.takeProfit,
+        lots: newStrategy.tradingAdvice.lots,
+        londonPricePrediction15min: newStrategy.tradingAdvice.londonPricePrediction15min,
+        pricePrediction15min: newStrategy.tradingAdvice.pricePrediction15min,
+        analysisReason: newStrategy.analysisReason,
+        profitLossPoints: newStrategy.profitLoss?.profitLossPoints,
+        profitLossPercent: newStrategy.profitLoss?.profitLossPercent,
+        isWin: newStrategy.profitLoss?.isWin,
+        takeProfitReached: newStrategy.profitLoss?.takeProfitReached,
+        takeProfitMinutes: newStrategy.profitLoss?.takeProfitMinutes,
       };
 
-      await apiClient.post('/api/data/save-prediction', predictionData);
-      console.log('[保存预测] 预测数据已保存到后端');
+      // 获取15分钟内的其他策略用于更新
+      const now = Date.now();
+      const fifteenMinutes = 15 * 60 * 1000;
+      const recentStrategies = allStrategies
+        .filter(s => {
+          const age = now - (s.timestamp || 0);
+          return age <= fifteenMinutes && s.timestamp !== newStrategy.timestamp && s.tradingAdvice;
+        })
+        .map(s => ({
+          timestamp: s.timestamp || 0,
+          model: s.model || 'unknown',
+          action: s.tradingAdvice.action,
+          confidence: s.tradingAdvice.confidence,
+          riskLevel: s.tradingAdvice.riskLevel,
+          entryPrice: s.tradingAdvice.entryPrice,
+          stopLoss: s.tradingAdvice.stopLoss,
+          takeProfit: s.tradingAdvice.takeProfit,
+          lots: s.tradingAdvice.lots,
+          londonPricePrediction15min: s.tradingAdvice.londonPricePrediction15min,
+          pricePrediction15min: s.tradingAdvice.pricePrediction15min,
+          analysisReason: s.analysisReason,
+          profitLossPoints: s.profitLoss?.profitLossPoints,
+          profitLossPercent: s.profitLoss?.profitLossPercent,
+          isWin: s.profitLoss?.isWin,
+          takeProfitReached: s.profitLoss?.takeProfitReached,
+          takeProfitMinutes: s.profitLoss?.takeProfitMinutes,
+        }));
+
+      const requestData = {
+        newPrediction: newPredictionData,
+        recentPredictions: recentStrategies
+      };
+
+      await apiClient.post('/api/data/save-prediction', requestData);
+      console.log('[保存预测] 预测数据已保存到后端，更新了', recentStrategies.length, '条历史数据');
     } catch (error) {
       console.error('[保存预测] 保存失败:', error);
       // 不抛出错误，避免影响主流程

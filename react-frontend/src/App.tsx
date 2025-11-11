@@ -576,9 +576,10 @@ function AppContent() {
         
         addStrategy(newStrategy);
         
-        // 保存预测数据到后端
+        // 保存预测数据到后端（包含新预测和15分钟内的历史数据）
         const { marketDataApi } = await import('./api/marketData');
-        marketDataApi.savePrediction(newStrategy).catch(err => {
+        const allStrategies = useAppStore.getState().strategies;
+        marketDataApi.savePrediction(newStrategy, allStrategies).catch(err => {
           console.error('[保存预测] 保存到后端失败:', err);
         });
         
@@ -588,12 +589,7 @@ function AppContent() {
         console.log('[自动分析] ✅ 分析完成，已添加到策略历史，将实时跟踪15分钟盈亏');
       } catch (error: any) {
         console.error('[自动分析] ❌ 分析失败:', error);
-        // 失败时也添加到历史，标记为错误
-        addStrategy({ 
-          error: error.message || '分析失败',
-          timestamp: Date.now(),
-          model: selectedModel
-        } as any);
+        // 分析失败时不保存到历史记录
       } finally {
         setIsLoadingStrategy(false);
       }

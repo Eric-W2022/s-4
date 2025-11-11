@@ -560,10 +560,16 @@ class PredictionData(BaseModel):
     takeProfitMinutes: Optional[int] = None
 
 
+class SavePredictionRequest(BaseModel):
+    """保存预测请求模型（包含新预测和需要更新的历史数据）"""
+    newPrediction: PredictionData
+    recentPredictions: list[PredictionData] = []  # 最近15分钟内需要更新的预测
+
+
 @router.post("/save-prediction")
-async def save_prediction(prediction: PredictionData):
+async def save_prediction(request: SavePredictionRequest):
     """
-    保存预测数据到CSV文件
+    保存预测数据到CSV文件，并更新15分钟内的旧数据
     """
     try:
         # 获取当前日期作为文件名
@@ -577,12 +583,6 @@ async def save_prediction(prediction: PredictionData):
         # 确保predictions目录存在
         predictions_dir.mkdir(exist_ok=True)
         
-        # 检查文件是否存在，决定是否写入表头
-        file_exists = csv_file.exists()
-        
-        # 将时间戳转换为可读格式
-        timestamp_str = datetime.fromtimestamp(prediction.timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
-        
         # CSV表头
         fieldnames = [
             '时间', '模型', '操作', '信心度', '风险等级',
@@ -592,41 +592,81 @@ async def save_prediction(prediction: PredictionData):
             '是否触达止盈', '触达止盈分钟数'
         ]
         
-        # 写入CSV
-        with open(str(csv_file), 'a', newline='', encoding='utf-8-sig') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            
-            # 如果文件不存在，写入表头
-            if not file_exists:
-                writer.writeheader()
-            
-            # 写入数据行
-            writer.writerow({
-                '时间': timestamp_str,
-                '模型': prediction.model,
-                '操作': prediction.action,
-                '信心度': prediction.confidence,
-                '风险等级': prediction.riskLevel,
-                '入场价': prediction.entryPrice,
-                '止损价': prediction.stopLoss,
-                '止盈价': prediction.takeProfit,
-                '手数': prediction.lots,
-                '伦敦预测价': prediction.londonPricePrediction15min,
-                '国内预测价': prediction.pricePrediction15min,
-                '分析理由': prediction.analysisReason or '',
-                '实际盈亏点数': prediction.profitLossPoints if prediction.profitLossPoints is not None else '',
-                '实际盈亏百分比': prediction.profitLossPercent if prediction.profitLossPercent is not None else '',
-                '是否盈利': '是' if prediction.isWin else '否' if prediction.isWin is not None else '',
-                '是否触达止盈': '是' if prediction.takeProfitReached else '否' if prediction.takeProfitReached is not None else '',
-                '触达止盈分钟数': prediction.takeProfitMinutes if prediction.takeProfitMinutes else ''
-            })
+        # 读取现有数据
+        existing_rows = []
+        if csv_file.exists():
+            with open(str(csv_file), 'r', newline='', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                existing_rows = list(reader)
         
-        logger.info(f"[保存预测] 成功保存预测数据到 {csv_file}")
+        # 创建时间戳到更新数据的映射
+        update_map = {}
+        for pred in request.recentPredictions:
+            timestamp_str = datetime.fromtimestamp(pred.timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            update_map[timestamp_str] = pred
+        
+        # 更新现有行的盈亏数据
+        updated_count = 0
+        for row in existing_rows:
+            if row['时间'] in update_map:
+                pred = update_map[row['时间']]
+                # 更新盈亏字段
+                if pred.profitLossPoints is not None:
+                    row['实际盈亏点数'] = pred.profitLossPoints
+                if pred.profitLossPercent is not None:
+                    row['实际盈亏百分比'] = pred.profitLossPercent
+                if pred.isWin is not None:
+                    row['是否盈利'] = '是' if pred.isWin else '否'
+                if pred.takeProfitReached is not None:
+                    row['是否触达止盈'] = '是' if pred.takeProfitReached else '否'
+                if pred.takeProfitMinutes is not None:
+                    row['触达止盈分钟数'] = pred.takeProfitMinutes
+                updated_count += 1
+        
+        # 添加新预测（检查是否已存在，避免重复）
+        new_pred = request.newPrediction
+        timestamp_str = datetime.fromtimestamp(new_pred.timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 检查该时间戳是否已存在
+        timestamp_exists = any(row['时间'] == timestamp_str for row in existing_rows)
+        
+        if not timestamp_exists:
+            new_row = {
+                '时间': timestamp_str,
+                '模型': new_pred.model,
+                '操作': new_pred.action,
+                '信心度': new_pred.confidence,
+                '风险等级': new_pred.riskLevel,
+                '入场价': new_pred.entryPrice,
+                '止损价': new_pred.stopLoss,
+                '止盈价': new_pred.takeProfit,
+                '手数': new_pred.lots,
+                '伦敦预测价': new_pred.londonPricePrediction15min,
+                '国内预测价': new_pred.pricePrediction15min,
+                '分析理由': new_pred.analysisReason or '',
+                '实际盈亏点数': new_pred.profitLossPoints if new_pred.profitLossPoints is not None else '',
+                '实际盈亏百分比': new_pred.profitLossPercent if new_pred.profitLossPercent is not None else '',
+                '是否盈利': '是' if new_pred.isWin else '否' if new_pred.isWin is not None else '',
+                '是否触达止盈': '是' if new_pred.takeProfitReached else '否' if new_pred.takeProfitReached is not None else '',
+                '触达止盈分钟数': new_pred.takeProfitMinutes if new_pred.takeProfitMinutes else ''
+            }
+            existing_rows.append(new_row)
+        else:
+            logger.info(f"[保存预测] 时间戳 {timestamp_str} 已存在，跳过添加")
+        
+        # 重新写入整个CSV文件
+        with open(str(csv_file), 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(existing_rows)
+        
+        logger.info(f"[保存预测] 成功保存新预测并更新{updated_count}条历史数据到 {csv_file}")
         
         return {
             "success": True,
             "message": "预测数据已保存",
-            "file": str(csv_file)
+            "file": str(csv_file),
+            "updated": updated_count
         }
         
     except Exception as e:
