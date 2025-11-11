@@ -1,19 +1,33 @@
 // 单手交易组件
-import React from 'react';
+import React, { useState } from 'react';
 import { LoadingSpinner } from '../Common/LoadingSpinner';
-import type { SingleHandPosition, SingleHandOperation } from '../../types';
+import { MODEL_OPTIONS } from '../../constants';
+import type { SingleHandPosition, SingleHandOperation, ModelType } from '../../types';
 import './SingleHandTrader.css';
 
 interface SingleHandTraderProps {
   position: SingleHandPosition;
   operations: SingleHandOperation[];
   isLoading?: boolean;
+  selectedModel: ModelType;
+  onModelChange: (model: ModelType) => void;
   onRefresh?: () => void;
   onClearOperations?: () => void;
+  onDeleteOperation?: (operationId: string) => void;
 }
 
 export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
-  ({ position, operations, isLoading, onRefresh, onClearOperations }) => {
+  ({ position, operations, isLoading, selectedModel, onModelChange, onRefresh, onClearOperations, onDeleteOperation }) => {
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    const selectedModelLabel = MODEL_OPTIONS.find(
+      (m) => m.value === selectedModel
+    )?.label || 'DeepSeek';
+
+    const handleModelSelect = (model: ModelType) => {
+      onModelChange(model);
+      setIsDropdownOpen(false);
+    };
     
     // 格式化时间
     const formatTime = (timestamp: number) => {
@@ -55,33 +69,65 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               </button>
             )}
           </div>
-          {onRefresh && (
-            <button
-              className="refresh-btn"
-              onClick={onRefresh}
-              disabled={isLoading}
-              title="手动刷新"
+          <div className="single-hand-header-right">
+            <div 
+              className="model-selector-container"
+              onMouseEnter={() => setIsDropdownOpen(true)}
+              onMouseLeave={() => setIsDropdownOpen(false)}
             >
-              {isLoading ? '⟳' : '↻'}
-            </button>
-          )}
+              <div className="model-selector-display">{selectedModelLabel}</div>
+              <div className={`model-selector-dropdown ${isDropdownOpen ? 'open' : ''}`}>
+                {MODEL_OPTIONS.slice(0, 6).map((option) => (
+                  <div
+                    key={option.value}
+                    className={`model-selector-option ${
+                      selectedModel === option.value ? 'active' : ''
+                    }`}
+                    onClick={() => handleModelSelect(option.value as ModelType)}
+                  >
+                    {option.label}
+                  </div>
+                ))}
+                <div className="model-gap" />
+                {MODEL_OPTIONS.slice(6).map((option) => (
+                  <div
+                    key={option.value}
+                    className={`model-selector-option ${
+                      selectedModel === option.value ? 'active' : ''
+                    }`}
+                    onClick={() => handleModelSelect(option.value as ModelType)}
+                  >
+                    {option.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {onRefresh && (
+              <button
+                className="refresh-btn"
+                onClick={onRefresh}
+                disabled={isLoading}
+                title="手动刷新"
+              >
+                {isLoading ? '⟳' : '↻'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* 当前持仓盈亏 */}
+        {/* 持仓盈亏 */}
         <div className="position-section">
-          <h3>当前持仓</h3>
           {position.hasPosition ? (
             <div className="position-info">
               <div className="position-cards">
-                {/* 持仓方向 */}
+                {/* 第一行：持仓方向、入场价、当前价 */}
                 <div className="position-card">
-                  <div className="position-card-label">方向</div>
+                  <div className="position-card-label">持仓方向</div>
                   <div className={`position-card-value direction ${position.direction === '多' ? 'long' : 'short'}`}>
                     {position.direction}单
                   </div>
                 </div>
 
-                {/* 入场价 */}
                 <div className="position-card">
                   <div className="position-card-label">入场价</div>
                   <div className="position-card-value">
@@ -89,7 +135,6 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                   </div>
                 </div>
 
-                {/* 当前价 */}
                 <div className="position-card">
                   <div className="position-card-label">当前价</div>
                   <div className="position-card-value">
@@ -97,7 +142,29 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                   </div>
                 </div>
 
-                {/* 持仓时长 */}
+                {/* 第二行：盈亏点数、盈亏金额、持仓时长 */}
+                <div className="position-card">
+                  <div className="position-card-label">盈亏点数</div>
+                  <div className={`position-card-value ${
+                    (position.profitLossPoints || 0) > 0 ? 'profit' : 
+                    (position.profitLossPoints || 0) < 0 ? 'loss' : 'neutral'
+                  }`}>
+                    {position.profitLossPoints !== undefined && position.profitLossPoints > 0 ? '+' : ''}
+                    {position.profitLossPoints?.toFixed(0) || 0}点
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">盈亏金额</div>
+                  <div className={`position-card-value ${
+                    (position.profitLossMoney || 0) > 0 ? 'profit' : 
+                    (position.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
+                  }`}>
+                    {position.profitLossMoney !== undefined && position.profitLossMoney > 0 ? '+' : ''}
+                    {position.profitLossMoney?.toFixed(0) || 0}元
+                  </div>
+                </div>
+
                 <div className="position-card">
                   <div className="position-card-label">持仓时长</div>
                   <div className="position-card-value duration">
@@ -105,51 +172,100 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                   </div>
                 </div>
               </div>
-
-              {/* 盈亏显示 */}
-              <div className="profit-loss-display">
-                <div className="profit-loss-row">
-                  <div className="profit-loss-item">
-                    <span className="profit-loss-label">盈亏点数:</span>
-                    <span className={`profit-loss-value ${
-                      (position.profitLossPoints || 0) > 0 ? 'profit' : 
-                      (position.profitLossPoints || 0) < 0 ? 'loss' : 'neutral'
-                    }`}>
-                      {position.profitLossPoints !== undefined && position.profitLossPoints > 0 ? '+' : ''}
-                      {position.profitLossPoints?.toFixed(0) || 0} 点
-                    </span>
-                  </div>
-                  <div className="profit-loss-item">
-                    <span className="profit-loss-label">盈亏金额:</span>
-                    <span className={`profit-loss-value ${
-                      (position.profitLossMoney || 0) > 0 ? 'profit' : 
-                      (position.profitLossMoney || 0) < 0 ? 'loss' : 'neutral'
-                    }`}>
-                      {position.profitLossMoney !== undefined && position.profitLossMoney > 0 ? '+' : ''}
-                      {position.profitLossMoney?.toFixed(0) || 0} 元
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
           ) : (
-            <div className="no-position">
-              <div className="no-position-icon">📊</div>
-              <div className="no-position-text">
-                <div className="idle-status">空闲</div>
-                <div className="idle-stats">
-                  <div className="idle-stat-item">
-                    <span className="idle-stat-label">当前价:</span>
-                    <span className="idle-stat-value">{position.currentPrice?.toFixed(0) || '-'}</span>
+            <div className="position-info">
+              <div className="position-cards">
+                {/* 第一行：持仓方向、入场价、当前价 */}
+                <div className="position-card">
+                  <div className="position-card-label">持仓方向</div>
+                  <div className="position-card-value direction idle">
+                    空闲
                   </div>
-                  <div className="idle-stat-item">
-                    <span className="idle-stat-label">盈亏:</span>
-                    <span className="idle-stat-value neutral">0 点 / 0 元</span>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">入场价</div>
+                  <div className="position-card-value">
+                    -
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">当前价</div>
+                  <div className="position-card-value">
+                    {position.currentPrice?.toFixed(0) || '-'}
+                  </div>
+                </div>
+
+                {/* 第二行：盈亏点数、盈亏金额、持仓时长 */}
+                <div className="position-card">
+                  <div className="position-card-label">盈亏点数</div>
+                  <div className="position-card-value neutral">
+                    0点
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">盈亏金额</div>
+                  <div className="position-card-value neutral">
+                    0元
+                  </div>
+                </div>
+
+                <div className="position-card">
+                  <div className="position-card-label">持仓时长</div>
+                  <div className="position-card-value duration">
+                    0分钟
                   </div>
                 </div>
               </div>
             </div>
           )}
+        </div>
+
+        {/* 今日统计 */}
+        <div className="daily-stats-section">
+          <div className="daily-stats-cards">
+            <div className="daily-stat-card">
+              <div className="daily-stat-label">今日总点数</div>
+              <div className={`daily-stat-value ${
+                operations.filter(op => op.profitLossPoints !== undefined)
+                  .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0) > 0 ? 'profit' : 
+                operations.filter(op => op.profitLossPoints !== undefined)
+                  .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0) < 0 ? 'loss' : 'neutral'
+              }`}>
+                {(() => {
+                  const total = operations.filter(op => op.profitLossPoints !== undefined)
+                    .reduce((sum, op) => sum + (op.profitLossPoints || 0), 0);
+                  return (total > 0 ? '+' : '') + total.toFixed(0);
+                })()}
+              </div>
+            </div>
+            <div className="daily-stat-card">
+              <div className="daily-stat-label">操作次数</div>
+              <div className="daily-stat-value neutral">
+                {operations.filter(op => 
+                  op.action === '开多' || op.action === '开空' || op.action === '平仓'
+                ).length}
+              </div>
+            </div>
+            <div className="daily-stat-card">
+              <div className="daily-stat-label">净利润</div>
+              <div className={`daily-stat-value ${
+                operations.filter(op => op.netProfit !== undefined)
+                  .reduce((sum, op) => sum + (op.netProfit || 0), 0) > 0 ? 'profit' : 
+                operations.filter(op => op.netProfit !== undefined)
+                  .reduce((sum, op) => sum + (op.netProfit || 0), 0) < 0 ? 'loss' : 'neutral'
+              }`}>
+                {(() => {
+                  const total = operations.filter(op => op.netProfit !== undefined)
+                    .reduce((sum, op) => sum + (op.netProfit || 0), 0);
+                  return (total > 0 ? '+' : '') + total.toFixed(0) + '元';
+                })()}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 操作记录 */}
@@ -168,18 +284,42 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               {operations.map((op) => (
                 <div key={op.id} className="operation-item">
                   <div className="operation-header">
-                    <span className="operation-time">{formatTime(op.timestamp)}</span>
-                    <span className={`operation-action ${
-                      op.action === '开多' ? 'open-long' :
-                      op.action === '开空' ? 'open-short' :
-                      op.action === '平仓' ? 'close' : 'hold'
-                    }`}>
-                      {op.action}
-                    </span>
-                    <span className="operation-price">@ {op.price.toFixed(0)}</span>
+                    <div className="operation-header-left">
+                      <span className="operation-time">{formatTime(op.timestamp)}</span>
+                      <span className={`operation-action ${
+                        op.action === '开多' ? 'open-long' :
+                        op.action === '开空' ? 'open-short' :
+                        op.action === '平仓' ? 'close' :
+                        op.action === '观望' ? 'watch' : 'hold'
+                      }`}>
+                        {op.action}
+                      </span>
+                      <span className="operation-price">@ {op.price.toFixed(0)}</span>
+                    </div>
+                    {onDeleteOperation && (
+                      <button
+                        className="delete-operation-btn"
+                        onClick={() => {
+                          if (confirm('确定要删除这条操作记录吗？')) {
+                            onDeleteOperation(op.id);
+                          }
+                        }}
+                        title="删除此记录"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                   
-                  {/* 平仓时显示盈亏 */}
+                  {/* 开仓/平仓时显示手续费 */}
+                  {(op.action === '开多' || op.action === '开空') && (
+                    <div className="operation-commission">
+                      <span className="operation-commission-label">手续费:</span>
+                      <span className="operation-commission-value">-8元</span>
+                    </div>
+                  )}
+                  
+                  {/* 平仓时显示盈亏和手续费 */}
                   {op.action === '平仓' && op.profitLossPoints !== undefined && (
                     <div className="operation-profit-loss">
                       <span className={`operation-pl-points ${
@@ -194,10 +334,24 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                       }`}>
                         {(op.profitLossMoney || 0) > 0 ? '+' : ''}{op.profitLossMoney?.toFixed(0)}元
                       </span>
+                      <span className="operation-commission-value">手续费-8元</span>
+                      <span className={`operation-net-profit ${
+                        (op.netProfit || 0) > 0 ? 'profit' : 
+                        (op.netProfit || 0) < 0 ? 'loss' : 'neutral'
+                      }`}>
+                        净利润{(op.netProfit || 0) > 0 ? '+' : ''}{op.netProfit?.toFixed(0)}元
+                      </span>
                     </div>
                   )}
                   
-                  <div className="operation-reason">{op.reason}</div>
+                  {/* 原因说明（默认折叠，hover展开）*/}
+                  <div className="operation-reason-container">
+                    <div className="operation-reason-header">
+                      <span className="operation-reason-title">💡 决策理由</span>
+                      <span className="operation-reason-hint">（移动鼠标展开）</span>
+                    </div>
+                    <div className="operation-reason">{op.reason}</div>
+                  </div>
                 </div>
               ))}
             </div>

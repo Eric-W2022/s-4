@@ -656,6 +656,56 @@
 }
 
 /* 图形分析 */
+.chart-analysis {
+  margin-top: 8px;
+  transition: all 0.3s ease;
+}
+
+.chart-analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chart-analysis-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a855f7;
+}
+
+.chart-analysis-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* 默认折叠状态 */
+.chart-analysis.collapsible .chart-analysis-grid {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.4s ease, opacity 0.3s ease;
+}
+
+/* hover时展开 */
+.chart-analysis.collapsible:hover .chart-analysis-grid {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.chart-analysis.collapsible:hover .chart-analysis-header {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+}
+
 .chart-analysis-grid {
   display: flex;
   flex-direction: column;

@@ -50,6 +50,7 @@ interface AppState {
   singleHandOperations: SingleHandOperation[];
   setSingleHandPosition: (position: SingleHandPosition) => void;
   addSingleHandOperation: (operation: SingleHandOperation) => void;
+  deleteSingleHandOperation: (operationId: string) => void;
   clearSingleHandOperations: () => void;
 
   // 连接状态
@@ -246,6 +247,18 @@ export const useAppStore = create<AppState>()(
         // 新操作添加到开头，保留最多50条
         const newOperations = [operation, ...state.singleHandOperations].slice(0, 50);
         console.log('[Store] 添加单手操作记录，当前保留', newOperations.length, '条（最多50条）');
+        
+        // 保存到localStorage
+        try {
+          localStorage.setItem('singleHandOperations', JSON.stringify(newOperations));
+        } catch (error) {
+          console.error('[Store] 保存单手操作记录失败:', error);
+        }
+        return { singleHandOperations: newOperations };
+      }),
+      deleteSingleHandOperation: (operationId) => set((state) => {
+        const newOperations = state.singleHandOperations.filter(op => op.id !== operationId);
+        console.log('[Store] 删除单手操作记录，ID:', operationId, '，剩余:', newOperations.length);
         
         // 保存到localStorage
         try {

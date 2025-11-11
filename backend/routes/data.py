@@ -590,6 +590,8 @@ class SingleHandOperation(BaseModel):
     reason: str
     profitLossPoints: Optional[float] = None
     profitLossMoney: Optional[float] = None
+    commission: Optional[float] = None  # 手续费
+    netProfit: Optional[float] = None  # 净利润
 
 
 @router.post("/save-prediction")
@@ -731,7 +733,7 @@ async def save_single_hand_operation(request: SaveSingleHandOperationRequest):
         
         # CSV表头
         fieldnames = [
-            '时间', '操作', '价格', '理由', '盈亏点数', '盈亏金额'
+            '时间', '操作', '价格', '理由', '盈亏点数', '盈亏金额', '手续费', '净利润'
         ]
         
         # 检查文件是否存在
@@ -747,7 +749,9 @@ async def save_single_hand_operation(request: SaveSingleHandOperationRequest):
             '价格': op.price,
             '理由': op.reason,
             '盈亏点数': op.profitLossPoints if op.profitLossPoints is not None else '',
-            '盈亏金额': op.profitLossMoney if op.profitLossMoney is not None else ''
+            '盈亏金额': op.profitLossMoney if op.profitLossMoney is not None else '',
+            '手续费': op.commission if op.commission is not None else '',
+            '净利润': op.netProfit if op.netProfit is not None else ''
         }
         
         # 追加写入CSV文件

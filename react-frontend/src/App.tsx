@@ -50,6 +50,7 @@ function AppContent() {
     singleHandOperations,
     setSingleHandPosition,
     addSingleHandOperation,
+    deleteSingleHandOperation,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -549,13 +550,14 @@ function AppContent() {
         profitLossMoney: 0,
       });
       
-      // 添加操作记录（使用store）
+      // 添加操作记录（使用store），开仓手续费8元
       const newOperation: SingleHandOperation = {
         id: operationId,
         timestamp: Date.now(),
         action: decision.action,
         price: currentPrice,
         reason: decision.reason,
+        commission: 8, // 开仓手续费
       };
       addSingleHandOperation(newOperation);
       
@@ -567,9 +569,12 @@ function AppContent() {
       
       console.log(`[单手交易] ${decision.action} @ ${currentPrice}`);
     } else if (decision.action === '平仓' && singleHandPosition.hasPosition) {
-      // 平仓
+      // 平仓，计算手续费（开仓8元+平仓8元=16元）
       const profitLossPoints = singleHandPosition.profitLossPoints || 0;
       const profitLossMoney = singleHandPosition.profitLossMoney || 0;
+      const commission = 8; // 平仓手续费
+      const totalCommission = 16; // 总手续费（开仓8+平仓8）
+      const netProfit = profitLossMoney - totalCommission; // 净利润
       
       const newOperation: SingleHandOperation = {
         id: operationId,
@@ -579,6 +584,8 @@ function AppContent() {
         reason: decision.reason,
         profitLossPoints,
         profitLossMoney,
+        commission, // 本次手续费（平仓8元）
+        netProfit, // 净利润（扣除开仓和平仓手续费）
       };
       addSingleHandOperation(newOperation);
       
@@ -594,10 +601,43 @@ function AppContent() {
       
       console.log(`[单手交易] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点 (${profitLossMoney.toFixed(0)}元)`);
     } else if (decision.action === '持有') {
-      // 持有（可选择是否记录）
-      console.log(`[单手交易] 持有, 原因: ${decision.reason}`);
+      // 持有决策也记录下来
+      const newOperation: SingleHandOperation = {
+        id: operationId,
+        timestamp: Date.now(),
+        action: '持有',
+        price: currentPrice,
+        reason: decision.reason,
+      };
+      addSingleHandOperation(newOperation);
+      
+      // 持有决策也保存到后端
+      const { marketDataApi } = await import('./api/marketData');
+      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
+        console.error('[单手交易] 保存操作失败:', err);
+      });
+      
+      console.log(`[单手交易] 持有 @ ${currentPrice}, 原因: ${decision.reason}`);
+    } else if (decision.action === '观望') {
+      // 观望决策也记录下来
+      const newOperation: SingleHandOperation = {
+        id: operationId,
+        timestamp: Date.now(),
+        action: '观望',
+        price: currentPrice,
+        reason: decision.reason,
+      };
+      addSingleHandOperation(newOperation);
+      
+      // 观望决策也保存到后端
+      const { marketDataApi } = await import('./api/marketData');
+      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
+        console.error('[单手交易] 保存操作失败:', err);
+      });
+      
+      console.log(`[单手交易] 观望 @ ${currentPrice}, 原因: ${decision.reason}`);
     }
-  }, [singleHandPosition]);
+  }, [singleHandPosition, addSingleHandOperation]);
 
   // 单手交易：自动触发AI决策（每分钟）
   useEffect(() => {
@@ -879,7 +919,8 @@ function AppContent() {
   return (
     <div className="container">
       <div className="main-content">
-        {/* 左侧：伦敦现货白银K线图 */}
+        {/* 左上：1分钟K线图 */}
+        <div className="kline-row">
         <div className="left-panel">
           <KlineChart
             title="伦敦现货白银"
@@ -889,21 +930,8 @@ function AppContent() {
             height={600}
             isLoading={londonKline1mQuery.isLoading && !londonKline1mQuery.data}
           />
-          <KlineChart
-            title="伦敦现货白银（15分钟K线）"
-            data={londonKline15mQuery.data || []}
-            height={400}
-            isLoading={londonKline15mQuery.isLoading && !londonKline15mQuery.data}
-          />
-          <KlineChart
-            title="伦敦现货白银（90日K线）"
-            data={londonKlineDailyQuery.data || []}
-            height={400}
-            isLoading={londonKlineDailyQuery.isLoading && !londonKlineDailyQuery.data}
-          />
         </div>
 
-        {/* 中间：国内白银K线图 */}
         <div className="middle-panel">
           <KlineChart
             title="国内白银主力"
@@ -918,39 +946,26 @@ function AppContent() {
               takeProfit: strategies[selectedStrategyIndex].tradingAdvice.takeProfit,
             } : undefined}
           />
-          <KlineChart
-            title="国内白银主力（15分钟K线）"
-            data={domesticKline15mQuery.data || []}
-            height={400}
-            isLoading={domesticKline15mQuery.isLoading && !domesticKline15mQuery.data}
-          />
-          <KlineChart
-            title="国内白银主力（90日K线）"
-            data={domesticKlineDailyQuery.data || []}
-            height={400}
-            isLoading={domesticKlineDailyQuery.isLoading && !domesticKlineDailyQuery.data}
-          />
         </div>
 
-        {/* 右侧：市场数据区域 */}
+          {/* 单手交易策略 */}
         <div className="right-panel">
-          <DepthPanel 
-            data={domesticDepthQuery.data || null}
-            londonData={londonKline1mQuery.data || []}
-            domesticData={domesticRealtimeKline}
-            isLoading={domesticDepthQuery.isLoading && !domesticDepthQuery.data} 
-          />
           <SingleHandTrader
             position={singleHandPosition}
             operations={singleHandOperations}
             isLoading={isLoadingSingleHand}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
             onClearOperations={() => {
               useAppStore.getState().clearSingleHandOperations();
+            }}
+            onDeleteOperation={(operationId) => {
+              deleteSingleHandOperation(operationId);
             }}
           />
         </div>
 
-        {/* 最右侧：交易策略区域 */}
+          {/* 交易策略区域 */}
         <div className="strategy-panel-container">
           <StrategyPanel
             strategies={strategies}
@@ -976,6 +991,50 @@ function AppContent() {
               }
             }}
           />
+          </div>
+        </div>
+
+        {/* 盘口数据横排 */}
+        <div className="depth-row">
+          <DepthPanel 
+            data={domesticDepthQuery.data || null}
+            londonData={londonKline1mQuery.data || []}
+            domesticData={domesticRealtimeKline}
+            isLoading={domesticDepthQuery.isLoading && !domesticDepthQuery.data} 
+          />
+        </div>
+
+        {/* 其他K线图 */}
+        <div className="other-klines-row">
+          <div className="left-panel">
+            <KlineChart
+              title="伦敦现货白银（15分钟K线）"
+              data={londonKline15mQuery.data || []}
+              height={400}
+              isLoading={londonKline15mQuery.isLoading && !londonKline15mQuery.data}
+            />
+            <KlineChart
+              title="伦敦现货白银（90日K线）"
+              data={londonKlineDailyQuery.data || []}
+              height={400}
+              isLoading={londonKlineDailyQuery.isLoading && !londonKlineDailyQuery.data}
+            />
+          </div>
+
+          <div className="middle-panel">
+            <KlineChart
+              title="国内白银主力（15分钟K线）"
+              data={domesticKline15mQuery.data || []}
+              height={400}
+              isLoading={domesticKline15mQuery.isLoading && !domesticKline15mQuery.data}
+            />
+            <KlineChart
+              title="国内白银主力（90日K线）"
+              data={domesticKlineDailyQuery.data || []}
+              height={400}
+              isLoading={domesticKlineDailyQuery.isLoading && !domesticKlineDailyQuery.data}
+            />
+          </div>
         </div>
       </div>
     </div>

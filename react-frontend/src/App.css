@@ -1,84 +1,112 @@
 .main-content {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 350px 320px;
+  grid-template-rows: auto auto 1fr;
   gap: 10px;
   padding: 10px;
-  flex-direction: row;
+  align-items: start;
 }
 
-.left-panel {
-  flex: 1;
+/* 第一行：1分钟K线图 + 单手交易 + 策略 */
+.kline-row {
+  display: contents;
+}
+
+.kline-row .left-panel {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
 }
 
-.middle-panel {
-  flex: 1;
+.kline-row .middle-panel {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
 }
 
-.right-panel {
-  flex: 0 0 350px;
+.kline-row .right-panel {
+  grid-column: 3;
+  grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
-  min-width: 350px;
-  max-width: 350px;
   overflow-x: hidden;
 }
 
-.strategy-panel-container {
-  flex: 0 0 320px;
+.kline-row .strategy-panel-container {
+  grid-column: 4;
+  grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
-  min-width: 320px;
-  max-width: 320px;
   overflow-x: hidden;
-  /* 约等于三个K线图总高度：(600+125) + (400+125) + (400+125) ≈ 1775px */
-  /* 125px = padding(40) + header(60) + border(2) + margin(20) */
-  height: 1775px;
+}
+
+/* 第二行：盘口数据横排（只占前两列） */
+.depth-row {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  display: flex;
+}
+
+/* 第三行：其他K线图（只占前两列） */
+.other-klines-row {
+  display: contents;
+}
+
+.other-klines-row .left-panel {
+  grid-column: 1;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+}
+
+.other-klines-row .middle-panel {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 响应式设计 */
 @media (max-width: 1600px) {
-  .right-panel {
-    flex: 0 0 320px;
-    min-width: 320px;
-    max-width: 320px;
-  }
-  
-  .strategy-panel-container {
-    flex: 0 0 300px;
-    min-width: 300px;
-    max-width: 300px;
+  .main-content {
+    grid-template-columns: 1fr 1fr 320px 300px;
   }
 }
 
 @media (max-width: 1400px) {
-  .right-panel {
-    flex: 0 0 300px;
-    min-width: 300px;
-    max-width: 300px;
-  }
-  
-  .strategy-panel-container {
-    flex: 0 0 280px;
-    min-width: 280px;
-    max-width: 280px;
+  .main-content {
+    grid-template-columns: 1fr 1fr 300px 280px;
   }
 }
 
 @media (max-width: 1024px) {
   .main-content {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .kline-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .kline-row .left-panel,
+  .kline-row .middle-panel,
+  .kline-row .right-panel,
+  .kline-row .strategy-panel-container {
+    width: 100%;
+  }
+  
+  .other-klines-row {
     flex-direction: column;
   }
 
-  .left-panel,
-  .middle-panel,
-  .right-panel,
-  .strategy-panel-container {
+  .other-klines-row .left-panel,
+  .other-klines-row .middle-panel {
     width: 100%;
-    flex: 1;
-    max-width: 100%;
   }
 }
 
@@ -87,5 +115,11 @@
     padding: 5px;
     gap: 5px;
   }
+  
+  .kline-row,
+  .other-klines-row {
+    gap: 5px;
+  }
 }
+
 

@@ -130,11 +130,13 @@ export interface StrategyAnalysis {
 export interface SingleHandOperation {
   id: string;
   timestamp: number;
-  action: '开多' | '开空' | '平仓' | '持有';
+  action: '开多' | '开空' | '平仓' | '持有' | '观望';
   price: number;
   reason: string;
   profitLossPoints?: number;  // 平仓时的盈亏点数
   profitLossMoney?: number;   // 平仓时的盈亏金额（元）
+  commission?: number;        // 手续费（元），开仓和平仓时各8元
+  netProfit?: number;         // 净利润（元），平仓时的盈亏金额减去手续费
 }
 
 /**
@@ -154,7 +156,7 @@ export interface SingleHandPosition {
  * 单手交易决策
  */
 export interface SingleHandDecision {
-  action: '开多' | '开空' | '平仓' | '持有';
+  action: '开多' | '开空' | '平仓' | '持有' | '观望';
   reason: string;
   confidence: number;
   targetPrice?: number;       // 目标价格（开仓时）

@@ -11,7 +11,9 @@ import type {
   SingleHandDecision,
   ModelType 
 } from '../types';
-import { buildSingleHandPrompt } from '../prompts/singleHandPrompts';
+import type { BollingerBands } from '../prompts/singleHandPrompts';
+import { buildSingleHandMessages } from '../prompts/singleHandPrompts';
+import { calculateBollingerBands } from '../utils/chart';
 
 // 新加坡服务器配置（与strategyService.ts一致）
 const LLM_API_URL = 'https://1256349444-fla6e0vfcj.ap-singapore.tencentscf.com/chat';
@@ -24,54 +26,91 @@ export async function analyzeSingleHandStrategy(
   model: ModelType,
   londonKline1m: KlineData[],
   londonKline15m: KlineData[],
-  londonKline1d: KlineData[],
+  londonKlineDaily: KlineData[],
   domesticKline1m: KlineData[],
   domesticKline15m: KlineData[],
-  domesticKline1d: KlineData[],
+  domesticKlineDaily: KlineData[],
   domesticDepth: DepthData | null,
   currentPosition: SingleHandPosition,
   recentOperations: SingleHandOperation[],
   currentPrice: number
 ): Promise<SingleHandDecision> {
   try {
-    // 构建提示词
-    const prompt = buildSingleHandPrompt({
-      londonKline1m,
-      londonKline15m,
-      londonKline1d,
-      domesticKline1m,
-      domesticKline15m,
-      domesticKline1d,
-      domesticDepth,
-      currentPosition,
-      recentOperations,
-      currentPrice,
-    });
-
     console.log('[单手交易] 开始AI分析, 模型:', model);
     console.log('[单手交易] 数据统计:');
     console.log('  - 伦敦1分钟:', londonKline1m.length, '条');
     console.log('  - 伦敦15分钟:', londonKline15m.length, '条');
-    console.log('  - 伦敦日线:', londonKline1d.length, '条');
+    console.log('  - 伦敦日线:', londonKlineDaily.length, '条');
     console.log('  - 国内1分钟:', domesticKline1m.length, '条');
     console.log('  - 国内15分钟:', domesticKline15m.length, '条');
-    console.log('  - 国内日线:', domesticKline1d.length, '条');
+    console.log('  - 国内日线:', domesticKlineDaily.length, '条');
     console.log('  - 国内盘口:', domesticDepth ? '有' : '无');
     console.log('  - 当前持仓:', currentPosition.hasPosition ? '有' : '无');
     console.log('  - 历史操作:', recentOperations.length, '条');
 
-    // 构建发送给AI的消息（与strategyService.ts格式一致）
-    const messages = [
+    // 计算布林带指标
+    const bollinger1m = calculateBollingerBands(domesticKline1m, 20, 2);
+    const bollinger15m = calculateBollingerBands(domesticKline15m, 20, 2);
+    
+    // 获取最新的布林带值
+    const domesticBollinger1m: BollingerBands | undefined = bollinger1m.upper.length > 0 ? {
+      upper: bollinger1m.upper[bollinger1m.upper.length - 1],
+      middle: bollinger1m.middle[bollinger1m.middle.length - 1],
+      lower: bollinger1m.lower[bollinger1m.lower.length - 1],
+    } : undefined;
+
+    const domesticBollinger15m: BollingerBands | undefined = bollinger15m.upper.length > 0 ? {
+      upper: bollinger15m.upper[bollinger15m.upper.length - 1],
+      middle: bollinger15m.middle[bollinger15m.middle.length - 1],
+      lower: bollinger15m.lower[bollinger15m.lower.length - 1],
+    } : undefined;
+
+    console.log('  - 1分钟布林带:', domesticBollinger1m ? '有' : '无');
+    console.log('  - 15分钟布林带:', domesticBollinger15m ? '有' : '无');
+
+    // 构建系统提示词
+    const systemPrompt = `# 单手交易策略分析
+
+你是一位经验丰富的白银期货短线交易专家，负责管理一手白银期货的交易决策。
+
+## 交易规则
+1. **只能控制一手**: 同时最多持有1手白银期货
+2. **可操作类型**: 开多、开空、平仓、持有
+3. **盈亏计算**: 每个点价值15元人民币
+4. **手续费**: 开仓8元，平仓8元，总计16元
+5. **交易目标**: 短线交易，追求稳健收益，控制风险`;
+
+    // 构建消息数组（包含布林带数据）
+    const userMessages = buildSingleHandMessages({
+      londonKline1m,
+      londonKline15m,
+      londonKline1d: londonKlineDaily,
+      domesticKline1m,
+      domesticKline15m,
+      domesticKline1d: domesticKlineDaily,
+      domesticDepth,
+      currentPosition,
+      recentOperations,
+      currentPrice,
+      domesticBollinger1m,
+      domesticBollinger15m,
+    });
+
+    // 完整消息数组：system + 两个user messages
+    const fullMessages = [
       {
-        role: 'user',
-        content: prompt,
-      }
+        role: 'system',
+        content: systemPrompt
+      },
+      ...userMessages
     ];
+
+    console.log('[单手交易] Messages数量:', fullMessages.length);
 
     // 请求体
     const requestBody = {
       model,
-      messages,
+      messages: fullMessages,
       temperature: 0.7,
       max_tokens: 2000,
     };

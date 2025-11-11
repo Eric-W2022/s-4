@@ -420,9 +420,13 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = React.memo(
                     </div>
                   </div>
 
-                  {/* 图形分析 */}
+                  {/* 图形分析（默认折叠，hover展开）*/}
                   {strategy.chartAnalysis && (
-                    <div className="analysis-section chart-analysis">
+                    <div className="analysis-section chart-analysis collapsible">
+                      <div className="chart-analysis-header">
+                        <span className="chart-analysis-title">📊 图形分析</span>
+                        <span className="chart-analysis-hint">（移动鼠标展开）</span>
+                      </div>
                       <div className="chart-analysis-grid">
                         <div className="chart-analysis-item">
                           <div className="chart-analysis-label">

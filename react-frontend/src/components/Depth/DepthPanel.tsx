@@ -102,9 +102,6 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
   if (isLoading) {
     return (
       <div className="depth-panel">
-        <div className="depth-header">
-          <h3>国内白银盘口</h3>
-        </div>
         <LoadingSpinner text="加载盘口数据..." size="small" />
       </div>
     );
@@ -113,9 +110,6 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
   if (!data) {
     return (
       <div className="depth-panel">
-        <div className="depth-header">
-          <h3>国内白银盘口</h3>
-        </div>
         <div className="no-data">暂无盘口数据</div>
       </div>
     );
@@ -123,15 +117,9 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
 
   return (
     <div className="depth-panel">
-      <div className="depth-header">
-        <h3>国内白银盘口</h3>
-        <span className="depth-update-time">
-          {data.datetime ? formatTimestamp(data.datetime, 'HH:mm:ss') : '--'}
-        </span>
-      </div>
-
       <div className="depth-content">
-        {/* 买卖盘列表 */}
+        {/* 第一列：买卖盘列表 */}
+        <div className="depth-section-left">
         <div className="depth-columns">
           {/* 卖盘 */}
           <div className="depth-column depth-column-ask">
@@ -167,10 +155,12 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
               </tbody>
             </table>
           </div>
+          </div>
         </div>
 
-        {/* 情绪进度条 */}
-        {emotion && (
+        {/* 第二列：多空优势 */}
+        <div className="depth-section-emotion">
+          {emotion && (
           <div className="depth-emotion-bar">
             <div className="emotion-trend-indicator">
               <span className={`trend-badge trend-${emotion.trend}`}>
@@ -208,9 +198,12 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
               </div>
             </div>
           </div>
-        )}
+          )}
+        </div>
 
-        {/* 扩展数据 */}
+        {/* 第三列：扩展数据 */}
+        <div className="depth-section-middle">
+          {/* 扩展数据 */}
         {data.last_price && (
           <div className="depth-extended-data">
             <div className="extended-data-grid">
@@ -220,24 +213,34 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
                   <div className="extended-value">{formatPrice(data.last_price)}</div>
                 </div>
                 <div className="extended-data-item">
+                  <div className="extended-label">昨结算</div>
+                  <div className="extended-value">{data.pre_settlement ? formatPrice(data.pre_settlement) : '--'}</div>
+                </div>
+                <div className="extended-data-item">
                   <div className="extended-label">涨跌</div>
-                  <div className={`extended-value ${parseFloat(data.change || '0') >= 0 ? 'price-up' : 'price-down'}`}>
-                    {data.change ? (parseFloat(data.change) >= 0 ? '+' : '') + formatPrice(data.change) : '--'}
+                  <div className={`extended-value ${
+                    data.pre_settlement && data.last_price
+                      ? (parseFloat(data.last_price) - parseFloat(data.pre_settlement) >= 0 ? 'price-up' : 'price-down')
+                      : ''
+                  }`}>
+                    {data.pre_settlement && data.last_price
+                      ? ((parseFloat(data.last_price) - parseFloat(data.pre_settlement)) >= 0 ? '+' : '') + 
+                        formatPrice((parseFloat(data.last_price) - parseFloat(data.pre_settlement)).toString())
+                      : (data.change ? (parseFloat(data.change) >= 0 ? '+' : '') + formatPrice(data.change) : '--')}
                   </div>
                 </div>
                 <div className="extended-data-item">
                   <div className="extended-label">涨跌幅</div>
-                  <div className={`extended-value ${parseFloat(data.change_percent || '0') >= 0 ? 'price-up' : 'price-down'}`}>
-                    {data.change_percent ? (parseFloat(data.change_percent) >= 0 ? '+' : '') + data.change_percent + '%' : '--'}
+                  <div className={`extended-value ${
+                    data.pre_settlement && data.last_price
+                      ? (parseFloat(data.last_price) - parseFloat(data.pre_settlement) >= 0 ? 'price-up' : 'price-down')
+                      : (parseFloat(data.change_percent || '0') >= 0 ? 'price-up' : 'price-down')
+                  }`}>
+                    {data.pre_settlement && data.last_price
+                      ? ((parseFloat(data.last_price) - parseFloat(data.pre_settlement)) >= 0 ? '+' : '') + 
+                        (((parseFloat(data.last_price) - parseFloat(data.pre_settlement)) / parseFloat(data.pre_settlement) * 100).toFixed(2)) + '%'
+                      : (data.change_percent ? (parseFloat(data.change_percent) >= 0 ? '+' : '') + data.change_percent + '%' : '--')}
                   </div>
-                </div>
-                <div className="extended-data-item">
-                  <div className="extended-label">成交量</div>
-                  <div className="extended-value">{data.volume ? formatVolume(data.volume) : '--'}</div>
-                </div>
-                <div className="extended-data-item">
-                  <div className="extended-label">昨持仓</div>
-                  <div className="extended-value">{data.pre_open_interest ? formatVolume(data.pre_open_interest) : '--'}</div>
                 </div>
               </div>
               <div className="extended-data-row">
@@ -254,8 +257,18 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
                   <div className="extended-value low-price">{data.lowest ? formatPrice(data.lowest) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
+                  <div className="extended-label">成交量</div>
+                  <div className="extended-value">{data.volume ? formatVolume(data.volume) : '--'}</div>
+                </div>
+              </div>
+              <div className="extended-data-row">
+                <div className="extended-data-item">
                   <div className="extended-label">持仓量</div>
                   <div className="extended-value">{data.open_interest ? formatVolume(data.open_interest) : '--'}</div>
+                </div>
+                <div className="extended-data-item">
+                  <div className="extended-label">昨持仓</div>
+                  <div className="extended-value">{data.pre_open_interest ? formatVolume(data.pre_open_interest) : '--'}</div>
                 </div>
                 <div className="extended-data-item">
                   <div className="extended-label">持仓差</div>
@@ -270,14 +283,19 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
                       : '--'}
                   </div>
                 </div>
+                <div className="extended-data-item">
+                  <div className="extended-label">结算价</div>
+                  <div className="extended-value">{data.settlement ? formatPrice(data.settlement) : '--'}</div>
+                </div>
               </div>
             </div>
           </div>
-        )}
+          )}
+        </div>
 
-        {/* 套利机会指标 */}
+        {/* 第四列：套利机会指标 */}
         {arbitrageMetrics && (
-          <div className="arbitrage-section">
+          <div className="depth-section-right">
             {/* 套利得分 */}
             <div className="arbitrage-score-section">
               <div className="arbitrage-score-main">

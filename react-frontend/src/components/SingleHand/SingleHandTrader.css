@@ -28,13 +28,91 @@
 
 .single-hand-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.single-hand-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 模型选择器 */
+.model-selector-container {
+  position: relative;
+  display: inline-block;
+}
+
+.model-selector-display {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.model-selector-container:hover .model-selector-display {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6);
+  transform: translateY(-1px);
+}
+
+.model-selector-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #1e2548;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+}
+
+.model-selector-dropdown.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.model-selector-option {
+  padding: 8px 16px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.model-selector-option:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: #ffffff;
+}
+
+.model-selector-option.active {
+  background: rgba(102, 126, 234, 0.3);
+  color: #667eea;
+  font-weight: 600;
+}
+
+.model-gap {
+  height: 1px;
+  background: rgba(102, 126, 234, 0.3);
+  margin: 4px 0;
 }
 
 .clear-operations-btn {
@@ -89,14 +167,6 @@
   margin-bottom: 16px;
 }
 
-.position-section h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #a0a0a0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
 .position-info {
   display: flex;
   flex-direction: column;
@@ -105,7 +175,7 @@
 
 .position-cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -141,105 +211,69 @@
   color: #22c55e;
 }
 
+.position-card-value.direction.idle {
+  color: #818cf8;
+}
+
 .position-card-value.duration {
   color: #818cf8;
 }
 
-/* 盈亏显示 */
-.profit-loss-display {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  padding: 12px;
-}
-
-.profit-loss-row {
-  display: flex;
-  justify-content: space-around;
-  gap: 16px;
-}
-
-.profit-loss-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.profit-loss-label {
-  font-size: 11px;
-  color: #909090;
-}
-
-.profit-loss-value {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.profit-loss-value.profit {
+.position-card-value.profit {
   color: #ef4444;
-  text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
-.profit-loss-value.loss {
+.position-card-value.loss {
   color: #22c55e;
-  text-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
 }
 
-.profit-loss-value.neutral {
+.position-card-value.neutral {
   color: #808080;
 }
 
-/* 无持仓状态 */
-.no-position {
-  text-align: center;
-  padding: 20px;
-  color: #808080;
+/* 今日统计区域 */
+.daily-stats-section {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
 }
 
-.no-position-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
-  opacity: 0.5;
+.daily-stats-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
-.no-position-text {
-  font-size: 14px;
-}
-
-.idle-status {
-  font-size: 18px;
-  font-weight: 600;
-  color: #818cf8;
-  margin-bottom: 12px;
-}
-
-.idle-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+.daily-stat-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.idle-stat-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-}
-
-.idle-stat-label {
+.daily-stat-label {
+  font-size: 11px;
   color: #909090;
+  margin-bottom: 4px;
 }
 
-.idle-stat-value {
+.daily-stat-value {
+  font-size: 16px;
+  font-weight: 600;
   color: #e0e0e0;
-  font-weight: 500;
 }
 
-.idle-stat-value.neutral {
+.daily-stat-value.profit {
+  color: #ef4444;
+}
+
+.daily-stat-value.loss {
+  color: #22c55e;
+}
+
+.daily-stat-value.neutral {
   color: #808080;
 }
 
@@ -320,8 +354,45 @@
 .operation-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.operation-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.delete-operation-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.delete-operation-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.operation-item:hover .delete-operation-btn {
+  opacity: 1;
 }
 
 .operation-time {
@@ -356,10 +427,32 @@
   color: #818cf8;
 }
 
+.operation-action.watch {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
 .operation-price {
   font-size: 13px;
   color: #e0e0e0;
   font-weight: 500;
+}
+
+/* 手续费显示 */
+.operation-commission {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.operation-commission-label {
+  color: #909090;
+}
+
+.operation-commission-value {
+  color: #fbbf24;
+  font-weight: 600;
 }
 
 /* 平仓盈亏 */
@@ -369,27 +462,79 @@
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 600;
+  flex-wrap: wrap;
 }
 
 .operation-pl-points.profit,
-.operation-pl-money.profit {
+.operation-pl-money.profit,
+.operation-net-profit.profit {
   color: #ef4444;
 }
 
 .operation-pl-points.loss,
-.operation-pl-money.loss {
+.operation-pl-money.loss,
+.operation-net-profit.loss {
   color: #22c55e;
 }
 
 .operation-pl-points.neutral,
-.operation-pl-money.neutral {
+.operation-pl-money.neutral,
+.operation-net-profit.neutral {
   color: #808080;
 }
 
+/* 决策理由区域（折叠功能）*/
+.operation-reason-container {
+  margin-top: 8px;
+  transition: all 0.3s ease;
+}
+
+.operation-reason-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(129, 140, 248, 0.15);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.operation-reason-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #818cf8;
+}
+
+.operation-reason-hint {
+  font-size: 10px;
+  color: #909090;
+  font-style: italic;
+}
+
+/* 默认折叠状态 */
 .operation-reason {
   font-size: 12px;
   color: #b0b0b0;
   line-height: 1.4;
-  margin-top: 4px;
+  margin-top: 6px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+/* hover时展开 */
+.operation-reason-container:hover .operation-reason {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 6px;
+}
+
+.operation-reason-container:hover .operation-reason-header {
+  background: rgba(129, 140, 248, 0.25);
+  border-color: rgba(129, 140, 248, 0.5);
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.2);
 }
 

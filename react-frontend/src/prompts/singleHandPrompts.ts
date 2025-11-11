@@ -5,6 +5,12 @@
 
 import type { KlineData, DepthData, SingleHandPosition, SingleHandOperation } from '../types';
 
+export interface BollingerBands {
+  upper: number | null;
+  middle: number | null;
+  lower: number | null;
+}
+
 export interface SingleHandPromptParams {
   londonKline1m: KlineData[];
   londonKline15m: KlineData[];
@@ -16,12 +22,14 @@ export interface SingleHandPromptParams {
   currentPosition: SingleHandPosition;
   recentOperations: SingleHandOperation[];  // 最近10条操作记录
   currentPrice: number;  // 当前价格
+  domesticBollinger1m?: BollingerBands;  // 国内1分钟布林带
+  domesticBollinger15m?: BollingerBands;  // 国内15分钟布林带
 }
 
 /**
- * 构建单手交易策略提示词
+ * 构建单手交易策略提示词消息数组
  */
-export function buildSingleHandPrompt(params: SingleHandPromptParams): string {
+export function buildSingleHandMessages(params: SingleHandPromptParams): Array<{role: string, content: string}> {
   const {
     londonKline1m,
     londonKline15m,
@@ -33,6 +41,8 @@ export function buildSingleHandPrompt(params: SingleHandPromptParams): string {
     currentPosition,
     recentOperations,
     currentPrice,
+    domesticBollinger1m,
+    domesticBollinger15m,
   } = params;
 
   // 格式化K线数据（分钟级别）
@@ -100,92 +110,166 @@ export function buildSingleHandPrompt(params: SingleHandPromptParams): string {
     }).join('\n\n');
   };
 
-  const prompt = `# 单手交易策略分析
+  // 格式化布林带数据
+  const formatBollinger = (bollinger?: BollingerBands, label: string = '') => {
+    if (!bollinger || bollinger.upper === null || bollinger.middle === null || bollinger.lower === null) {
+      return `${label}布林带：数据不可用`;
+    }
+    return `${label}布林带：上轨${bollinger.upper.toFixed(0)} | 中轨${bollinger.middle.toFixed(0)} | 下轨${bollinger.lower.toFixed(0)}`;
+  };
 
-你是一位经验丰富的白银期货短线交易专家，负责管理一手白银期货的交易决策。
+  // 每个数据项都是一个独立的user message
+  const messages = [
+    {
+      role: 'user',
+      content: `当前价格\n国内白银主力当前价: ${currentPrice.toFixed(0)}`
+    },
+    {
+      role: 'user',
+      content: `伦敦现货白银 (1分钟K线，最近100根)\n${formatKlineData(londonKline1m, 100)}`
+    },
+    {
+      role: 'user',
+      content: `伦敦现货白银 (15分钟K线，最近50根)\n${formatKlineData(londonKline15m, 50)}`
+    },
+    {
+      role: 'user',
+      content: `伦敦现货白银 (日线，最近50根)\n${formatKlineDataDaily(londonKline1d, 50)}`
+    },
+    {
+      role: 'user',
+      content: `国内白银主力 (1分钟K线，最近100根)\n${formatKlineData(domesticKline1m, 100)}`
+    },
+    {
+      role: 'user',
+      content: `国内白银主力 (15分钟K线，最近50根)\n${formatKlineData(domesticKline15m, 50)}`
+    },
+    {
+      role: 'user',
+      content: `国内白银主力 (日线，最近50根)\n${formatKlineDataDaily(domesticKline1d, 50)}`
+    },
+    {
+      role: 'user',
+      content: `国内白银盘口\n${formatDepthData(domesticDepth)}`
+    },
+    {
+      role: 'user',
+      content: `技术指标\n${formatBollinger(domesticBollinger1m, '1分钟')}\n${formatBollinger(domesticBollinger15m, '15分钟')}`
+    },
+    {
+      role: 'user',
+      content: `当前持仓状态\n${formatPosition(currentPosition)}`
+    },
+    {
+      role: 'user',
+      content: `最近10条操作记录\n${formatOperations(recentOperations)}`
+    }
+  ];
 
-## 交易规则
-1. **只能控制一手**: 同时最多持有1手白银期货
-2. **可操作类型**: 开多、开空、平仓、持有
-3. **盈亏计算**: 每个点价值15元人民币
-4. **交易目标**: 短线交易，追求稳健收益，控制风险
+  // 最后一个user message：分析要求
+  const analysisMessage = {
+    role: 'user',
+    content: `分析要求
 
-## 当前市场数据
+请基于以上市场数据和持仓状态，给出你的交易决策。
 
-### 当前价格
-国内白银主力当前价: ${currentPrice.toFixed(0)}
+分析维度
 
-### 伦敦现货白银 (1分钟K线，最近100根)
-${formatKlineData(londonKline1m, 100)}
+1. **图形技术分析**（15分钟短线）：
+   - K线形态：头肩顶/底、双顶/底、三角形、楔形、吞没、锤子线等经典形态
+   - 均线系统：MA5、MA10、MA20的排列和交叉情况（金叉/死叉）
+   - 布林带：价格与布林带上中下轨的位置关系
+     * 价格触及上轨：超买，可能回调
+     * 价格触及下轨：超卖，可能反弹
+     * 价格在中轨附近：震荡，等待方向
+     * 布林带收窄：酝酿突破
+     * 布林带扩张：趋势加速
+   - 趋势判断：上升趋势、下降趋势、横盘震荡
+   - 支撑阻力：关键价格支撑位和阻力位（结合K线、布林带、整数关口）
+   - 成交量：放量突破、缩量整理、量价配合情况
 
-### 伦敦现货白银 (15分钟K线，最近50根)
-${formatKlineData(londonKline15m, 50)}
+2. **多周期共振**：
+   - 日线趋势：大周期方向判断
+   - 15分钟趋势：中周期方向
+   - 1分钟趋势：入场时机把握
+   - 伦敦与国内：内外盘联动性分析
 
-### 伦敦现货白银 (日线，最近50根)
-${formatKlineDataDaily(londonKline1d, 50)}
+3. **盘口分析**：
+   - 买卖盘力量对比（买一买二 vs 卖一卖二）
+   - 大单压力：是否有明显的大单挂单
+   - 成交活跃度：盘口流动性判断
 
-### 国内白银主力 (1分钟K线，最近100根)
-${formatKlineData(domesticKline1m, 100)}
+4. **持仓评估**（如有持仓）：
+   - 当前盈亏：是否达到止盈/止损条件
+   - 持仓时长：是否超过合理持仓时间
+   - 市场变化：开仓后市场是否按预期发展
+   - 及时决策：盈利时及时止盈，亏损时果断止损
 
-### 国内白银主力 (15分钟K线，最近50根)
-${formatKlineData(domesticKline15m, 50)}
+5. **历史操作反思**：
+   - 分析最近操作的成功率
+   - 总结失败操作的原因
+   - 避免重复犯错
+   - 强化成功策略
 
-### 国内白银主力 (日线，最近50根)
-${formatKlineDataDaily(domesticKline1d, 50)}
+策略偏好（短线15分钟内）
 
-### 国内白银盘口
-${formatDepthData(domesticDepth)}
+**开仓策略**：
+- ✓ 趋势明确时顺势开仓（多周期K线方向一致）
+- ✓ 多周期共振（日线、15分钟、1分钟方向一致）
+- ✓ 布林带突破：价格突破上轨做多，跌破下轨做空
+- ✓ 布林带反转：价格触及下轨反弹做多，触及上轨回调做空
+- ✓ 关键位置突破：整数关口、前高前低突破时跟进
+- ✓ K线形态确认：吞没、锤子线等反转形态
+- ✗ 震荡行情避免开仓（布林带窄幅震荡）
+- ✗ 趋势不明时观望（价格在布林中轨附近反复）
+- ✗ 布林带极端位置谨慎追高杀低
 
-## 当前持仓状态
-${formatPosition(currentPosition)}
+**平仓策略**（优先级从高到低）：
+1. **止盈**：盈利达到10-20点时，果断止盈（15分钟短线目标）
+2. **止损**：亏损达到5-10点时，立即止损（控制风险）
+3. **时间止损**：持仓超过10分钟未盈利，考虑离场
+4. **趋势反转**：K线形态反转时，及时平仓
+5. **盘口变化**：买卖力量明显逆转时平仓
 
-## 最近10条操作记录
-${formatOperations(recentOperations)}
+**持有策略**：
+- 盈利中且趋势未改变：继续持有
+- 盈利较小但趋势强劲：持有等待
+- 时间<5分钟且未触及止损：观察持有
 
-## 分析要求
+风险控制
 
-请基于以上市场数据和持仓状态，给出你的交易决策：
+- 单次亏损控制在10点以内（150元）
+- 单次盈利目标10-20点（150-300元）
+- 扣除手续费16元后仍有利润
+- 避免频繁交易（手续费成本）
+- 宁可少赚不要亏损
 
-1. **决策分析**: 
-   - 分析当前市场趋势（上涨/下跌/震荡）
-   - 分析关键价格支撑位和阻力位
-   - 如果有持仓，评估当前盈亏和持仓合理性
-   - 参考历史操作记录，避免重复失误
-
-2. **操作建议**:
-   - 如果无持仓: 考虑是否开多、开空或继续观望
-   - 如果有持仓: 考虑是否平仓止盈/止损，或继续持有
-   - 给出具体的操作理由
-
-3. **风险控制**:
-   - 评估当前市场风险
-   - 如果建议开仓，说明预期目标价位
-   - 如果建议持有，说明继续持有的条件
-
-## 输出格式
+输出格式
 
 请严格按照以下JSON格式输出（不要包含markdown代码块标记）:
 
 {
-  "action": "开多/开空/平仓/持有",
-  "reason": "详细的决策理由，包括技术分析和风险评估",
+  "action": "开多/开空/平仓/持有/观望",
+  "reason": "详细的决策理由，包括：1)图形形态分析 2)趋势判断 3)支撑阻力位 4)盘口情况 5)持仓评估(如有) 6)操作依据",
   "confidence": 85,
   "targetPrice": 8650
 }
 
-说明：
-- action: 必须是"开多"、"开空"、"平仓"或"持有"之一
-- reason: 详细说明你的分析逻辑和决策依据
-- confidence: 信心度（0-100），表示对这个决策的把握程度
-- targetPrice: 目标价格（仅在开仓时需要，平仓和持有时可不填）
+字段说明：
+- action: 必须是"开多"、"开空"、"平仓"、"持有"或"观望"之一
+- reason: 详细说明分析逻辑（150字以内，重点突出）
+- confidence: 信心度（0-100），基于技术指标一致性
+- targetPrice: 目标价格（开仓时必填，平仓、持有和观望时可不填）
 
-注意：
+约束条件：
 1. 如果当前有持仓，不能再开新仓，只能选择"平仓"或"持有"
-2. 如果当前无持仓，不能选择"平仓"，只能选择"开多"、"开空"或"持有"
-3. 考虑短线交易特点，及时止盈止损
-4. 参考历史操作记录，总结经验教训
-`;
+2. 如果当前无持仓，不能选择"平仓"或"持有"，只能选择"开多"、"开空"或"观望"
+3. 开仓时confidence必须≥60%，否则选择"观望"
+4. 考虑短线交易特点（15分钟内），及时止盈止损
+5. 参考历史操作记录，避免重复失误，提高成功率`
+  };
 
-  return prompt;
+  // 返回所有消息（10个数据message + 1个分析要求message）
+  return [...messages, analysisMessage];
 }
 
