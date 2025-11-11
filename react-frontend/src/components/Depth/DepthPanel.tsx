@@ -336,7 +336,6 @@ export const DepthPanel: React.FC<DepthPanelProps> = React.memo(({ data, londonD
                     color: arbitrageMetrics.direction === 'long' ? '#ef4444' : 
                            arbitrageMetrics.direction === 'short' ? '#4ade80' : '#9ca3af',
                     fontWeight: 'bold',
-                    fontSize: arbitrageMetrics.score >= 40 && arbitrageMetrics.direction !== 'neutral' ? '18px' : '15px',
                     transition: 'all 0.3s ease'
                   }}
                 >
