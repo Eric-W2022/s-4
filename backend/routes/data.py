@@ -585,13 +585,17 @@ class SingleHandOperation(BaseModel):
     """单手交易操作记录"""
     id: str
     timestamp: int
-    action: str  # '开多', '开空', '平仓', '持有'
+    action: str  # '开多', '开空', '平仓', '持有', '观望'
     price: float
     reason: str
+    reflection: Optional[str] = None  # AI反思
     profitLossPoints: Optional[float] = None
     profitLossMoney: Optional[float] = None
     commission: Optional[float] = None  # 手续费
     netProfit: Optional[float] = None  # 净利润
+    duration: Optional[int] = None  # 持仓时长（分钟）
+    model: Optional[str] = None  # 使用的AI模型
+    processingTime: Optional[int] = None  # AI处理时间（毫秒）
 
 
 @router.post("/save-prediction")
@@ -711,6 +715,7 @@ async def save_prediction(request: SavePredictionRequest):
 
 class SaveSingleHandOperationRequest(BaseModel):
     """保存单手交易操作请求"""
+    modelId: str  # 模型ID（model1, model2, model3）
     operation: SingleHandOperation
 
 
@@ -726,14 +731,15 @@ async def save_single_hand_operation(request: SaveSingleHandOperationRequest):
         from pathlib import Path
         base_dir = Path(__file__).parent.parent.parent
         predictions_dir = base_dir / "predictions" / "single_hand"
-        csv_file = predictions_dir / f"operations_{date_str}.csv"
+        # 按模型ID分开保存到不同文件
+        csv_file = predictions_dir / f"operations_{request.modelId}_{date_str}.csv"
         
         # 确保predictions/single_hand目录存在
         predictions_dir.mkdir(parents=True, exist_ok=True)
         
         # CSV表头
         fieldnames = [
-            '时间', '操作', '价格', '理由', '盈亏点数', '盈亏金额', '手续费', '净利润'
+            '时间', '操作', '价格', '理由', '反思', '盈亏点数', '盈亏金额', '手续费', '净利润', '持仓时长', '模型', '处理时间'
         ]
         
         # 检查文件是否存在
@@ -748,10 +754,14 @@ async def save_single_hand_operation(request: SaveSingleHandOperationRequest):
             '操作': op.action,
             '价格': op.price,
             '理由': op.reason,
+            '反思': op.reflection if op.reflection else '',
             '盈亏点数': op.profitLossPoints if op.profitLossPoints is not None else '',
             '盈亏金额': op.profitLossMoney if op.profitLossMoney is not None else '',
             '手续费': op.commission if op.commission is not None else '',
-            '净利润': op.netProfit if op.netProfit is not None else ''
+            '净利润': op.netProfit if op.netProfit is not None else '',
+            '持仓时长': op.duration if op.duration is not None else '',
+            '模型': op.model if op.model else '',
+            '处理时间': op.processingTime if op.processingTime is not None else ''
         }
         
         # 追加写入CSV文件

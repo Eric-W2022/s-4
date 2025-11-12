@@ -46,11 +46,15 @@ function AppContent() {
     updateStrategyProfitLoss,
     clearStrategies,
     deleteStrategy,
-    singleHandPosition,
-    singleHandOperations,
+    singleHandPositions,
+    singleHandOperationsMap,
     setSingleHandPosition,
     addSingleHandOperation,
     deleteSingleHandOperation,
+    singleHandAutoRequest,
+    setSingleHandAutoRequest,
+    singleHandModels,
+    setSingleHandModel,
   } = useAppStore();
 
   // 国内白银实时K线数据（WebSocket）
@@ -70,9 +74,30 @@ function AppContent() {
   // 当前是否正在加载策略
   const [isLoadingStrategy, setIsLoadingStrategy] = useState(false);
 
-  // 单手交易加载状态和分析时间（从store获取持仓和操作记录）
-  const [isLoadingSingleHand, setIsLoadingSingleHand] = useState(false);
-  const lastSingleHandAnalysisRef = useRef<number>(0);
+  // 单手交易加载状态和分析时间（每个模型独立）
+  const [isLoadingSingleHand, setIsLoadingSingleHand] = useState<Record<string, boolean>>({
+    model1: false,
+    model2: false,
+    model3: false,
+    model4: false,
+    model5: false,
+  });
+  const lastSingleHandAnalysisRef = useRef<Record<string, number>>({
+    model1: 0,
+    model2: 0,
+    model3: 0,
+    model4: 0,
+    model5: 0,
+  });
+  
+  // 5个模型的配置（从store获取每个模型选择的模型）
+  const modelConfigs = [
+    { id: 'model1', model: singleHandModels['model1'] || 'deepseek-chat' as ModelType },
+    { id: 'model2', model: singleHandModels['model2'] || 'kimi-k2-turbo-preview' as ModelType },
+    { id: 'model3', model: singleHandModels['model3'] || 'MiniMax-M2' as ModelType },
+    { id: 'model4', model: singleHandModels['model4'] || 'google-ai-studio/gemini-2.5-pro' as ModelType },
+    { id: 'model5', model: singleHandModels['model5'] || 'claude-sonnet-4-5' as ModelType },
+  ];
 
   // Wake Lock 引用
   const wakeLockRef = useRef<any>(null);
@@ -555,91 +580,88 @@ function AppContent() {
     if (domesticDepthQuery.data) setDomesticDepth(domesticDepthQuery.data);
   }, [domesticDepthQuery.data]);
 
-  // 单手交易：更新当前持仓的盈亏
+
+  // 更新所有模型的实时盈亏
   useEffect(() => {
     if (!domesticTradeTickQuery.data?.price) return;
     
     const currentPrice = Number(domesticTradeTickQuery.data.price);
+    const modelIds = ['model1', 'model2', 'model3', 'model4', 'model5'];
     
-    // 如果有持仓，计算实时盈亏
-    if (singleHandPosition.hasPosition) {
-      const entryPrice = singleHandPosition.entryPrice || 0;
-      const direction = singleHandPosition.direction;
+    modelIds.forEach(modelId => {
+      const position = singleHandPositions[modelId] || { hasPosition: false };
       
-      // 更新持仓期间的最高价和最低价
-      const maxPrice = Math.max(singleHandPosition.maxPrice || currentPrice, currentPrice);
-      const minPrice = Math.min(singleHandPosition.minPrice || currentPrice, currentPrice);
-      
-      // 计算当前盈亏
-      let profitLossPoints = 0;
-      if (direction === '多') {
-        profitLossPoints = currentPrice - entryPrice;
-      } else if (direction === '空') {
-        profitLossPoints = entryPrice - currentPrice;
+      if (position.hasPosition) {
+        const entryPrice = position.entryPrice || 0;
+        const direction = position.direction;
+        const maxPrice = Math.max(position.maxPrice || currentPrice, currentPrice);
+        const minPrice = Math.min(position.minPrice || currentPrice, currentPrice);
+        
+        let profitLossPoints = 0;
+        if (direction === '多') {
+          profitLossPoints = currentPrice - entryPrice;
+        } else if (direction === '空') {
+          profitLossPoints = entryPrice - currentPrice;
+        }
+        const profitLossMoney = profitLossPoints * 15;
+        
+        let maxProfitPoints = 0;
+        if (direction === '多') {
+          maxProfitPoints = maxPrice - entryPrice;
+        } else if (direction === '空') {
+          maxProfitPoints = entryPrice - minPrice;
+        }
+        const maxProfitMoney = maxProfitPoints * 15;
+        
+        let drawdownPercent = 0;
+        if (maxProfitPoints > 0) {
+          drawdownPercent = ((maxProfitPoints - profitLossPoints) / maxProfitPoints) * 100;
+        }
+        
+        if (position.currentPrice !== currentPrice ||
+            position.profitLossPoints !== profitLossPoints ||
+            position.maxPrice !== maxPrice ||
+            position.minPrice !== minPrice) {
+          setSingleHandPosition(modelId, {
+            ...position,
+            currentPrice,
+            profitLossPoints,
+            profitLossMoney,
+            maxPrice,
+            minPrice,
+            maxProfitPoints,
+            maxProfitMoney,
+            drawdownPercent,
+          });
+        }
+      } else {
+        if (position.currentPrice !== currentPrice || position.profitLossPoints !== 0) {
+          setSingleHandPosition(modelId, {
+            hasPosition: false,
+            currentPrice,
+            profitLossPoints: 0,
+            profitLossMoney: 0,
+            maxPrice: 0,
+            minPrice: 0,
+            maxProfitPoints: 0,
+            maxProfitMoney: 0,
+            drawdownPercent: 0,
+          });
+        }
       }
-      const profitLossMoney = profitLossPoints * 15; // 每点15元
-      
-      // 根据持仓方向计算最高盈利（基于最高价/最低价）
-      let maxProfitPoints = 0;
-      if (direction === '多') {
-        // 多单：最高价 - 入场价
-        maxProfitPoints = maxPrice - entryPrice;
-      } else if (direction === '空') {
-        // 空单：入场价 - 最低价
-        maxProfitPoints = entryPrice - minPrice;
-      }
-      const maxProfitMoney = maxProfitPoints * 15;
-      
-      // 计算回撤百分比
-      let drawdownPercent = 0;
-      if (maxProfitPoints > 0) {
-        drawdownPercent = ((maxProfitPoints - profitLossPoints) / maxProfitPoints) * 100;
-      }
-      
-      // 检查是否有变化，避免无限循环
-      if (singleHandPosition.currentPrice !== currentPrice ||
-          singleHandPosition.profitLossPoints !== profitLossPoints ||
-          singleHandPosition.maxPrice !== maxPrice ||
-          singleHandPosition.minPrice !== minPrice) {
-        setSingleHandPosition({
-          ...singleHandPosition,
-          currentPrice,
-          profitLossPoints,
-          profitLossMoney,
-          maxPrice,
-          minPrice,
-          maxProfitPoints,
-          maxProfitMoney,
-          drawdownPercent,
-        });
-      }
-    } else {
-      // 无持仓时，确保显示当前价格和0盈亏
-      if (singleHandPosition.currentPrice !== currentPrice ||
-          singleHandPosition.profitLossPoints !== 0) {
-        setSingleHandPosition({
-          hasPosition: false,
-          currentPrice,
-          profitLossPoints: 0,
-          profitLossMoney: 0,
-          maxPrice: 0,
-          minPrice: 0,
-          maxProfitPoints: 0,
-          maxProfitMoney: 0,
-          drawdownPercent: 0,
-        });
-      }
-    }
-  }, [domesticTradeTickQuery.data?.price, singleHandPosition, setSingleHandPosition]);
+    });
+  }, [domesticTradeTickQuery.data?.price, singleHandPositions, setSingleHandPosition]);
 
-  // 单手交易：执行AI决策
-  const executeSingleHandDecision = useCallback(async (decision: SingleHandDecision, currentPrice: number) => {
+  // 单手交易：执行AI决策（支持多模型）
+  const executeSingleHandDecision = useCallback(async (modelId: string, model: ModelType, decision: SingleHandDecision, currentPrice: number) => {
     const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const singleHandPosition = singleHandPositions[modelId] || { hasPosition: false };
+    const singleHandOperations = singleHandOperationsMap[modelId] || [];
     
     if (decision.action === '开多' || decision.action === '开空') {
       // 开仓
       const direction = decision.action === '开多' ? '多' : '空';
-      setSingleHandPosition({
+      setSingleHandPosition(modelId, {
         hasPosition: true,
         direction,
         entryPrice: currentPrice,
@@ -647,42 +669,40 @@ function AppContent() {
         currentPrice,
         profitLossPoints: 0,
         profitLossMoney: 0,
-        maxPrice: currentPrice,  // 初始化最高价为开仓价
-        minPrice: currentPrice,  // 初始化最低价为开仓价
+        maxPrice: currentPrice,
+        minPrice: currentPrice,
         maxProfitPoints: 0,
         maxProfitMoney: 0,
         drawdownPercent: 0,
       });
       
-      // 添加操作记录（使用store），开仓手续费8元
       const newOperation: SingleHandOperation = {
         id: operationId,
         timestamp: Date.now(),
         action: decision.action,
         price: currentPrice,
         reason: decision.reason,
-        reflection: decision.reflection, // AI的反思
-        commission: 8, // 开仓手续费
-        profitLossPoints: 0, // 开仓时盈亏为0
+        reflection: decision.reflection,
+        commission: 8,
+        profitLossPoints: 0,
         profitLossMoney: 0,
-        model: selectedModel, // 记录使用的模型
+        model: model,
+        processingTime: decision.processingTime,
       };
-      addSingleHandOperation(newOperation);
+      addSingleHandOperation(modelId, newOperation);
       
-      // 保存到后端
       const { marketDataApi } = await import('./api/marketData');
-      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
-        console.error('[单手交易] 保存操作失败:', err);
+      marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
       });
       
-      console.log(`[单手交易] ${decision.action} @ ${currentPrice}`);
+      console.log(`[单手交易-${modelId}] ${decision.action} @ ${currentPrice}`);
     } else if (decision.action === '平仓' && singleHandPosition.hasPosition) {
-      // 平仓，计算手续费（开仓8元+平仓8元=16元）
       const profitLossPoints = singleHandPosition.profitLossPoints || 0;
       const profitLossMoney = singleHandPosition.profitLossMoney || 0;
-      const commission = 8; // 平仓手续费
-      const totalCommission = 16; // 总手续费（开仓8+平仓8）
-      const netProfit = profitLossMoney - totalCommission; // 净利润
+      const commission = 8;
+      const totalCommission = 16;
+      const netProfit = profitLossMoney - totalCommission;
       
       const newOperation: SingleHandOperation = {
         id: operationId,
@@ -690,36 +710,29 @@ function AppContent() {
         action: '平仓',
         price: currentPrice,
         reason: decision.reason,
-        reflection: decision.reflection, // AI的反思
+        reflection: decision.reflection,
         profitLossPoints,
         profitLossMoney,
-        commission, // 本次手续费（平仓8元）
-        netProfit, // 净利润（扣除开仓和平仓手续费）
-        model: selectedModel, // 记录使用的模型
+        commission,
+        netProfit,
+        model: model,
+        processingTime: decision.processingTime,
       };
-      addSingleHandOperation(newOperation);
+      addSingleHandOperation(modelId, newOperation);
       
-      setSingleHandPosition({
-        hasPosition: false,
-      });
+      setSingleHandPosition(modelId, { hasPosition: false });
       
-      // 保存到后端
       const { marketDataApi } = await import('./api/marketData');
-      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
-        console.error('[单手交易] 保存操作失败:', err);
+      marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
       });
       
-      console.log(`[单手交易] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点 (${profitLossMoney.toFixed(0)}元)`);
+      console.log(`[单手交易-${modelId}] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点`);
     } else if (decision.action === '持有') {
-      // 如果新操作是持有，并且前1条也是持有，删除前面的一条
-      const currentOperations = useAppStore.getState().singleHandOperations;
-      if (currentOperations.length >= 1 &&
-          currentOperations[0]?.action === '持有') {
-        console.log('[操作优化] 连续持有操作，删除旧的持有记录');
-        useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
+      if (singleHandOperations.length >= 1 && singleHandOperations[0]?.action === '持有') {
+        deleteSingleHandOperation(modelId, singleHandOperations[0].id);
       }
       
-      // 持有决策也记录下来，保存当时的盈亏和持仓时长
       const duration = singleHandPosition.entryTime 
         ? Math.round((Date.now() - singleHandPosition.entryTime) / 60000) 
         : 0;
@@ -730,63 +743,57 @@ function AppContent() {
         action: '持有',
         price: currentPrice,
         reason: decision.reason,
-        reflection: decision.reflection, // AI的反思
+        reflection: decision.reflection,
         profitLossPoints: singleHandPosition.profitLossPoints,
         profitLossMoney: singleHandPosition.profitLossMoney,
-        duration, // 持仓时长（分钟）
-        model: selectedModel, // 记录使用的模型
+        duration,
+        model: model,
+        processingTime: decision.processingTime,
       };
-      addSingleHandOperation(newOperation);
+      addSingleHandOperation(modelId, newOperation);
       
-      // 持有决策也保存到后端
       const { marketDataApi } = await import('./api/marketData');
-      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
-        console.error('[单手交易] 保存操作失败:', err);
+      marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
       });
-      
-      console.log(`[单手交易] 持有 @ ${currentPrice}, 原因: ${decision.reason}`);
     } else if (decision.action === '观望') {
-      // 如果新操作是观望，并且前1条也是观望，删除前面的一条
-      const currentOperations = useAppStore.getState().singleHandOperations;
-      if (currentOperations.length >= 1 &&
-          currentOperations[0]?.action === '观望') {
-        console.log('[操作优化] 连续观望操作，删除旧的观望记录');
-        useAppStore.getState().deleteSingleHandOperation(currentOperations[0].id);
+      if (singleHandOperations.length >= 1 && singleHandOperations[0]?.action === '观望') {
+        deleteSingleHandOperation(modelId, singleHandOperations[0].id);
       }
       
-      // 观望决策也记录下来
       const newOperation: SingleHandOperation = {
         id: operationId,
         timestamp: Date.now(),
         action: '观望',
         price: currentPrice,
         reason: decision.reason,
-        reflection: decision.reflection, // AI的反思
-        model: selectedModel, // 记录使用的模型
+        reflection: decision.reflection,
+        model: model,
+        processingTime: decision.processingTime,
       };
-      addSingleHandOperation(newOperation);
+      addSingleHandOperation(modelId, newOperation);
       
-      // 观望决策也保存到后端
       const { marketDataApi } = await import('./api/marketData');
-      marketDataApi.saveSingleHandOperation(newOperation).catch(err => {
-        console.error('[单手交易] 保存操作失败:', err);
+      marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
       });
-      
-      console.log(`[单手交易] 观望 @ ${currentPrice}, 原因: ${decision.reason}`);
     }
-  }, [singleHandPosition, addSingleHandOperation]);
+  }, [singleHandPositions, singleHandOperationsMap, setSingleHandPosition, addSingleHandOperation, deleteSingleHandOperation]);
 
-  // 单手交易：自动触发AI决策（每分钟，仅交易时间）
+  // 单手交易：自动触发AI决策（每个模型独立控制）
   useEffect(() => {
-    const triggerSingleHandAnalysis = async () => {
+    const triggerSingleHandAnalysis = async (modelId: string, model: ModelType) => {
+      // 检查该模型是否启用自动请求
+      if (!singleHandAutoRequest[modelId]) {
+        return;
+      }
+      
       // 检查是否在交易时间
       if (!isSilverTradingHours()) {
-        console.log('[单手交易] 非交易时间，跳过分析');
         return;
       }
       
       if (!domesticTradeTickQuery.data?.price) {
-        console.log('[单手交易] 等待价格数据...');
         return;
       }
       
@@ -801,37 +808,36 @@ function AppContent() {
       
       if (!londonData || !londonKline15mQuery.data || !londonKlineDailyQuery.data || 
           !domesticData || !domesticKline15mQuery.data || !domesticKlineDailyQuery.data) {
-        console.log('[单手交易] 等待所有数据加载...');
         return;
       }
       
       const now = Date.now();
-      const timeSinceLastAnalysis = now - lastSingleHandAnalysisRef.current;
+      const timeSinceLastAnalysis = now - (lastSingleHandAnalysisRef.current[modelId] || 0);
       const oneMinute = 60 * 1000;
       
       // 首次或间隔1分钟
-      if (lastSingleHandAnalysisRef.current === 0 || timeSinceLastAnalysis >= oneMinute) {
-        if (isLoadingSingleHand) {
-          console.log('[单手交易] 正在分析中，跳过');
+      if (lastSingleHandAnalysisRef.current[modelId] === 0 || timeSinceLastAnalysis >= oneMinute) {
+        if (isLoadingSingleHand[modelId]) {
           return;
         }
         
         try {
-          setIsLoadingSingleHand(true);
-          lastSingleHandAnalysisRef.current = now;
+          setIsLoadingSingleHand(prev => ({ ...prev, [modelId]: true }));
+          lastSingleHandAnalysisRef.current[modelId] = now;
           
           const currentPrice = Number(domesticTradeTickQuery.data.price);
+          const position = singleHandPositions[modelId] || { hasPosition: false };
+          const operations = singleHandOperationsMap[modelId] || [];
           
           // 更新当前持仓价格
-          const updatedPosition: SingleHandPosition = singleHandPosition.hasPosition
-            ? { ...singleHandPosition, currentPrice }
-            : singleHandPosition;
+          const updatedPosition: SingleHandPosition = position.hasPosition
+            ? { ...position, currentPrice }
+            : position;
           
-          // 使用前端服务直接调用AI
           const { analyzeSingleHandStrategy } = await import('./services/singleHandService');
           
           const decision = await analyzeSingleHandStrategy(
-            selectedModel,
+            model,
             londonData,
             londonKline15mQuery.data,
             londonKlineDailyQuery.data,
@@ -840,36 +846,61 @@ function AppContent() {
             domesticKlineDailyQuery.data,
             domesticDepthQuery.data || null,
             updatedPosition,
-            singleHandOperations,
+            operations,
             currentPrice
           );
           
-          console.log(`[单手交易] AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
+          console.log(`[单手交易-${modelId}] AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
           
           // 执行决策
-          executeSingleHandDecision(decision, currentPrice);
+          executeSingleHandDecision(modelId, model, decision, currentPrice);
         } catch (error: any) {
-          console.error('[单手交易] 分析失败:', error);
+          console.error(`[单手交易-${modelId}] 分析失败:`, error);
         } finally {
-          setIsLoadingSingleHand(false);
+          setIsLoadingSingleHand(prev => ({ ...prev, [modelId]: false }));
         }
       }
     };
     
-    // 立即触发首次分析
-    triggerSingleHandAnalysis();
+    // 为每个模型创建独立的定时器
+    const timers: NodeJS.Timeout[] = [];
     
-    // 每30秒检查一次
-    const timer = setInterval(() => {
-      triggerSingleHandAnalysis();
-    }, 30000);
+    // 使用store中的模型配置
+    const modelIds = ['model1', 'model2', 'model3', 'model4', 'model5'];
     
-    return () => clearInterval(timer);
+    // 默认模型映射
+    const defaultModels: Record<string, ModelType> = {
+      model1: 'deepseek-chat',
+      model2: 'kimi-k2-turbo-preview',
+      model3: 'MiniMax-M2',
+      model4: 'google-ai-studio/gemini-2.5-pro',
+      model5: 'claude-sonnet-4-5',
+    };
+    
+    modelIds.forEach((id) => {
+      const currentModel = singleHandModels[id] || defaultModels[id];
+      
+      // 立即触发首次分析
+      triggerSingleHandAnalysis(id, currentModel);
+      
+      // 每30秒检查一次
+      const timer = setInterval(() => {
+        const model = singleHandModels[id] || defaultModels[id];
+        triggerSingleHandAnalysis(id, model);
+      }, 30000);
+      
+      timers.push(timer);
+    });
+    
+    return () => {
+      timers.forEach(timer => clearInterval(timer));
+    };
   }, [
     domesticTradeTickQuery.data?.price,
-    selectedModel,
-    singleHandPosition,
-    singleHandOperations,
+    singleHandPositions,
+    singleHandOperationsMap,
+    singleHandAutoRequest,
+    singleHandModels,
     isLoadingSingleHand,
     executeSingleHandDecision,
     londonRealtimeKline,
@@ -878,9 +909,10 @@ function AppContent() {
     domesticRealtimeKline,
     domesticKline1mQuery.data,
     domesticKline15mQuery.data,
+    domesticKlineDailyQuery.data,
     domesticDepthQuery.data,
-    isLondonWebSocketActive,
     isSilverTradingHours,
+    isLondonWebSocketActive,
   ]);
 
   // 【已禁用】自动触发AI策略分析
@@ -1102,87 +1134,97 @@ function AppContent() {
           />
         </div>
 
-          {/* 单手交易策略 */}
-        <div className="right-panel">
-          <SingleHandTrader
-            position={singleHandPosition}
-            operations={singleHandOperations}
-            isLoading={isLoadingSingleHand}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-            onClearOperations={() => {
-              useAppStore.getState().clearSingleHandOperations();
-            }}
-            onDeleteOperation={(operationId) => {
-              deleteSingleHandOperation(operationId);
-            }}
-            onManualTrigger={async () => {
-              if (!domesticTradeTickQuery.data?.price) {
-                console.log('[单手交易] 手动触发：等待价格数据...');
-                return;
-              }
-              
-              // 检查所有必需的数据是否就绪
-              const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
-                ? londonRealtimeKline 
-                : londonKline1mQuery.data;
-              
-              const domesticData = domesticRealtimeKline.length > 0 
-                ? domesticRealtimeKline 
-                : domesticKline1mQuery.data;
-              
-              if (!londonData || !londonKline15mQuery.data || !londonKlineDailyQuery.data || 
-                  !domesticData || !domesticKline15mQuery.data || !domesticKlineDailyQuery.data) {
-                console.log('[单手交易] 手动触发：等待所有数据加载...');
-                return;
-              }
-              
-              if (isLoadingSingleHand) {
-                console.log('[单手交易] 手动触发：正在分析中，跳过');
-                return;
-              }
-              
-              try {
-                setIsLoadingSingleHand(true);
-                
-                const currentPrice = Number(domesticTradeTickQuery.data.price);
-                
-                // 更新当前持仓价格
-                const updatedPosition: SingleHandPosition = singleHandPosition.hasPosition
-                  ? { ...singleHandPosition, currentPrice }
-                  : singleHandPosition;
-                
-                // 使用前端服务直接调用AI
-                const { analyzeSingleHandStrategy } = await import('./services/singleHandService');
-                
-                const decision = await analyzeSingleHandStrategy(
-                  selectedModel,
-                  londonData,
-                  londonKline15mQuery.data,
-                  londonKlineDailyQuery.data,
-                  domesticData,
-                  domesticKline15mQuery.data,
-                  domesticKlineDailyQuery.data,
-                  domesticDepthQuery.data || null,
-                  updatedPosition,
-                  singleHandOperations,
-                  currentPrice
-                );
-                
-                console.log(`[单手交易] 手动触发AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
-                
-                // 执行决策
-                executeSingleHandDecision(decision, currentPrice);
-                
-                // 更新最后分析时间
-                lastSingleHandAnalysisRef.current = Date.now();
-              } catch (error: any) {
-                console.error('[单手交易] 手动触发分析失败:', error);
-              } finally {
-                setIsLoadingSingleHand(false);
-              }
-            }}
-          />
+          {/* 单手交易策略 - 5列 */}
+        <div className="single-hand-panels">
+          {modelConfigs.map(({ id, model }) => (
+            <div key={id} className="single-hand-panel">
+              <SingleHandTrader
+                position={singleHandPositions[id] || { hasPosition: false }}
+                operations={singleHandOperationsMap[id] || []}
+                isLoading={isLoadingSingleHand[id] || false}
+                selectedModel={singleHandModels[id] || model}
+                onModelChange={(newModel) => {
+                  setSingleHandModel(id, newModel);
+                }}
+                autoRequestEnabled={singleHandAutoRequest[id] ?? (id === 'model1')}
+                onAutoRequestToggle={(enabled) => {
+                  setSingleHandAutoRequest(id, enabled);
+                }}
+                onClearOperations={() => {
+                  console.log(`[App] 用户点击清空${id}单手交易数据`);
+                  useAppStore.getState().clearSingleHandOperations(id);
+                  lastSingleHandAnalysisRef.current[id] = 0;
+                  console.log(`[App] ✅ ${id}单手交易数据已清空`);
+                }}
+                onDeleteOperation={(operationId) => {
+                  deleteSingleHandOperation(id, operationId);
+                }}
+                onManualTrigger={async () => {
+                  if (!domesticTradeTickQuery.data?.price) {
+                    console.log(`[单手交易-${id}] 手动触发：等待价格数据...`);
+                    return;
+                  }
+                  
+                  const londonData = isLondonWebSocketActive && londonRealtimeKline.length > 0 
+                    ? londonRealtimeKline 
+                    : londonKline1mQuery.data;
+                  
+                  const domesticData = domesticRealtimeKline.length > 0 
+                    ? domesticRealtimeKline 
+                    : domesticKline1mQuery.data;
+                  
+                  if (!londonData || !londonKline15mQuery.data || !londonKlineDailyQuery.data || 
+                      !domesticData || !domesticKline15mQuery.data || !domesticKlineDailyQuery.data) {
+                    console.log(`[单手交易-${id}] 手动触发：等待所有数据加载...`);
+                    return;
+                  }
+                  
+                  if (isLoadingSingleHand[id]) {
+                    console.log(`[单手交易-${id}] 手动触发：正在分析中，跳过`);
+                    return;
+                  }
+                  
+                  try {
+                    setIsLoadingSingleHand(prev => ({ ...prev, [id]: true }));
+                    
+                    const currentPrice = Number(domesticTradeTickQuery.data.price);
+                    const position = singleHandPositions[id] || { hasPosition: false };
+                    const operations = singleHandOperationsMap[id] || [];
+                    const currentModel = singleHandModels[id] || model;
+                    
+                    const updatedPosition: SingleHandPosition = position.hasPosition
+                      ? { ...position, currentPrice }
+                      : position;
+                    
+                    const { analyzeSingleHandStrategy } = await import('./services/singleHandService');
+                    
+                    const decision = await analyzeSingleHandStrategy(
+                      currentModel,
+                      londonData,
+                      londonKline15mQuery.data,
+                      londonKlineDailyQuery.data,
+                      domesticData,
+                      domesticKline15mQuery.data,
+                      domesticKlineDailyQuery.data,
+                      domesticDepthQuery.data || null,
+                      updatedPosition,
+                      operations,
+                      currentPrice
+                    );
+                    
+                    console.log(`[单手交易-${id}] 手动触发AI决策: ${decision.action}, 信心度: ${decision.confidence}%`);
+                    
+                    executeSingleHandDecision(id, currentModel, decision, currentPrice);
+                    lastSingleHandAnalysisRef.current[id] = Date.now();
+                  } catch (error: any) {
+                    console.error(`[单手交易-${id}] 手动触发分析失败:`, error);
+                  } finally {
+                    setIsLoadingSingleHand(prev => ({ ...prev, [id]: false }));
+                  }
+                }}
+              />
+            </div>
+          ))}
         </div>
 
           {/* 【已隐藏】交易策略区域 */}

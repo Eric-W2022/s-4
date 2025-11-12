@@ -114,13 +114,17 @@ export async function analyzeSingleHandStrategy(
 
     console.log('[单手交易] Messages数量:', fullMessages.length);
 
-    // 请求体
-    const requestBody = {
+    // 请求体（GPT模型不传temperature参数，其他模型使用0.7）
+    const requestBody: any = {
       model,
       messages: fullMessages,
-      temperature: 0.7,
       max_tokens: 2000,
     };
+    
+    // GPT模型不支持temperature参数（或只支持默认值1），其他模型使用0.7
+    if (!model.toLowerCase().includes('gpt')) {
+      requestBody.temperature = 0.7;
+    }
 
     console.log('[单手交易] 发送请求到新加坡服务器...');
 
@@ -204,10 +208,12 @@ export async function analyzeSingleHandStrategy(
     const decision: SingleHandDecision = {
       action: decisionData.action,
       reason: decisionData.reason,
+      reflection: decisionData.reflection || '', // 如果没有reflection字段，使用空字符串
       confidence: decisionData.confidence,
       targetPrice: decisionData.targetPrice,
       timestamp: Date.now(),
       model,
+      processingTime: result.processingTime, // 保存处理时间（毫秒）
     };
 
     console.log('[单手交易] ✅ AI决策完成');

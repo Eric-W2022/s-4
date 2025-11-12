@@ -49,7 +49,8 @@ export function buildSingleHandMessages(params: SingleHandPromptParams): Array<{
   const formatKlineData = (klines: KlineData[], count: number = 20) => {
     return klines.slice(-count).map(k => {
       const time = new Date(k.t).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-      return `${time}: 开${k.o.toFixed(2)}/高${k.h.toFixed(2)}/低${k.l.toFixed(2)}/收${k.c.toFixed(2)}`;
+      const volume = k.v !== undefined ? ` 量${k.v >= 10000 ? (k.v / 10000).toFixed(1) + 'w' : k.v.toFixed(0)}` : '';
+      return `${time}: 开${k.o.toFixed(2)}/高${k.h.toFixed(2)}/低${k.l.toFixed(2)}/收${k.c.toFixed(2)}${volume}`;
     }).join('\n');
   };
 
@@ -57,7 +58,8 @@ export function buildSingleHandMessages(params: SingleHandPromptParams): Array<{
   const formatKlineDataDaily = (klines: KlineData[], count: number = 50) => {
     return klines.slice(-count).map(k => {
       const date = new Date(k.t).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-      return `${date}: 开${k.o.toFixed(2)}/高${k.h.toFixed(2)}/低${k.l.toFixed(2)}/收${k.c.toFixed(2)}`;
+      const volume = k.v !== undefined ? ` 量${k.v >= 10000 ? (k.v / 10000).toFixed(1) + 'w' : k.v.toFixed(0)}` : '';
+      return `${date}: 开${k.o.toFixed(2)}/高${k.h.toFixed(2)}/低${k.l.toFixed(2)}/收${k.c.toFixed(2)}${volume}`;
     }).join('\n');
   };
 
@@ -147,14 +149,31 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 `;
     
     const opsList = operations.map((op, idx) => {
-      const time = new Date(op.timestamp).toLocaleTimeString('zh-CN');
+      const opDate = new Date(op.timestamp);
+      // 格式化时间：包含日期和时间，格式如 "11月12日 09:28:13"
+      // 确保时间戳正确解析
+      if (isNaN(opDate.getTime())) {
+        console.warn(`[格式化操作记录] 无效的时间戳: ${op.timestamp}`);
+        return `${idx+1}. [时间无效] ${op.action} @ ${op.price.toFixed(0)}`;
+      }
+      
+      const month = opDate.getMonth() + 1;
+      const day = opDate.getDate();
+      const hours = opDate.getHours().toString().padStart(2, '0');
+      const minutes = opDate.getMinutes().toString().padStart(2, '0');
+      const seconds = opDate.getSeconds().toString().padStart(2, '0');
+      const fullTime = `${month}月${day}日 ${hours}:${minutes}:${seconds}`;
+      
       const profitInfo = op.profitLossPoints !== undefined 
         ? ` | 盈亏: ${op.profitLossPoints.toFixed(0)}点 (${op.profitLossMoney?.toFixed(0)}元)`
         : '';
       const netProfitInfo = op.netProfit !== undefined 
         ? ` | 净利润: ${op.netProfit > 0 ? '+' : ''}${op.netProfit.toFixed(0)}元`
         : '';
-      return `${idx+1}. [${time}] ${op.action} @ ${op.price.toFixed(0)}${profitInfo}${netProfitInfo}\n   原因: ${op.reason}`;
+      const reflectionInfo = op.reflection 
+        ? `\n   🤔 AI反思: ${op.reflection}`
+        : '';
+      return `${idx+1}. [${fullTime}] ${op.action} @ ${op.price.toFixed(0)}${profitInfo}${netProfitInfo}\n   原因: ${op.reason}${reflectionInfo}`;
     }).join('\n\n');
     
     return `${performanceSummary}\n【操作记录】\n${opsList}`;
@@ -168,11 +187,28 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
     return `${label}布林带：上轨${bollinger.upper.toFixed(0)} | 中轨${bollinger.middle.toFixed(0)} | 下轨${bollinger.lower.toFixed(0)}`;
   };
 
+  // 获取当前时间
+  const now = new Date();
+  const currentTimeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  
+  // 检查是否接近收盘（收盘前1分钟）
+  const isNearClose = 
+    (hours === 10 && minutes === 14) ||  // 10:14分（10:15收盘前）
+    (hours === 11 && minutes === 29) ||  // 11:29分（11:30收盘前）
+    (hours === 14 && minutes === 59) ||  // 14:59分（15:00收盘前）
+    (hours === 2 && minutes === 29);     // 次日2:29分（2:30收盘前）
+  
+  const closeWarning = isNearClose && currentPosition.hasPosition
+    ? '\n\n⚠️⚠️⚠️ 警告：当前时间接近收盘（收盘前1分钟），必须立即平仓！不要持仓到收盘！ ⚠️⚠️⚠️'
+    : '';
+
   // 每个数据项都是一个独立的user message
   const messages = [
     {
       role: 'user',
-      content: `当前价格\n国内白银主力当前价: ${currentPrice.toFixed(0)}`
+      content: `当前时间和价格\n当前时间: ${currentTimeStr}${closeWarning}\n国内白银主力当前价: ${currentPrice.toFixed(0)}`
     },
     {
       role: 'user',
@@ -223,6 +259,14 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 
 请基于以上市场数据和持仓状态，给出你的交易决策。
 
+**⚠️ 最高优先级：收盘前强制平仓**：
+如果当前有持仓，检查当前时间是否接近收盘：
+- **10:14分**（10:15收盘前）→ **立即平仓！**
+- **11:29分**（11:30收盘前）→ **立即平仓！**
+- **14:59分**（15:00收盘前）→ **立即平仓！**
+- **次日2:29分**（2:30收盘前）→ **立即平仓！**
+**收盘前1分钟必须清仓，无论盈亏！不要持仓到收盘！**
+
 **⚠️ 首要任务：反思历史绩效**：
 1. **查看绩效统计**：胜率<50%说明策略有问题，必须反思！
 2. **连续亏损警示**：最近3次操作如果有2次以上亏损，说明方向判断错误！
@@ -242,6 +286,7 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 3. **震荡行情**：
    - 开仓：在支撑位做多、阻力位做空（高抛低吸）
    - 平仓：盈利≥20点立即平仓！震荡中快进快出！
+   - **震荡向下行情做多止盈**：如果判断为震荡向下行情但做了多单，价格反弹到布林带中轨附近（中线左右）时，必须及时止盈平仓！不要等待更高，震荡向下行情中多单反弹空间有限！
    - 目标：10-20点
 4. **单边行情**：
    - 开仓：顺势追涨/杀跌，不怕追高
@@ -404,6 +449,7 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 - 盈利<10点：可以等待反弹/回调到目标位
 - 盈利10-20点：考虑平仓，震荡空间有限
 - 盈利≥20点：立即平仓，震荡行情不贪
+- **震荡向下行情做多**：如果判断为震荡向下行情但持有多单，价格反弹到布林带中轨（中线）附近时，必须及时止盈！不要等待更高，震荡向下行情中多单反弹空间有限，到中线就是止盈机会！
 - 任何时候接近布林带上轨/下轨：准备平仓
 
 **单边行情持有**：
@@ -469,16 +515,21 @@ ${volumeInfo}${openInterestInfo}${openInterestChange}`;
 - targetPrice: 目标价格（开仓时必填，平仓、持有和观望时可不填）
 
 约束条件：
-1. 如果当前有持仓，不能再开新仓，只能选择"平仓"或"持有"
-2. 如果当前无持仓，不能选择"平仓"或"持有"，只能选择"开多"、"开空"或"观望"
-3. **开仓要积极但要吸取教训**：
+1. **⚠️ 收盘前强制平仓（最高优先级）**：
+   - 如果当前时间是10:14、11:29、14:59或次日2:29分，且有持仓
+   - **必须立即选择"平仓"，无论盈亏，无论任何理由！**
+   - 原因必须说明"收盘前强制平仓"
+2. 如果当前有持仓，不能再开新仓，只能选择"平仓"或"持有"
+3. 如果当前无持仓，不能选择"平仓"或"持有"，只能选择"开多"、"开空"或"观望"
+4. **开仓要积极但要吸取教训**：
    - confidence≥50%即可开仓，不要过于保守
    - 趋势反转信号明确时，confidence≥60%就果断开反向仓
    - **⚠️ 但如果最近连续亏损，必须反思：是否一直逆势？如果是，本次必须顺势！**
    - 不要因为之前的持仓方向而不敢开反向仓
-4. **必须先识别行情类型**（单边/震荡/突破/反转），然后根据类型选择对应策略
-5. 震荡行情：目标10-20点，快进快出；单边行情：目标20-50点；反转行情：抓住机会
-6. **⚠️ 参考历史操作记录**，总结成功经验，**避免重复失误**：
+   - **⚠️ 收盘前5分钟不要开新仓**（避免来不及平仓）
+5. **必须先识别行情类型**（单边/震荡/突破/反转），然后根据类型选择对应策略
+6. 震荡行情：目标10-20点，快进快出；单边行情：目标20-50点；反转行情：抓住机会
+7. **⚠️ 参考历史操作记录**，总结成功经验，**避免重复失误**：
    - 如果一直做空却亏损，说明可能需要做多
    - 如果一直做多却亏损，说明可能需要做空
    - 看K线实际走势，不要固执己见`

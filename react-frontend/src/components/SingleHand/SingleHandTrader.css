@@ -24,20 +24,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.single-hand-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-  white-space: nowrap;
-}
-
-.single-hand-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  width: 100%;
 }
 
 /* 模型选择器 */
@@ -50,14 +37,15 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
   border: none;
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s ease;
   user-select: none;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .model-selector-container:hover .model-selector-display {
@@ -69,7 +57,7 @@
 .model-selector-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   margin-top: 4px;
   background: #1e2548;
   border-radius: 6px;
@@ -203,8 +191,8 @@
 
 .position-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .position-card {
@@ -273,25 +261,25 @@
 .daily-stats-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 6px;
 }
 
 .daily-stat-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .daily-stat-label {
-  font-size: 10px;
+  font-size: 9px;
   color: #909090;
   margin-bottom: 2px;
 }
 
 .daily-stat-value {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
   color: #e0e0e0;
 }
@@ -370,6 +358,7 @@
 
 /* 操作项 */
 .operation-item {
+  position: relative;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
   padding: 12px;
@@ -385,23 +374,28 @@
 .operation-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
 }
 
-.operation-header-left {
+/* 第二行：模型和处理时间 */
+.operation-model-time-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .delete-operation-btn {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border-radius: 4px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  background: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ffffff;
+  border-radius: 50%;
   width: 20px;
   height: 20px;
   display: flex;
@@ -411,19 +405,21 @@
   font-size: 12px;
   transition: all 0.2s ease;
   padding: 0;
-  flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 10;
 }
 
 .delete-operation-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  opacity: 1;
-  transform: scale(1.1);
+  background: rgba(239, 68, 68, 1);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: translate(50%, -50%) scale(1.15);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
 }
 
 .operation-item:hover .delete-operation-btn {
   opacity: 1;
+  visibility: visible;
 }
 
 .operation-time {
@@ -432,10 +428,11 @@
 }
 
 .operation-action {
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .operation-action.open-long {
@@ -470,21 +467,39 @@
 }
 
 .operation-model {
-  font-size: 10px;
+  font-size: 11px;
   color: #9ca3af;
   background: rgba(99, 102, 241, 0.15);
   border: 1px solid rgba(99, 102, 241, 0.3);
-  padding: 2px 6px;
-  border-radius: 3px;
-  margin-left: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
-/* 财务信息显示（盈亏和手续费）*/
+.operation-processing-time {
+  color: #6b7280;
+  font-size: 10px;
+  margin-left: 6px;
+  font-weight: 400;
+}
+
+/* 第三行：操作动作和手续费/持仓时间 */
+.operation-action-line {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 第四行：财务信息显示（盈亏和净利润）*/
 .operation-financial-info {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   flex-wrap: wrap;
   align-items: center;
@@ -493,13 +508,18 @@
 .operation-commission-value {
   color: #fbbf24;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .operation-duration {
   color: #818cf8;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.operation-net-profit {
   font-size: 12px;
+  font-weight: 600;
 }
 
 .operation-pl-points.profit,
@@ -612,5 +632,60 @@
   background: rgba(168, 85, 247, 0.25);
   border-color: rgba(168, 85, 247, 0.5);
   box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+}
+
+/* 自动请求开关 - 滑动开关样式 */
+.auto-request-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.auto-request-toggle input[type="checkbox"].toggle-switch {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  background-color: #4b5563;
+  border-radius: 20px;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+}
+
+.auto-request-toggle input[type="checkbox"].toggle-switch:checked + .toggle-slider {
+  background-color: #6366f1;
+}
+
+.auto-request-toggle input[type="checkbox"].toggle-switch:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+
+.toggle-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  min-width: 32px;
 }
 

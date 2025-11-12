@@ -135,15 +135,16 @@ export const marketDataApi = {
     }
   },
 
-  // 保存单手交易操作
-  saveSingleHandOperation: async (operation: SingleHandOperation): Promise<void> => {
+  // 保存单手交易操作（支持按模型ID分开保存）
+  saveSingleHandOperation: async (modelId: string, operation: SingleHandOperation): Promise<void> => {
     try {
       await apiClient.post('/api/data/save-single-hand-operation', {
+        modelId, // 添加模型ID
         operation,
       });
-      console.log('[保存单手交易操作] 操作已保存到后端');
+      console.log(`[保存单手交易操作-${modelId}] 操作已保存到后端`);
     } catch (error) {
-      console.error('[保存单手交易操作] 保存失败:', error);
+      console.error(`[保存单手交易操作-${modelId}] 保存失败:`, error);
       // 不抛出错误，避免影响主流程
     }
   },

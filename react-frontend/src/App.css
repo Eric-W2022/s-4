@@ -1,13 +1,13 @@
 .main-content {
   display: grid;
-  grid-template-columns: 1fr 1fr 420px;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
   grid-template-rows: auto auto 1fr;
   gap: 10px;
   padding: 10px;
   align-items: start;
 }
 
-/* 第一行：1分钟K线图 + 单手交易 + 策略 */
+/* 第一行：1分钟K线图 + 3列单手交易 */
 .kline-row {
   display: contents;
 }
@@ -26,12 +26,20 @@
   flex-direction: column;
 }
 
-.kline-row .right-panel {
-  grid-column: 3;
+/* 5列单手交易面板 */
+.single-hand-panels {
+  grid-column: 3 / 6;
   grid-row: 1 / 4;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  overflow-x: auto; /* 允许横向滚动以查看右侧多出的2列 */
+}
+
+.single-hand-panel {
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  min-width: 0; /* 防止溢出 */
 }
 
 /* 【已隐藏】策略面板 */

@@ -74,17 +74,21 @@ export async function analyzeStrategy(
       }))
     ];
     
-    // 请求体（传递messages、temperature、model和max_tokens）
-    const requestBody = {
+    // 请求体（GPT模型不传temperature参数，其他模型使用0.7）
+    const requestBody: any = {
       model: request.model,
       messages: messages,
-      temperature: 0.7,
       max_tokens: 4000,
     };
     
+    // GPT模型不支持temperature参数（或只支持默认值1），其他模型使用0.7
+    if (!request.model.toLowerCase().includes('gpt')) {
+      requestBody.temperature = 0.7;
+    }
+    
     console.log('[策略分析] 发送请求到新加坡服务器...');
     console.log('[策略分析] Messages数量:', messages.length);
-    console.log('[策略分析] Temperature:', 0.7);
+    console.log('[策略分析] Temperature:', requestBody.temperature || '默认(1)');
     
     // 发送请求（与旧版script.js格式一致）
     const response = await fetch(LLM_API_URL, {

@@ -140,6 +140,7 @@ export interface SingleHandOperation {
   netProfit?: number;         // 净利润（元），平仓时的盈亏金额减去手续费
   duration?: number;          // 持仓时长（分钟），持有操作时记录
   model?: string;             // 使用的AI模型
+  processingTime?: number;    // AI处理时间（毫秒）
 }
 
 /**
@@ -171,5 +172,6 @@ export interface SingleHandDecision {
   targetPrice?: number;       // 目标价格（开仓时）
   timestamp: number;
   model: string;
+  processingTime?: number;    // AI处理时间（毫秒）
 }
 
