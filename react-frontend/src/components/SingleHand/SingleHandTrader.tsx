@@ -316,7 +316,10 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
               <div className="daily-stat-label">操作数</div>
               <div className="daily-stat-value neutral">
                 {operations.filter(op => 
-                  op.action === '开多' || op.action === '开空' || op.action === '平仓'
+                  op.action === '开多' || op.action === '开空' || op.action === '平仓' || 
+                  op.action === '反转开多' || op.action === '反转开空' ||
+                  op.action === '锁仓开多' || op.action === '锁仓开空' || 
+                  op.action === '解锁平多' || op.action === '解锁平空'
                 ).length}
               </div>
             </div>
@@ -484,16 +487,19 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                   {/* 第三行：操作动作和手续费/持仓时间 */}
                   <div className="operation-action-line">
                     <span className={`operation-action ${
-                      op.action === '开多' ? 'open-long' : 
-                      op.action === '开空' ? 'open-short' :
-                      op.action === '平仓' ? 'close' : 
+                      op.action === '开多' || op.action === '反转开多' || op.action === '锁仓开多' ? 'open-long' : 
+                      op.action === '开空' || op.action === '反转开空' || op.action === '锁仓开空' ? 'open-short' :
+                      op.action === '平仓' || op.action === '解锁平多' || op.action === '解锁平空' ? 'close' : 
                       op.action === '观望' ? 'watch' : 'hold'
                     }`}>
                       {op.action}
                     </span>
                     
-                    {/* 开仓和平仓显示手续费 */}
-                    {(op.action === '开多' || op.action === '开空' || op.action === '平仓') && (
+                    {/* 开仓、平仓、锁仓、解锁显示手续费 */}
+                    {(op.action === '开多' || op.action === '开空' || op.action === '平仓' || 
+                      op.action === '反转开多' || op.action === '反转开空' ||
+                      op.action === '锁仓开多' || op.action === '锁仓开空' || 
+                      op.action === '解锁平多' || op.action === '解锁平空') && (
                       <span className="operation-commission-value">
                         手续费{(op.commission || -8) < 0 ? '' : '+'}{(op.commission || -8).toFixed(0)}
                       </span>
@@ -520,8 +526,10 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                   
                   {/* 第四行：点数、金额、净利润 */}
                   <div className="operation-financial-info">
-                    {/* 开仓操作 */}
-                    {(op.action === '开多' || op.action === '开空') && (
+                    {/* 开仓操作（包括反转开仓、锁仓） */}
+                    {(op.action === '开多' || op.action === '开空' || 
+                      op.action === '反转开多' || op.action === '反转开空' ||
+                      op.action === '锁仓开多' || op.action === '锁仓开空') && (
                       <>
                         {(() => {
                           const isCurrentPosition = position.hasPosition && position.entryTime && op.timestamp >= position.entryTime;
@@ -546,8 +554,8 @@ export const SingleHandTrader: React.FC<SingleHandTraderProps> = React.memo(
                       </>
                     )}
                   
-                    {/* 平仓操作 */}
-                    {op.action === '平仓' && op.profitLossPoints !== undefined && (
+                    {/* 平仓和解锁操作 */}
+                    {(op.action === '平仓' || op.action === '解锁平多' || op.action === '解锁平空') && op.profitLossPoints !== undefined && (
                       <>
                         <span className={`operation-pl-points ${
                           op.profitLossPoints > 0 ? 'profit' : 

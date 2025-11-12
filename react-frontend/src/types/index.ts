@@ -130,7 +130,7 @@ export interface StrategyAnalysis {
 export interface SingleHandOperation {
   id: string;
   timestamp: number;
-  action: '开多' | '开空' | '平仓' | '持有' | '观望';
+  action: '开多' | '开空' | '平仓' | '持有' | '观望' | '反转开多' | '反转开空' | '锁仓开多' | '锁仓开空' | '解锁平多' | '解锁平空';
   price: number;
   reason: string;
   reflection?: string;        // 反思：对历史绩效的反思和改进
@@ -141,6 +141,7 @@ export interface SingleHandOperation {
   duration?: number;          // 持仓时长（分钟），持有操作时记录
   model?: string;             // 使用的AI模型
   processingTime?: number;    // AI处理时间（毫秒）
+  lockedProfitLoss?: number;  // 锁仓时锁定的盈亏（元）
 }
 
 /**
@@ -148,7 +149,7 @@ export interface SingleHandOperation {
  */
 export interface SingleHandPosition {
   hasPosition: boolean;       // 是否有持仓
-  direction?: '多' | '空';    // 持仓方向
+  direction?: '多' | '空';    // 持仓方向（如果是锁仓，这个字段表示主要方向）
   entryPrice?: number;        // 入场价格
   entryTime?: number;         // 入场时间
   currentPrice?: number;      // 当前价格
@@ -159,13 +160,33 @@ export interface SingleHandPosition {
   maxProfitPoints?: number;   // 最高盈利点数
   maxProfitMoney?: number;    // 最高盈利金额（元）
   drawdownPercent?: number;   // 回撤百分比（从最高点回撤的比例）
+  
+  // 锁仓相关
+  isLocked?: boolean;         // 是否锁仓（同时持有多空两个方向）
+  longPosition?: {            // 多单持仓信息
+    entryPrice: number;
+    entryTime: number;
+    profitLossPoints: number;
+    profitLossMoney: number;
+    maxProfitPoints: number;
+    maxProfitMoney: number;
+  };
+  shortPosition?: {           // 空单持仓信息
+    entryPrice: number;
+    entryTime: number;
+    profitLossPoints: number;
+    profitLossMoney: number;
+    maxProfitPoints: number;
+    maxProfitMoney: number;
+  };
+  lockedProfitLoss?: number;  // 锁仓时锁定的盈亏（元）
 }
 
 /**
  * 单手交易决策
  */
 export interface SingleHandDecision {
-  action: '开多' | '开空' | '平仓' | '持有' | '观望';
+  action: '开多' | '开空' | '平仓' | '持有' | '观望' | '反转开多' | '反转开空' | '锁仓开多' | '锁仓开空' | '解锁平多' | '解锁平空';
   reason: string;
   reflection: string;         // 反思：对历史绩效的反思和改进
   confidence: number;

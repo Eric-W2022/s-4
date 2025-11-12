@@ -592,6 +592,49 @@ function AppContent() {
       const position = singleHandPositions[modelId] || { hasPosition: false };
       
       if (position.hasPosition) {
+        // 锁仓状态：分别计算多单和空单的盈亏
+        if (position.isLocked && position.longPosition && position.shortPosition) {
+          const longEntry = position.longPosition.entryPrice;
+          const shortEntry = position.shortPosition.entryPrice;
+          
+          // 计算多单盈亏
+          const longProfitLossPoints = currentPrice - longEntry;
+          const longProfitLossMoney = longProfitLossPoints * 15;
+          const longMaxProfitPoints = Math.max(
+            position.longPosition.maxProfitPoints,
+            longProfitLossPoints
+          );
+          const longMaxProfitMoney = longMaxProfitPoints * 15;
+          
+          // 计算空单盈亏
+          const shortProfitLossPoints = shortEntry - currentPrice;
+          const shortProfitLossMoney = shortProfitLossPoints * 15;
+          const shortMaxProfitPoints = Math.max(
+            position.shortPosition.maxProfitPoints,
+            shortProfitLossPoints
+          );
+          const shortMaxProfitMoney = shortMaxProfitPoints * 15;
+          
+          setSingleHandPosition(modelId, {
+            ...position,
+            currentPrice,
+            longPosition: {
+              ...position.longPosition,
+              profitLossPoints: longProfitLossPoints,
+              profitLossMoney: longProfitLossMoney,
+              maxProfitPoints: longMaxProfitPoints,
+              maxProfitMoney: longMaxProfitMoney,
+            },
+            shortPosition: {
+              ...position.shortPosition,
+              profitLossPoints: shortProfitLossPoints,
+              profitLossMoney: shortProfitLossMoney,
+              maxProfitPoints: shortMaxProfitPoints,
+              maxProfitMoney: shortMaxProfitMoney,
+            },
+          });
+        } else {
+          // 单向持仓：原有逻辑
         const entryPrice = position.entryPrice || 0;
         const direction = position.direction;
         const maxPrice = Math.max(position.maxPrice || currentPrice, currentPrice);
@@ -633,6 +676,7 @@ function AppContent() {
             maxProfitMoney,
             drawdownPercent,
           });
+          }
         }
       } else {
         if (position.currentPrice !== currentPrice || position.profitLossPoints !== 0) {
@@ -657,6 +701,240 @@ function AppContent() {
     const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const singleHandPosition = singleHandPositions[modelId] || { hasPosition: false };
     const singleHandOperations = singleHandOperationsMap[modelId] || [];
+    
+    // 处理反转操作：先平仓，再开反向仓
+    if (decision.action === '反转开多' || decision.action === '反转开空') {
+      if (!singleHandPosition.hasPosition) {
+        console.warn(`[单手交易-${modelId}] 反转操作但当前无持仓，忽略`);
+        return;
+      }
+      
+      // 第一步：平仓
+      const profitLossPoints = singleHandPosition.profitLossPoints || 0;
+      const profitLossMoney = singleHandPosition.profitLossMoney || 0;
+      const commission = 8;
+      const totalCommission = 16;
+      const netProfit = profitLossMoney - totalCommission;
+      
+      const closeOperationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const closeOperation: SingleHandOperation = {
+        id: closeOperationId,
+        timestamp: Date.now(),
+        action: '平仓',
+        price: currentPrice,
+        reason: `反转信号触发，平掉${singleHandPosition.direction}单`,
+        reflection: decision.reflection,
+        profitLossPoints,
+        profitLossMoney,
+        commission,
+        netProfit,
+        model: model,
+        processingTime: decision.processingTime,
+      };
+      addSingleHandOperation(modelId, closeOperation);
+      
+      // 保存平仓操作
+      const { marketDataApi } = await import('./api/marketData');
+      await marketDataApi.saveSingleHandOperation(modelId, closeOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存平仓操作失败:`, err);
+      });
+      
+      console.log(`[单手交易-${modelId}] 反转平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点`);
+      
+      // 第二步：开反向仓
+      const newDirection = decision.action === '反转开多' ? '多' : '空';
+      const openOperationId = `op_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      setSingleHandPosition(modelId, {
+        hasPosition: true,
+        direction: newDirection,
+        entryPrice: currentPrice,
+        entryTime: Date.now(),
+        currentPrice,
+        profitLossPoints: 0,
+        profitLossMoney: 0,
+        maxPrice: currentPrice,
+        minPrice: currentPrice,
+        maxProfitPoints: 0,
+        maxProfitMoney: 0,
+        drawdownPercent: 0,
+      });
+      
+      const openOperation: SingleHandOperation = {
+        id: openOperationId,
+        timestamp: Date.now(),
+        action: decision.action === '反转开多' ? '开多' : '开空',
+        price: currentPrice,
+        reason: decision.reason,
+        reflection: `反转操作：检测到${decision.action === '反转开多' ? '看涨' : '看跌'}反转信号`,
+        commission: 8,
+        profitLossPoints: 0,
+        profitLossMoney: 0,
+        model: model,
+        processingTime: decision.processingTime,
+      };
+      addSingleHandOperation(modelId, openOperation);
+      
+      // 保存开仓操作
+      await marketDataApi.saveSingleHandOperation(modelId, openOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存开仓操作失败:`, err);
+      });
+      
+      console.log(`[单手交易-${modelId}] ${decision.action} @ ${currentPrice}`);
+      return;
+    }
+    
+    // 处理锁仓操作：保留原仓位，添加反向仓位
+    if (decision.action === '锁仓开多' || decision.action === '锁仓开空') {
+      if (!singleHandPosition.hasPosition || singleHandPosition.isLocked) {
+        console.warn(`[单手交易-${modelId}] 锁仓操作条件不满足，忽略`);
+        return;
+      }
+      
+      const lockOperationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const lockedProfitLoss = singleHandPosition.profitLossMoney || 0;
+      
+      // 保存当前持仓信息
+      const currentDirection = singleHandPosition.direction;
+      const currentEntryPrice = singleHandPosition.entryPrice!;
+      const currentEntryTime = singleHandPosition.entryTime!;
+      const currentProfitLossPoints = singleHandPosition.profitLossPoints || 0;
+      const currentProfitLossMoney = singleHandPosition.profitLossMoney || 0;
+      const currentMaxProfitPoints = singleHandPosition.maxProfitPoints || 0;
+      const currentMaxProfitMoney = singleHandPosition.maxProfitMoney || 0;
+      
+      // 创建锁仓状态
+      const newLockPosition: SingleHandPosition = {
+        hasPosition: true,
+        isLocked: true,
+        currentPrice,
+        lockedProfitLoss,
+        direction: currentDirection, // 保留原方向作为主方向
+      };
+      
+      // 设置多单和空单信息
+      if (currentDirection === '多') {
+        // 原来持有多单，现在锁仓开空
+        newLockPosition.longPosition = {
+          entryPrice: currentEntryPrice,
+          entryTime: currentEntryTime,
+          profitLossPoints: currentProfitLossPoints,
+          profitLossMoney: currentProfitLossMoney,
+          maxProfitPoints: currentMaxProfitPoints,
+          maxProfitMoney: currentMaxProfitMoney,
+        };
+        newLockPosition.shortPosition = {
+          entryPrice: currentPrice,
+          entryTime: Date.now(),
+          profitLossPoints: 0,
+          profitLossMoney: 0,
+          maxProfitPoints: 0,
+          maxProfitMoney: 0,
+        };
+      } else {
+        // 原来持有空单，现在锁仓开多
+        newLockPosition.shortPosition = {
+          entryPrice: currentEntryPrice,
+          entryTime: currentEntryTime,
+          profitLossPoints: currentProfitLossPoints,
+          profitLossMoney: currentProfitLossMoney,
+          maxProfitPoints: currentMaxProfitPoints,
+          maxProfitMoney: currentMaxProfitMoney,
+        };
+        newLockPosition.longPosition = {
+          entryPrice: currentPrice,
+          entryTime: Date.now(),
+          profitLossPoints: 0,
+          profitLossMoney: 0,
+          maxProfitPoints: 0,
+          maxProfitMoney: 0,
+        };
+      }
+      
+      setSingleHandPosition(modelId, newLockPosition);
+      
+      const lockOperation: SingleHandOperation = {
+        id: lockOperationId,
+        timestamp: Date.now(),
+        action: decision.action,
+        price: currentPrice,
+        reason: decision.reason,
+        reflection: decision.reflection,
+        commission: 8,
+        lockedProfitLoss,
+        model: model,
+        processingTime: decision.processingTime,
+      };
+      addSingleHandOperation(modelId, lockOperation);
+      
+      const { marketDataApi } = await import('./api/marketData');
+      await marketDataApi.saveSingleHandOperation(modelId, lockOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存锁仓操作失败:`, err);
+      });
+      
+      console.log(`[单手交易-${modelId}] ${decision.action} @ ${currentPrice}, 锁定盈亏: ${lockedProfitLoss.toFixed(0)}元`);
+      return;
+    }
+    
+    // 处理解锁操作：平掉指定方向，保留另一方向
+    if (decision.action === '解锁平多' || decision.action === '解锁平空') {
+      if (!singleHandPosition.isLocked || !singleHandPosition.longPosition || !singleHandPosition.shortPosition) {
+        console.warn(`[单手交易-${modelId}] 解锁操作条件不满足，忽略`);
+        return;
+      }
+      
+      const unlockOperationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // 确定要平掉的仓位和保留的仓位
+      const closingPosition = decision.action === '解锁平多' ? singleHandPosition.longPosition : singleHandPosition.shortPosition;
+      const remainingPosition = decision.action === '解锁平多' ? singleHandPosition.shortPosition : singleHandPosition.longPosition;
+      const remainingDirection = decision.action === '解锁平多' ? '空' : '多';
+      
+      const profitLossPoints = closingPosition.profitLossPoints;
+      const profitLossMoney = closingPosition.profitLossMoney;
+      const commission = 8;
+      
+      // 记录解锁操作
+      const unlockOperation: SingleHandOperation = {
+        id: unlockOperationId,
+        timestamp: Date.now(),
+        action: decision.action,
+        price: currentPrice,
+        reason: decision.reason,
+        reflection: decision.reflection,
+        profitLossPoints,
+        profitLossMoney,
+        commission,
+        model: model,
+        processingTime: decision.processingTime,
+      };
+      addSingleHandOperation(modelId, unlockOperation);
+      
+      // 更新为单向持仓
+      setSingleHandPosition(modelId, {
+        hasPosition: true,
+        isLocked: false,
+        direction: remainingDirection,
+        entryPrice: remainingPosition.entryPrice,
+        entryTime: remainingPosition.entryTime,
+        currentPrice,
+        profitLossPoints: remainingPosition.profitLossPoints,
+        profitLossMoney: remainingPosition.profitLossMoney,
+        maxPrice: remainingDirection === '多' ? currentPrice : undefined,
+        minPrice: remainingDirection === '空' ? currentPrice : undefined,
+        maxProfitPoints: remainingPosition.maxProfitPoints,
+        maxProfitMoney: remainingPosition.maxProfitMoney,
+        drawdownPercent: 0,
+      });
+      
+      const { marketDataApi } = await import('./api/marketData');
+      await marketDataApi.saveSingleHandOperation(modelId, unlockOperation).catch(err => {
+        console.error(`[单手交易-${modelId}] 保存解锁操作失败:`, err);
+      });
+      
+      console.log(`[单手交易-${modelId}] ${decision.action} @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点，保留${remainingDirection}单`);
+      return;
+    }
     
     if (decision.action === '开多' || decision.action === '开空') {
       // 开仓
@@ -698,6 +976,42 @@ function AppContent() {
       
       console.log(`[单手交易-${modelId}] ${decision.action} @ ${currentPrice}`);
     } else if (decision.action === '平仓' && singleHandPosition.hasPosition) {
+      // 如果是锁仓状态，需要平掉两个方向的仓位
+      if (singleHandPosition.isLocked && singleHandPosition.longPosition && singleHandPosition.shortPosition) {
+        const longProfitLoss = singleHandPosition.longPosition.profitLossMoney;
+        const shortProfitLoss = singleHandPosition.shortPosition.profitLossMoney;
+        const totalProfitLossMoney = longProfitLoss + shortProfitLoss;
+        const totalProfitLossPoints = (totalProfitLossMoney / 15);
+        const commission = 16; // 平两个仓位，每个8元
+        const totalCommission = commission + 16; // 加上开仓时的手续费
+        const netProfit = totalProfitLossMoney - commission;
+        
+        const newOperation: SingleHandOperation = {
+          id: operationId,
+          timestamp: Date.now(),
+          action: '平仓',
+          price: currentPrice,
+          reason: `锁仓全平：${decision.reason}`,
+          reflection: decision.reflection,
+          profitLossPoints: totalProfitLossPoints,
+          profitLossMoney: totalProfitLossMoney,
+          commission,
+          netProfit,
+          model: model,
+          processingTime: decision.processingTime,
+        };
+        addSingleHandOperation(modelId, newOperation);
+        
+        setSingleHandPosition(modelId, { hasPosition: false });
+        
+        const { marketDataApi } = await import('./api/marketData');
+        marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
+          console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
+        });
+        
+        console.log(`[单手交易-${modelId}] 锁仓全平 @ ${currentPrice}, 总盈亏: ${totalProfitLossPoints.toFixed(0)}点`);
+      } else {
+        // 单向持仓平仓
       const profitLossPoints = singleHandPosition.profitLossPoints || 0;
       const profitLossMoney = singleHandPosition.profitLossMoney || 0;
       const commission = 8;
@@ -728,7 +1042,14 @@ function AppContent() {
       });
       
       console.log(`[单手交易-${modelId}] 平仓 @ ${currentPrice}, 盈亏: ${profitLossPoints.toFixed(0)}点`);
+      }
     } else if (decision.action === '持有') {
+      // 检查：只有在有持仓时才能执行"持有"操作
+      if (!singleHandPosition.hasPosition) {
+        console.warn(`[单手交易-${modelId}] ⚠️ 无效的"持有"决策：当前无持仓，忽略该决策`);
+        return;
+      }
+      
       if (singleHandOperations.length >= 1 && singleHandOperations[0]?.action === '持有') {
         deleteSingleHandOperation(modelId, singleHandOperations[0].id);
       }
@@ -756,6 +1077,8 @@ function AppContent() {
       marketDataApi.saveSingleHandOperation(modelId, newOperation).catch(err => {
         console.error(`[单手交易-${modelId}] 保存操作失败:`, err);
       });
+      
+      console.log(`[单手交易-${modelId}] 持有 @ ${currentPrice}, 盈亏: ${singleHandPosition.profitLossPoints?.toFixed(0)}点`);
     } else if (decision.action === '观望') {
       if (singleHandOperations.length >= 1 && singleHandOperations[0]?.action === '观望') {
         deleteSingleHandOperation(modelId, singleHandOperations[0].id);
@@ -779,6 +1102,80 @@ function AppContent() {
       });
     }
   }, [singleHandPositions, singleHandOperationsMap, setSingleHandPosition, addSingleHandOperation, deleteSingleHandOperation]);
+
+  // 单手交易：自动平仓检查（多重规则）
+  useEffect(() => {
+    if (!domesticTradeTickQuery.data?.price) return;
+    
+    const currentPrice = Number(domesticTradeTickQuery.data.price);
+    const modelIds = ['model1', 'model2', 'model3', 'model4', 'model5'];
+    
+    // 每秒检查一次
+    const checkAutoClose = setInterval(() => {
+      modelIds.forEach(async (modelId) => {
+        const position = singleHandPositions[modelId] || { hasPosition: false };
+        
+        // 只处理单向持仓（不处理锁仓状态）
+        if (!position.hasPosition || position.isLocked) {
+          return;
+        }
+        
+        const profitPoints = position.profitLossPoints || 0;
+        const durationMinutes = position.entryTime 
+          ? Math.round((Date.now() - position.entryTime) / 60000)
+          : 0;
+        
+        let shouldClose = false;
+        let closeReason = '';
+        
+        // 规则0：亏损≥10点立即止损（最高优先级）
+        if (profitPoints <= -10) {
+          shouldClose = true;
+          closeReason = `自动止损触发：亏损${Math.abs(profitPoints).toFixed(0)}点（≥10点），立即止损保护本金`;
+        }
+        // 规则1：持仓≥5分钟 且 盈利≥20点
+        else if (durationMinutes >= 5 && profitPoints >= 20) {
+          shouldClose = true;
+          closeReason = `自动平仓规则1触发：持仓${durationMinutes}分钟（≥5分钟），盈利${profitPoints.toFixed(0)}点（≥20点），强制止盈`;
+        }
+        // 规则2：持仓≥6分钟 且 盈利≥10点
+        else if (durationMinutes >= 6 && profitPoints >= 10) {
+          shouldClose = true;
+          closeReason = `自动平仓规则2触发：持仓${durationMinutes}分钟（≥6分钟），盈利${profitPoints.toFixed(0)}点（≥10点），强制止盈`;
+        }
+        
+        if (shouldClose) {
+          console.log(`[单手交易-${modelId}] ⚠️ ${closeReason}`);
+          
+          // 创建自动平仓决策
+          const autoCloseDecision: SingleHandDecision = {
+            action: '平仓',
+            reason: closeReason,
+            reflection: '触发自动平仓规则，保护利润',
+            confidence: 100,
+            timestamp: Date.now(),
+            model: singleHandModels[modelId] || 'deepseek-chat',
+          };
+          
+          // 执行平仓
+          const currentPriceNow = Number(domesticTradeTickQuery.data?.price || currentPrice);
+          await executeSingleHandDecision(
+            modelId, 
+            singleHandModels[modelId] || 'deepseek-chat', 
+            autoCloseDecision, 
+            currentPriceNow
+          );
+        }
+      });
+    }, 1000); // 每秒检查一次
+    
+    return () => clearInterval(checkAutoClose);
+  }, [
+    domesticTradeTickQuery.data?.price, 
+    singleHandPositions, 
+    singleHandModels,
+    executeSingleHandDecision
+  ]);
 
   // 单手交易：自动触发AI决策（每个模型独立控制）
   useEffect(() => {
